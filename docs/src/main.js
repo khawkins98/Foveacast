@@ -395,7 +395,14 @@ function boot() {
     outputCanvasWrap.appendChild(composite);
   }
 
-  /** Render (or refresh) the attribution footer. */
+  /**
+   * Render (or refresh) the attribution footer. The footer carries:
+   *   - Model version indicator (updates when the preset changes).
+   *   - Credits for MSI-Net, TensorFlow.js, and heatmap.js.
+   *   - Non-dismissible bias disclosure (PRD §Attribution).
+   *   - A "Need more?" button that opens the commercial-alternatives
+   *     modal, per PRD §Positioning and Alternatives.
+   */
   function renderFooter() {
     const footer = document.querySelector('.fc-footer');
     if (!footer) return;
@@ -407,12 +414,36 @@ function boot() {
     modelLine.textContent = `Model: MSI-Net · ${codeName}`;
     footer.appendChild(modelLine);
 
+    // Attribution lines are built as individual nodes rather than one
+    // innerHTML blob so the anchors carry real DOM event hooks (and so
+    // a future reviewer spotting innerHTML doesn't need to worry about
+    // XSS exposure in a static page).
     const credits = document.createElement('p');
     credits.className = 'fc-footer__line';
-    credits.innerHTML =
-      'Attention prediction by <a href="https://github.com/alexanderkroner/saliency" rel="noopener noreferrer">MSI-Net</a> (Alexander Kroner, MIT). ' +
-      'Inference via <a href="https://www.tensorflow.org/js" rel="noopener noreferrer">TensorFlow.js</a> (Apache 2.0). ' +
-      'Heatmap rendering by <a href="https://www.patrick-wied.at/static/heatmapjs/" rel="noopener noreferrer">heatmap.js</a> (Patrick Wied, MIT).';
+    credits.appendChild(
+      textAndLink(
+        'Attention prediction powered by ',
+        'MSI-Net',
+        'https://github.com/alexanderkroner/saliency',
+        ' by Alexander Kroner (MIT). ',
+      ),
+    );
+    credits.appendChild(
+      textAndLink(
+        'Inference via ',
+        'TensorFlow.js',
+        'https://www.tensorflow.org/js',
+        ' (Apache 2.0). ',
+      ),
+    );
+    credits.appendChild(
+      textAndLink(
+        'Heatmap rendering by ',
+        'heatmap.js',
+        'https://www.patrick-wied.at/static/heatmapjs/',
+        ' by Patrick Wied (MIT).',
+      ),
+    );
     footer.appendChild(credits);
 
     const bias = document.createElement('p');
@@ -420,6 +451,73 @@ function boot() {
     bias.textContent =
       "Heatmap outputs reflect population-average gaze patterns from the model's training data. They are estimates, not measurements of any specific person's attention.";
     footer.appendChild(bias);
+
+    const moreLine = document.createElement('p');
+    moreLine.className = 'fc-footer__line';
+    const moreLabel = document.createTextNode('Need more than Foveacast can offer? ');
+    const moreBtn = document.createElement('button');
+    moreBtn.type = 'button';
+    moreBtn.className = 'fc-footer__more';
+    moreBtn.textContent = 'See commercial alternatives.';
+    moreBtn.addEventListener('click', openAlternativesModal);
+    moreLine.appendChild(moreLabel);
+    moreLine.appendChild(moreBtn);
+    footer.appendChild(moreLine);
+  }
+
+  /**
+   * Open the commercial-alternatives modal and remember what had
+   * focus so we can restore it on close.
+   *
+   * WHY we use <dialog>.showModal(): it gives us focus-trap and
+   * Escape-to-close without hand-rolling either. showModal also
+   * elevates the dialog to the top-layer so no z-index games are
+   * needed.
+   */
+  function openAlternativesModal() {
+    const modal = /** @type {HTMLDialogElement | null} */ (
+      document.getElementById('fc-alternatives-modal')
+    );
+    if (!modal) return;
+    const previouslyFocused = /** @type {HTMLElement | null} */ (document.activeElement);
+
+    const onClose = () => {
+      modal.removeEventListener('close', onClose);
+      if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+        previouslyFocused.focus();
+      }
+    };
+    modal.addEventListener('close', onClose);
+
+    if (typeof modal.showModal === 'function') {
+      modal.showModal();
+    } else {
+      // Extremely old engine fallback — just show it. Focus and
+      // dismissal gestures won't be trapped, but the content is still
+      // readable. <dialog> is supported everywhere in our target set.
+      modal.setAttribute('open', '');
+    }
+  }
+
+  /**
+   * Helper that builds a lead-text + anchor + trailing-text run in a
+   * single span, which keeps the footer prose readable in the DOM
+   * without resorting to innerHTML.
+   * @param {string} lead
+   * @param {string} linkText
+   * @param {string} href
+   * @param {string} trail
+   */
+  function textAndLink(lead, linkText, href, trail) {
+    const span = document.createElement('span');
+    span.appendChild(document.createTextNode(lead));
+    const a = document.createElement('a');
+    a.href = href;
+    a.textContent = linkText;
+    a.rel = 'noopener noreferrer';
+    span.appendChild(a);
+    span.appendChild(document.createTextNode(trail));
+    return span;
   }
 
   /** Build a canvas that just contains the image, at the image's own pixel size. */

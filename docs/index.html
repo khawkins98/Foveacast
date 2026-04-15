@@ -68,8 +68,32 @@
       </main>
 
       <footer class="fc-footer" role="contentinfo">
-        <!-- Populated in commit 13 (attribution + model version + bias note). -->
+        <!-- main.js populates this on load and refreshes on preset changes. -->
       </footer>
     </div>
+
+    <!--
+      Commercial-alternatives modal. Rendered on page load but closed by
+      default; opened from the footer's "Need more?" button.
+      `<dialog>` gets native focus trap and Escape-to-close behaviour in
+      all modern engines, which is what we want for keyboard users.
+    -->
+    <dialog class="fc-modal" id="fc-alternatives-modal" aria-labelledby="fc-alternatives-title">
+      <h2 class="fc-modal__title" id="fc-alternatives-title">Commercial alternatives worth knowing</h2>
+      <p>
+        If you need richer analysis, design-tool integrations, or higher-accuracy models
+        tuned for UI content, these paid tools are worth a look:
+      </p>
+      <ul class="fc-modal__list">
+        <li><a href="https://attentioninsight.com" rel="noopener noreferrer">Attention Insight</a></li>
+        <li><a href="https://www.brainsight.app" rel="noopener noreferrer">Brainsight</a></li>
+        <li><a href="https://www.neuronsinc.com" rel="noopener noreferrer">Neurons</a></li>
+        <li><a href="https://www.eyequant.com" rel="noopener noreferrer">EyeQuant</a></li>
+        <li><a href="https://www.tobii.com" rel="noopener noreferrer">Tobii</a></li>
+      </ul>
+      <form method="dialog">
+        <button class="fc-modal__close" type="submit" value="close">Close</button>
+      </form>
+    </dialog>
   </body>
 </html>
