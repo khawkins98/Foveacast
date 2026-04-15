@@ -1,0 +1,17 @@
+{
+  "name": "foveacast",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Free, offline-capable, open-source predictive attention-heatmap tool. Runs entirely in the browser.",
+  "scripts": {
+    "dev": "vite",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "jsdom": "^24",
+    "vite": "^5",
+    "vitest": "^1"
+  }
+}
