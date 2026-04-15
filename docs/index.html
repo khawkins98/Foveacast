@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="Foveacast predicts where people will look on a screenshot. Free, open source, runs entirely in your browser — nothing leaves your machine."
+    />
+    <title>Foveacast — predicted attention heatmaps</title>
+
+    <!--
+      Buildless by design. CDN scripts rather than ES module imports so this
+      file works when double-clicked off the filesystem with no dev server.
+      TensorFlow.js attaches to `globalThis.tf`; heatmap.js to `globalThis.h337`.
+    -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/heatmap.js@2.0.5/build/heatmap.min.js"></script>
+
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+
+    <!--
+      `type="module"` is the one ESM touchpoint. Browsers serve .js from
+      file:// with a plausible MIME type, which the module loader accepts;
+      this is the detail that lets us ship modules without bundling.
+    -->
+    <script type="module" src="./src/main.js"></script>
+  </head>
+  <body>
+    <a class="fc-skiplink" href="#fc-main">Skip to content</a>
+
+    <div id="fc-app">
+      <header class="fc-header" role="banner">
+        <h1 class="fc-header__title">Foveacast</h1>
+        <p class="fc-header__tag">
+          Predicted attention heatmaps, right in your browser.
+        </p>
+      </header>
+
+      <main id="fc-main" class="fc-main" tabindex="-1">
+        <!-- Mount points: status banner, dropzone, controls, output canvas. -->
+        <div id="fc-status-mount" class="fc-mount fc-mount--status"></div>
+        <div id="fc-dropzone-mount" class="fc-mount fc-mount--dropzone"></div>
+        <div id="fc-controls-mount" class="fc-mount fc-mount--controls"></div>
+
+        <section
+          id="fc-output"
+          class="fc-output"
+          aria-label="Heatmap output"
+          tabindex="-1"
+        >
+          <div class="fc-output__placeholder" id="fc-output-placeholder">
+            Your heatmap will appear here once you drop a screenshot.
+          </div>
+          <div class="fc-output__canvas-wrap" id="fc-output-canvas-wrap" hidden>
+            <!-- main.js appends the composited canvas here. -->
+          </div>
+        </section>
+      </main>
+
+      <footer class="fc-footer" role="contentinfo">
+        <!-- Populated in commit 13 (attribution + model version + bias note). -->
+      </footer>
+    </div>
+  </body>
+</html>
