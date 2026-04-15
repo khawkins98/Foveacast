@@ -100,6 +100,7 @@ function boot() {
   const outputSection = mustGet('fc-output');
   const outputPlaceholder = mustGet('fc-output-placeholder');
   const outputCanvasWrap = mustGet('fc-output-canvas-wrap');
+  const outputCaption = mustGet('fc-output-caption');
 
   // --- Status banner ----------------------------------------------------
   const status = createStatus();
@@ -338,6 +339,13 @@ function boot() {
       'fc-output__canvas-wrap--sidebyside',
       state.view === 'sidebyside',
     );
+
+    // Sighted redundancy for the first-fixation crosshair: show the
+    // coordinates as plain text below the canvas. Screen readers
+    // already get this via `aria-label`, but a visible caption helps
+    // everyone compare runs without squinting at pixel positions.
+    outputCaption.textContent = describeHeatmap(state.lastFixation, state.lastOrigDims);
+    outputCaption.hidden = false;
 
     if (state.view === 'original') {
       const plain = drawPlainImageCanvas(state.lastImage);

@@ -458,6 +458,12 @@ a:hover {
   width: 100%;
 }
 
+.fc-output__caption {
+  margin: 0.6rem 0 0;
+  color: var(--fc-text-muted);
+  font-size: 0.92rem;
+}
+
 .fc-output__canvas-wrap canvas {
   display: block;
   max-width: 100%;
