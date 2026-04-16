@@ -70,7 +70,7 @@ export function createDropzone({ onFile, onError }) {
   // Default visible copy. Caller can swap this out via setEnabled(false).
   const label = document.createElement('p');
   label.className = 'fc-dropzone__label';
-  label.textContent = 'Drop a screenshot here, or click to choose a file.';
+  label.textContent = 'Drop a screenshot here, click to choose a file, or paste one from the clipboard.';
   element.appendChild(label);
 
   const hint = document.createElement('p');
@@ -192,7 +192,7 @@ export function createDropzone({ onFile, onError }) {
       element.removeAttribute('aria-disabled');
       element.setAttribute('tabindex', '0');
       element.classList.remove('fc-dropzone--disabled');
-      label.textContent = 'Drop a screenshot here, or click to choose a file.';
+      label.textContent = 'Drop a screenshot here, click to choose a file, or paste one from the clipboard.';
     } else {
       element.setAttribute('aria-disabled', 'true');
       // Removing from tab order is important — an aria-disabled

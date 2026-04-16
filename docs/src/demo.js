@@ -147,7 +147,6 @@ async function loadDemoImage(url) {
  * know the pipeline has completed end-to-end.
  *
  * @param {{
- *   outputPlaceholder: HTMLElement,
  *   outputCanvasWrap: HTMLElement,
  *   outputCaption: HTMLElement,
  *   outputSection: HTMLElement,
@@ -156,7 +155,6 @@ async function loadDemoImage(url) {
  */
 export async function runDemoMode(mounts) {
   const {
-    outputPlaceholder,
     outputCanvasWrap,
     outputCaption,
     outputSection,
@@ -212,7 +210,9 @@ export async function runDemoMode(mounts) {
       `${origW} by ${origH} pixel image.`,
   );
 
-  outputPlaceholder.hidden = true;
+  // Reveal the output section (hidden on first load per progressive
+  // disclosure) and fill it with the composited canvas.
+  outputSection.hidden = false;
   outputCanvasWrap.hidden = false;
   outputCanvasWrap.textContent = '';
   outputCanvasWrap.appendChild(composite);

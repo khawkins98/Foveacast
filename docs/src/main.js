@@ -114,7 +114,6 @@ function boot() {
   const dropzoneMount = mustGet('fc-dropzone-mount');
   const controlsMount = mustGet('fc-controls-mount');
   const outputSection = mustGet('fc-output');
-  const outputPlaceholder = mustGet('fc-output-placeholder');
   const outputCanvasWrap = mustGet('fc-output-canvas-wrap');
   const outputCaption = mustGet('fc-output-caption');
 
@@ -206,7 +205,6 @@ function boot() {
 
   if (demoMode) {
     runDemoMode({
-      outputPlaceholder,
       outputCanvasWrap,
       outputCaption,
       outputSection,
@@ -476,7 +474,10 @@ function boot() {
   /** Draw the composited canvas (or plain image / side-by-side) into the output wrap. */
   function renderOutput() {
     if (!state.lastImage || !state.lastHeatmapCanvas) return;
-    outputPlaceholder.hidden = true;
+    // Reveal the output section — it's hidden on first load so the
+    // pre-drop page isn't cluttered by a reserved empty box (same
+    // progressive-disclosure principle as the controls panel).
+    outputSection.hidden = false;
     outputCanvasWrap.hidden = false;
     outputCanvasWrap.textContent = '';
     outputCanvasWrap.classList.toggle(

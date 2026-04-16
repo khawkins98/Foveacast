@@ -544,18 +544,6 @@ body.fc-page-dragover .fc-dropzone {
   outline-offset: 3px;
 }
 
-.fc-output__placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-  color: var(--fc-text-muted);
-  text-align: center;
-  padding: 1rem;
-  border: 1px dashed var(--fc-border);
-  border-radius: var(--fc-radius-sm);
-}
-
 .fc-output__canvas-wrap {
   width: 100%;
 }
