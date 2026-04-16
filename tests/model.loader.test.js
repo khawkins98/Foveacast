@@ -125,14 +125,21 @@ describe('loadModel', () => {
     expect(result).toEqual({ session: { fake: 'session' }, inputDims: UNISAL_INPUT_DIMS });
   });
 
-  it('points ORT at the vendored wasm folder and forces single-threaded', async () => {
+  it('forces single-threaded WASM (no COEP on Pages)', async () => {
+    // We deliberately do NOT set `ort.env.wasm.wasmPaths` here. ORT
+    // resolves its sibling `.mjs`/`.wasm` files relative to its own
+    // script URL by default, which gives the right path for both
+    // the dev server and GitHub Pages. An earlier draft set
+    // `wasmPaths = './vendor/'` and that broke in the browser —
+    // ORT resolves the override relative to its own script too,
+    // so it requested `/vendor/vendor/ort-wasm-simd-threaded.mjs`.
     installOrtMock();
     globalThis.fetch = makeStreamingFetch(new Uint8Array(8));
 
     await loadModel();
     const ort = /** @type {any} */ (globalThis).ort;
-    expect(ort.env.wasm.wasmPaths).toBe('./vendor/');
     expect(ort.env.wasm.numThreads).toBe(1);
+    expect(ort.env.wasm.wasmPaths).toBeFalsy();
   });
 
   it('reports progress as fraction + loaded/total when Content-Length is set', async () => {

@@ -146,13 +146,18 @@ export async function loadModel(onProgress) {
     );
   }
 
-  // Point ORT at the vendored wasm file next to its JS entry. Without
-  // this, ORT's default resolution looks in the document root and a
-  // Pages deploy at a subpath (e.g. /Foveacast/) can misresolve.
+  // Let ORT's default wasm resolution do its own thing: it loads the
+  // sibling `.mjs` / `.wasm` files relative to its own script URL
+  // (`./vendor/ort.wasm.min.js`), which gives the right path in both
+  // dev (`/vendor/...`) and GitHub Pages (`/<repo>/vendor/...`).
+  // Setting `ort.env.wasm.wasmPaths` manually was previously tried
+  // and it double-prefixed the path to `/vendor/vendor/` because
+  // ORT resolves the override relative to its own script too.
+  //
+  // Cross-origin isolation is off on Pages (no COEP header), so we
+  // force single-threaded explicitly — otherwise ORT warns about
+  // `numThreads > 1` on load.
   if (ort.env && ort.env.wasm) {
-    ort.env.wasm.wasmPaths = './vendor/';
-    // Cross-origin isolation is off on Pages; this makes ORT skip
-    // the threaded-init code path quietly instead of warning.
     ort.env.wasm.numThreads = 1;
   }
 

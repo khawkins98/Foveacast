@@ -116,9 +116,16 @@ function servePassthroughStatic() {
  */
 function pickContentType(filePath) {
   if (filePath.endsWith('.json')) return 'application/json';
-  if (filePath.endsWith('.js')) return 'text/javascript';
+  // `.mjs` MUST be text/javascript — browsers block ESM imports
+  // served with any other MIME type ("was blocked because of a
+  // disallowed MIME type"). ORT Web reaches for its own glue module
+  // (`ort-wasm-simd-threaded.mjs`) via a dynamic import from the
+  // browser side, so this is not optional.
+  if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) return 'text/javascript';
+  if (filePath.endsWith('.wasm')) return 'application/wasm';
   if (filePath.endsWith('.css')) return 'text/css';
   if (filePath.endsWith('.txt') || filePath.endsWith('.md')) return 'text/plain';
+  if (filePath.endsWith('.onnx')) return 'application/octet-stream';
   return 'application/octet-stream';
 }
 
