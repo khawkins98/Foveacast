@@ -257,13 +257,15 @@ SUM is the academically strongest model for Foveacast's use case. It is the only
 
 ### Quality presets
 
-Expose inference quality as a user-facing preset, following the pattern from the MSI-Net TF.js demo:
+Expose inference quality as a user-facing preset, following the pattern from the MSI-Net TF.js demo. The demo ships five tiers and Foveacast exposes the same five under human-readable labels. The underlying input dimensions are `H × W` in pixels, matching the dims the model author converted the weights against.
 
-| Preset | Input resolution | Expected speed (CPU WASM) | Use case |
-|---|---|---|---|
-| Fast | 320px | ~2–4 seconds | Quick sanity check |
-| Standard | 640px | ~6–10 seconds | Default |
-| High | 1024px | ~15–25 seconds | Detailed review before publish |
+| Preset label (dropdown) | Preset code | Input dims (H × W) | Expected speed | Use case |
+|---|---|---|---|---|
+| Fast (very low) | `very_low` | 48 × 64 | Quickest; least detailed output | Rough sanity check on older or modest hardware |
+| Low | `low` | 72 × 96 | Faster than Standard; still coarse | Quick pass when Fast feels too blocky |
+| Standard | `medium` | 120 × 160 | The default; balances speed and detail | Most reviews |
+| High | `high` | 168 × 224 | Slower; more detailed contours | Detailed review before publish |
+| Very high (slowest) | `very_high` | 240 × 320 | Slowest; most detailed output | Final pass on a fast machine |
 
 ---
 
@@ -488,7 +490,7 @@ This framing sets expectations without gatekeeping. Users on modest hardware can
 ## Success Criteria
 
 - A user with no technical background can go from screenshot to heatmap in under 60 seconds
-- Inference completes in under 15 seconds on a mid-range laptop (CPU-only WebAssembly path)
+- Inference completes in under 15 seconds on a mid-range laptop at the default (Standard) preset
 - The tool runs fully offline after first model weight download
 - Output is visually interpretable without explanation — the heatmap is self-evident
 

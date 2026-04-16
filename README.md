@@ -117,7 +117,7 @@ Full licence text for Foveacast itself is in [LICENSE](LICENSE) (MIT, Ken Hawkin
 - MSI-Net was trained primarily on natural scenes, so accuracy drops on dense text, data tables, maps, and other content types that are underrepresented in the SALICON dataset.
 - Output is a probabilistic estimate based on population-average gaze patterns, not measured eye-tracking data. Saliency models have documented biases that reflect their training distribution; the UI carries a non-dismissible note to that effect.
 - Images above 20 MB are rejected at the drop zone, and anything wider than 2560 px is downsampled before inference to keep memory behaviour predictable on modest hardware.
-- Recommended machine is 8 GB RAM with a reasonably modern CPU; the High preset is slow on anything smaller. Pick Fast or Standard on older hardware.
+- Recommended machine is 8 GB RAM with a reasonably modern CPU; the High and Very high presets are slow on anything smaller. Pick Fast or Low on older hardware.
 
 ## Contributing and maintenance
 
