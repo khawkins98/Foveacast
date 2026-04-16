@@ -141,7 +141,7 @@ The heatmap was mostly encouraging and slightly humbling:
 - **The right margin had drifting green patches over empty space.** Nothing to look at, but the model's learned priors for web layouts assume symmetry, and our single-column layout leaves that symmetric space unused. Not a bug — a nudge that a two-column treatment at wider viewports could absorb that wandering attention usefully, perhaps with a small "what this does" helper block.
 - **The attribution footer and bias disclosure got warm.** Good: those need to be seen, and they are, without stealing from the primary action.
 
-The general lesson — and the reason this entry exists — is that a predictive tool used on its own UI is a near-free UX audit. The heatmap doesn't give you answers, but it tells you where the eye is working and where it is wasted, in the same way you'd otherwise have to pay a UX researcher to tell you. If anything about the landing page changes in V1.1, the new version should be run through Foveacast before merging.
+The general lesson — and the reason this entry exists — is that a predictive tool used on its own UI is a near-free UX audit. The heatmap doesn't give you answers, but it tells you where the eye is working and where it is wasted, in the same way you'd otherwise have to pay a UX researcher to tell you. If anything about the landing page changes in a future release, the new version should be run through Foveacast before merging.
 
 Changes that came directly out of this audit shipped in the 0.1.1 patch: a tighter header, a small "what this does" helper block to use the empty right-hand space at wider viewports, and a visually stronger drop zone so the ratio of "first-fixation on the actual target" to "first-fixation on chrome" improves.
 
