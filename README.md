@@ -14,16 +14,14 @@ It is aimed at comms staff, web officers, and UX-aware developers who want a qui
 
 A hosted build is served from GitHub Pages:
 
-<https://<owner>.github.io/Foveacast/>
-
-(The repo owner will fill in the real URL once the project has a permanent home.)
+<https://khawkins98.github.io/Foveacast/>
 
 ### Instant preview with demo mode
 
 Don't want to wait on the ~60 MB first-run model download just to see what the tool looks like? Append `?demo=1` to the URL:
 
 ```
-https://<owner>.github.io/Foveacast/?demo=1
+https://khawkins98.github.io/Foveacast/?demo=1
 ```
 
 Demo mode loads a committed example screenshot and renders a synthetic saliency map through the real postprocess → fixation → heatmap → composite pipeline. You see output in under a second, no network round-trip to the model CDN. The banner above the output says plainly that demo output is a synthetic preview, not a real MSI-Net prediction — drop your own screenshot or remove `?demo=1` to run real inference.
@@ -50,7 +48,7 @@ Vite serves the `docs/` folder on <http://localhost:5173>. There is no build ste
 ### 3. From a clone
 
 ```sh
-git clone https://github.com/<owner>/Foveacast.git
+git clone https://github.com/khawkins98/Foveacast.git
 cd Foveacast
 pnpm install
 pnpm dev
