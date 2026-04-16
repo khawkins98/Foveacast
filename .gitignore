@@ -1,6 +1,12 @@
 # Dependencies
 node_modules/
 
+# Python virtualenv used by one-off spikes (e.g. the UNISAL ONNX export
+# under scripts/unisal-onnx-export.py). Never part of the shipped app.
+.venv/
+__pycache__/
+*.pyc
+
 # Build / dev artefacts
 dist/
 .vite/
@@ -30,5 +36,17 @@ tests/e2e/.cache/
 *.pb
 *.onnx
 *.bin
-# Mirrored model weights — populated by scripts/fetch-weights.sh
-docs/models/
+# Mirrored MSI-Net weights are populated by scripts/fetch-weights.sh
+# at dev-time and by the Pages deploy workflow at build-time. Using
+# `docs/models/*` rather than `docs/models/` so git still traverses
+# the directory and the negation rule below can re-include specific
+# subdirectories. (Git refuses to look inside a fully-ignored dir.)
+docs/models/*
+# Exception: the UNISAL ONNX artefact IS committed to the repo because
+# GitHub Pages serves it directly and there is no CDN alternative for a
+# hand-exported spike artefact. If V2 ships, this is the production home.
+# Two negations are needed — one for the directory (so git traverses
+# into it) and one for the specific file (so *.onnx above doesn't
+# re-ignore it).
+!docs/models/unisal/
+!docs/models/unisal/*.onnx
