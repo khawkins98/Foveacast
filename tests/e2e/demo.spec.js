@@ -95,6 +95,39 @@ test.describe('Foveacast — demo mode end-to-end', () => {
     await expect(banner).toContainText(/real MSI-Net/i);
   });
 
+  test('dropzone and controls are interactive as soon as demo renders, even while the background model is still loading', async ({
+    page,
+  }) => {
+    // UX regression: previously `reloadModel({silent: true})` kept
+    // the dropzone and controls disabled for 40–60s after the demo
+    // finished rendering. A user who dropped their own file in that
+    // window hit a dead dropzone with no signal. Now the dropzone and
+    // controls are live immediately; a drop gets queued and runs when
+    // the model finishes.
+    await page.goto('/?demo=1');
+
+    // Demo-render ready
+    await expect(page.locator('#fc-output[data-foveacast-ready="true"]')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Dropzone must not report aria-disabled
+    const dropzone = page.locator('.fc-dropzone');
+    await expect(dropzone).toHaveAttribute('aria-disabled', /^(?!true$).*/).catch(async () => {
+      // Alternative: attribute absent is also fine.
+      const val = await dropzone.getAttribute('aria-disabled');
+      expect(val).not.toBe('true');
+    });
+
+    // Opacity slider operable
+    const slider = page.locator('input[type="range"]').first();
+    await expect(slider).toBeEnabled();
+
+    // Download button operable
+    const download = page.getByRole('button', { name: /download/i });
+    await expect(download).toBeEnabled();
+  });
+
   test('the composited canvas carries a demo watermark that survives cropping', async ({
     page,
   }) => {

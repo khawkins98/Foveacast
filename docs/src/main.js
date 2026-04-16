@@ -76,6 +76,8 @@ const state = {
   lastOrigDims: null,
   opacity: 0.6,
   view: 'overlay',
+  /** File dropped before the model finished loading (demo-mode race). */
+  queuedFile: /** @type {File | null} */ (null),
 };
 
 /**
@@ -183,26 +185,38 @@ function boot() {
   // resumes as soon as the user drops their own file (we still let the
   // real model load in the background so a drop works immediately
   // after the demo renders).
-  if (isDemoModeRequested()) {
+  const demoMode = isDemoModeRequested();
+
+  if (demoMode) {
     runDemoMode({
       outputPlaceholder,
       outputCanvasWrap,
       outputCaption,
       outputSection,
       onBanner: (message) => status.showDemoBanner(message),
-    }).catch((err) => {
-      console.error('Foveacast: demo mode failed.', err);
-      status.showError({
-        code: 'INFERENCE_FAILED',
-        message:
-          'Demo mode failed to render. This is unexpected — please file an issue. Real inference is unaffected.',
+    })
+      .then(() => {
+        // As soon as the demo renders, the user has a canvas to
+        // control — enable the controls and the dropzone right away
+        // even though the background model is still loading. If the
+        // user drops a file before the model is ready, the drop is
+        // queued and auto-runs once load resolves.
+        dropzone.setEnabled(true);
+        controls.setDisabled(false);
+      })
+      .catch((err) => {
+        console.error('Foveacast: demo mode failed.', err);
+        status.showError({
+          code: 'INFERENCE_FAILED',
+          message:
+            'Demo mode failed to render. This is unexpected — please file an issue. Real inference is unaffected.',
+        });
       });
-    });
-    // Fall through: the normal `reloadModel()` still runs below, but
-    // in silent mode — we don't want its cache-load banner to stomp
-    // the demo banner the moment the demo render completes. The model
-    // still loads in the background so a subsequent file drop runs
-    // real inference without a page reload.
+    // Fall through: the normal `reloadModel()` still runs below in
+    // silent mode (no cache-load banner stomps the demo banner). The
+    // model keeps loading in the background so a user drop works as
+    // soon as load resolves — directly if already ready, or via the
+    // queued-file path if the drop happened first.
     reloadModel({ silent: true }).catch((err) => surfaceModelError(err));
   } else {
     // --- Kick off model load (normal path) ------------------------------
@@ -254,6 +268,23 @@ function boot() {
       controls.setDisabled(false);
       if (!silent) status.showReady();
       renderFooter();
+
+      // Drain any file the user dropped while we were still loading.
+      // This is the second half of the demo-mode queued-drop flow.
+      if (state.queuedFile) {
+        const pending = state.queuedFile;
+        state.queuedFile = null;
+        status.element.removeAttribute('data-foveacast-queued');
+        // Don't await — same reason the dropzone onFile doesn't await:
+        // we want the caller to return promptly.
+        handleFile(pending).catch((err) => {
+          console.error('Foveacast: queued-file inference failed.', err);
+          status.showError({
+            code: 'INFERENCE_FAILED',
+            onRetry: () => status.clear(),
+          });
+        });
+      }
     } catch (err) {
       // Re-throw so the outer catch can choose the right error code.
       throw err;
@@ -305,14 +336,25 @@ function boot() {
 
   /**
    * Handle a user-dropped file through the full pipeline.
+   *
+   * In demo mode the dropzone goes live as soon as the synthetic
+   * preview renders, which may be well before the real model has
+   * finished downloading. A drop that arrives in that window gets
+   * queued: we show the first-run banner so the user knows why the
+   * wait, and `reloadModel()` picks up the queued file when it
+   * resolves. The user never sees a "model still loading, try again"
+   * dead end.
+   *
    * @param {File} file
    */
   async function handleFile(file) {
     if (!state.loadedModel) {
-      status.showError({
-        code: 'INFERENCE_FAILED',
-        message: 'The model is still loading. Please wait a moment and try again.',
-      });
+      state.queuedFile = file;
+      // Surface the real download/cache banner so the user sees that
+      // something is happening. The visible banner depends on whether
+      // the silent background load has passed the first-run threshold.
+      status.showFirstRun({ fraction: 0, loaded: undefined, total: undefined });
+      status.element.setAttribute('data-foveacast-queued', 'true');
       return;
     }
 
