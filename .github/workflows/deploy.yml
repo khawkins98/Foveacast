@@ -1,0 +1,58 @@
+# GitHub Pages deploy for Foveacast.
+#
+# Follows the canonical Pages v4 deploy pattern from GitHub's own docs:
+# upload-pages-artifact + deploy-pages, the explicit pages/id-token
+# permissions required for OIDC-backed deployment, and a single-slot
+# concurrency group so queued deploys coalesce instead of racing.
+#
+# Why we ship `./docs` directly: the project is buildless. The folder
+# committed under `docs/` IS the site — it's what Vite serves in dev,
+# what a user opens when they unzip the repo, and what Pages publishes.
+# There is no transform step between source and production, on purpose
+# (the PRD's "unzip and open index.html" promise depends on it).
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Allow a manual re-run from the Actions tab without having to push
+  # an empty commit.
+  workflow_dispatch:
+
+# Minimum permissions needed for the OIDC-backed Pages deploy.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one in-flight Pages deploy at a time; a newer push supersedes
+# an older one that is still queued, but we don't cancel a deploy
+# that has already started — half-deployed Pages sites are worse
+# than a slightly stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The Pages tooling expects a specific artifact format produced
+      # by this action. Handing it `./docs` uploads the static-site
+      # folder verbatim — no build invocation, no transformation.
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./docs
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
