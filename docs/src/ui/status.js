@@ -30,6 +30,8 @@ const ERROR_MESSAGES = {
     'That image is too large. Try a screenshot under 20MB, or use a lower screen resolution.',
   INFERENCE_FAILED:
     'Something went wrong during analysis. Try the Fast preset, or use a smaller image.',
+  DEMO_FAILED:
+    'Demo mode failed to render. Real inference is unaffected \u2014 drop a screenshot to run it, or reload to try the demo again.',
 };
 
 const GENERIC_ERROR =

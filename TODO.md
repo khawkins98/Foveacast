@@ -60,12 +60,6 @@ pnpm action in CI pins Node 20, but the repo does not declare its Node floor. A 
 
 ## Deferred from the technical-writing batch
 
-### P1 — Off-PRD error string in main.js
-
-**Source:** writing review P1 #3. `main.js:300` surfaces `INFERENCE_FAILED` with the message "The model is still loading. Please wait a moment and try again." — different text from `STATUS_ERROR_MESSAGES.INFERENCE_FAILED`. The UX queued-drop commit already replaces this code path with a first-run banner, but audit the rest of main.js for similar inline strings.
-
-**Size:** 30 minutes.
-
 ### P2 — Voice audit: one section slips into AI-register
 
 The CONTRIBUTING.md section titled "Style" has a line — `"— the project is expected to be picked up by people who didn't build it."` — that is fine, but the paragraph around it reads more like a policy document than the rest of the voice. A humanizer pass would bring it into line.

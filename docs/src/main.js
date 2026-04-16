@@ -212,11 +212,11 @@ function boot() {
       })
       .catch((err) => {
         console.error('Foveacast: demo mode failed.', err);
-        status.showError({
-          code: 'INFERENCE_FAILED',
-          message:
-            'Demo mode failed to render. This is unexpected — please file an issue. Real inference is unaffected.',
-        });
+        // DEMO_FAILED is its own code + message in STATUS_ERROR_MESSAGES.
+        // Keeping it out of INFERENCE_FAILED means a user who sees a
+        // demo-mode error still knows the real inference path is
+        // independently usable.
+        status.showError({ code: 'DEMO_FAILED' });
       });
     // Fall through: the normal `reloadModel()` still runs below in
     // silent mode (no cache-load banner stomps the demo banner). The
