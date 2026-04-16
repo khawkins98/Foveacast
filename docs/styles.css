@@ -1,0 +1,681 @@
+/* Foveacast stylesheet.
+ *
+ * Buildless, single-file CSS. Custom properties carry the palette so the
+ * dark-scheme override at the bottom can flip a handful of values without
+ * touching any rule that uses them.
+ *
+ * Accessibility notes baked in here:
+ *   - All foreground/background pairs clear WCAG 2.1 AA (≥ 4.5:1 body,
+ *     ≥ 3:1 large text and UI components).
+ *   - `:focus-visible` carries a thick, high-contrast ring so keyboard
+ *     navigation is never guesswork.
+ *   - `prefers-reduced-motion: reduce` disables the progress-bar shimmer
+ *     and every transition/animation the UI uses.
+ */
+
+/* -- Design tokens ----------------------------------------------------- */
+
+:root {
+  /* Light scheme by default. The dark override sits at the bottom. */
+  --fc-bg: #f6f7fb;
+  --fc-surface: #ffffff;
+  --fc-surface-alt: #f0f2f7;
+  --fc-border: #c7cbd4;
+  --fc-border-strong: #8a8f99;
+
+  --fc-text: #12151c;           /* 16:1 on --fc-bg */
+  --fc-text-muted: #3c4252;     /* 9:1 on --fc-bg */
+  --fc-text-inverse: #ffffff;
+
+  --fc-accent: #0051d0;         /* 7.3:1 on white */
+  --fc-accent-hover: #003ea3;
+  --fc-accent-contrast: #ffffff;
+
+  --fc-success: #0f6a3e;
+  --fc-danger: #a31515;
+  --fc-focus: #ffbf00;
+
+  --fc-radius: 12px;
+  --fc-radius-sm: 8px;
+  --fc-shadow: 0 1px 2px rgba(10, 20, 40, 0.04),
+               0 4px 14px rgba(10, 20, 40, 0.08);
+
+  --fc-content-max: 1100px;
+
+  /* Motion tokens. Overridden to 0ms when reduced motion is requested. */
+  --fc-dur-fast: 120ms;
+  --fc-dur-med: 240ms;
+  --fc-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  color-scheme: light dark;
+}
+
+/* -- Base -------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--fc-bg);
+  color: var(--fc-text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu,
+    "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+p {
+  margin: 0 0 0.75em;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0 0 0.4em;
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+a {
+  color: var(--fc-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  color: var(--fc-accent-hover);
+}
+
+:focus-visible {
+  outline: 3px solid var(--fc-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Skip link — visible only when focused. Placed first in <body> so keyboard
+   users can jump straight to main content. */
+.fc-skiplink {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--fc-accent);
+  color: var(--fc-accent-contrast);
+  padding: 0.5rem 0.75rem;
+  border-radius: 0 0 var(--fc-radius-sm) 0;
+  text-decoration: none;
+}
+
+.fc-skiplink:focus {
+  left: 0;
+  z-index: 1000;
+}
+
+/* -- Layout ------------------------------------------------------------ */
+
+#fc-app {
+  max-width: var(--fc-content-max);
+  margin: 0 auto;
+  padding: clamp(1rem, 2vw, 2rem);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-height: 100vh;
+}
+
+.fc-header__title {
+  font-size: clamp(1.75rem, 2.4vw + 1rem, 2.4rem);
+  margin-bottom: 0.1em;
+}
+
+/* The HTML `hidden` attribute applies `display: none` via the user-agent
+   stylesheet, but author-level `display: grid/flex/block` rules beat
+   it. We use `hidden` for progressive disclosure (a11y-friendly) and
+   for mount-point cleanup, so enforce it globally. */
+[hidden] {
+  display: none !important;
+}
+
+.fc-header__tag {
+  color: var(--fc-text-muted);
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+/* One-line promise under the tagline. Short enough to register at a
+   glance before the drop zone becomes the focal point. */
+.fc-header__promise {
+  color: var(--fc-text);
+  margin: 0.25rem 0 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.fc-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  flex: 1 0 auto;
+}
+
+.fc-main:focus {
+  outline: none; /* The main element itself takes focus programmatically
+                    after inference; the output-section ring carries the
+                    visual cue. */
+}
+
+.fc-mount:empty {
+  display: none; /* Avoid stray empty boxes before JS mounts. */
+}
+
+/* -- Status banner ----------------------------------------------------- */
+
+.fc-status {
+  background: var(--fc-surface);
+  border: 1px solid var(--fc-border);
+  border-left: 4px solid var(--fc-accent);
+  border-radius: var(--fc-radius);
+  padding: 0.9rem 1.1rem;
+  box-shadow: var(--fc-shadow);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+
+.fc-status--error {
+  border-left-color: var(--fc-danger);
+  background: color-mix(in srgb, var(--fc-danger) 6%, var(--fc-surface));
+}
+
+.fc-status--ready {
+  border-left-color: var(--fc-success);
+}
+
+/* Demo-mode banner: yellow-ish accent so nobody mistakes synthetic
+   preview output for a real model prediction. */
+.fc-status--demo {
+  border-left-color: #c97b00;
+  background: color-mix(in srgb, #c97b00 6%, var(--fc-surface));
+}
+
+.fc-status__body {
+  margin: 0;
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.fc-status__progress {
+  flex: 1 1 200px;
+  height: 10px;
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--fc-surface-alt);
+}
+
+.fc-status__progress::-webkit-progress-bar {
+  background: var(--fc-surface-alt);
+  border-radius: 999px;
+}
+
+.fc-status__progress::-webkit-progress-value {
+  background: linear-gradient(
+    90deg,
+    var(--fc-accent),
+    color-mix(in srgb, var(--fc-accent) 60%, #ff9f0a)
+  );
+  border-radius: 999px;
+  transition: width var(--fc-dur-med) var(--fc-ease);
+}
+
+.fc-status__progress::-moz-progress-bar {
+  background: var(--fc-accent);
+  border-radius: 999px;
+}
+
+/* Indeterminate bar — gentle shimmer. Reduced-motion users get a static bar. */
+.fc-status__progress:not([value]) {
+  position: relative;
+  background: linear-gradient(
+    90deg,
+    var(--fc-surface-alt) 0%,
+    color-mix(in srgb, var(--fc-accent) 30%, var(--fc-surface-alt)) 50%,
+    var(--fc-surface-alt) 100%
+  );
+  background-size: 200% 100%;
+  animation: fc-shimmer 1.4s linear infinite;
+}
+
+@keyframes fc-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.fc-status__readout {
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-text-muted);
+  font-size: 0.9rem;
+}
+
+.fc-status__indicator--spin {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--fc-accent) 40%, transparent);
+  border-top-color: var(--fc-accent);
+  animation: fc-spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+.fc-status__indicator--static {
+  color: var(--fc-accent);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+@keyframes fc-spin {
+  to { transform: rotate(360deg); }
+}
+
+.fc-status__retry {
+  background: var(--fc-accent);
+  color: var(--fc-accent-contrast);
+  border: 1px solid var(--fc-accent);
+  border-radius: var(--fc-radius-sm);
+  padding: 0.45rem 0.85rem;
+  font: inherit;
+  cursor: pointer;
+  transition: background var(--fc-dur-fast) var(--fc-ease);
+}
+
+.fc-status__retry:hover {
+  background: var(--fc-accent-hover);
+}
+
+/* -- Drop zone --------------------------------------------------------- */
+
+.fc-dropzone {
+  background: var(--fc-surface);
+  border: 2px dashed var(--fc-border-strong);
+  border-radius: var(--fc-radius);
+  padding: clamp(1.25rem, 3vw, 2.5rem);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    background var(--fc-dur-fast) var(--fc-ease),
+    border-color var(--fc-dur-fast) var(--fc-ease),
+    transform var(--fc-dur-fast) var(--fc-ease);
+  position: relative;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.fc-dropzone:hover {
+  border-color: var(--fc-accent);
+  background: color-mix(in srgb, var(--fc-accent) 4%, var(--fc-surface));
+}
+
+.fc-dropzone:focus-visible {
+  outline: 3px solid var(--fc-focus);
+  outline-offset: 3px;
+}
+
+.fc-dropzone--dragging,
+/* When a file is being dragged anywhere over the document, lift the
+   drop zone so the user can see the target even if the cursor is far
+   from it. The `body.fc-page-dragover` class is toggled from
+   ui/page-drop.js while any file-carrying drag is in flight. */
+body.fc-page-dragover .fc-dropzone {
+  border-color: var(--fc-accent);
+  background: color-mix(in srgb, var(--fc-accent) 10%, var(--fc-surface));
+  transform: scale(1.005);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.fc-page-dragover .fc-dropzone,
+  .fc-dropzone--dragging {
+    transform: none;
+  }
+}
+
+.fc-dropzone--disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  background: var(--fc-surface-alt);
+}
+
+.fc-dropzone__label {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--fc-text);
+}
+
+.fc-dropzone__hint {
+  color: var(--fc-text-muted);
+  margin: 0;
+}
+
+/* -- Controls ---------------------------------------------------------- */
+
+.fc-controls {
+  background: var(--fc-surface);
+  border: 1px solid var(--fc-border);
+  border-radius: var(--fc-radius);
+  padding: 1rem 1.25rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem 1.5rem;
+  align-items: end;
+  box-shadow: var(--fc-shadow);
+}
+
+.fc-controls--disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.fc-controls__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.fc-controls__field--group {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fc-controls__field > label,
+.fc-controls__field > legend {
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0;
+}
+
+.fc-controls__slider {
+  width: 100%;
+  accent-color: var(--fc-accent);
+}
+
+.fc-controls__readout {
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-text-muted);
+  font-size: 0.85rem;
+}
+
+.fc-controls__radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-right: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.fc-controls__select {
+  font: inherit;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--fc-border);
+  border-radius: var(--fc-radius-sm);
+  background: var(--fc-surface);
+  color: var(--fc-text);
+  min-width: 180px;
+}
+
+.fc-controls__download {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.6rem 1rem;
+  background: var(--fc-accent);
+  color: var(--fc-accent-contrast);
+  border: 1px solid var(--fc-accent);
+  border-radius: var(--fc-radius-sm);
+  cursor: pointer;
+  transition: background var(--fc-dur-fast) var(--fc-ease);
+  align-self: end;
+}
+
+.fc-controls__download:hover:not(:disabled) {
+  background: var(--fc-accent-hover);
+}
+
+.fc-controls__download:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* -- Output area ------------------------------------------------------- */
+
+.fc-output {
+  background: var(--fc-surface);
+  border: 1px solid var(--fc-border);
+  border-radius: var(--fc-radius);
+  padding: 1rem;
+  min-height: 240px;
+  box-shadow: var(--fc-shadow);
+}
+
+.fc-output:focus-visible {
+  outline: 3px solid var(--fc-focus);
+  outline-offset: 3px;
+}
+
+.fc-output__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: var(--fc-text-muted);
+  text-align: center;
+  padding: 1rem;
+  border: 1px dashed var(--fc-border);
+  border-radius: var(--fc-radius-sm);
+}
+
+.fc-output__canvas-wrap {
+  width: 100%;
+}
+
+.fc-output__caption {
+  margin: 0.6rem 0 0;
+  color: var(--fc-text-muted);
+  font-size: 0.92rem;
+}
+
+.fc-output__canvas-wrap canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--fc-radius-sm);
+  background: var(--fc-surface-alt);
+}
+
+/* Side-by-side layout: two canvases stacked on narrow viewports, side-by-side
+   from 720px up. */
+.fc-output__canvas-wrap--sidebyside {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 720px) {
+  .fc-output__canvas-wrap--sidebyside {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* -- Footer ------------------------------------------------------------ */
+
+.fc-footer {
+  border-top: 1px solid var(--fc-border);
+  padding-top: 1rem;
+  color: var(--fc-text-muted);
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.fc-footer a {
+  color: var(--fc-accent);
+}
+
+.fc-footer__line {
+  margin: 0;
+}
+
+.fc-footer__bias {
+  background: var(--fc-surface);
+  border: 1px solid var(--fc-border);
+  border-radius: var(--fc-radius-sm);
+  padding: 0.6rem 0.8rem;
+  color: var(--fc-text);
+}
+
+.fc-footer__model {
+  font-variant-numeric: tabular-nums;
+}
+
+.fc-footer__more {
+  background: none;
+  border: none;
+  color: var(--fc-accent);
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.fc-footer__more:hover {
+  color: var(--fc-accent-hover);
+}
+
+/* -- Alternatives modal ------------------------------------------------ */
+
+.fc-modal {
+  max-width: 480px;
+  width: calc(100% - 2rem);
+  border: 1px solid var(--fc-border);
+  border-radius: var(--fc-radius);
+  padding: 1.25rem 1.5rem;
+  background: var(--fc-surface);
+  color: var(--fc-text);
+  box-shadow: 0 10px 40px rgba(10, 20, 40, 0.25);
+}
+
+.fc-modal::backdrop {
+  background: rgba(10, 16, 32, 0.5);
+}
+
+.fc-modal__title {
+  margin-top: 0;
+}
+
+.fc-modal__list {
+  padding-left: 1.2rem;
+  margin: 0.75rem 0;
+}
+
+.fc-modal__close {
+  margin-top: 0.75rem;
+  background: var(--fc-accent);
+  color: var(--fc-accent-contrast);
+  border: 1px solid var(--fc-accent);
+  border-radius: var(--fc-radius-sm);
+  font: inherit;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+}
+
+.fc-modal__close:hover {
+  background: var(--fc-accent-hover);
+}
+
+/* -- Mobile guard ------------------------------------------------------ */
+
+.fc-mobile-guard {
+  max-width: 540px;
+  margin: 3rem auto;
+  padding: 1.5rem;
+  background: var(--fc-surface);
+  border: 1px solid var(--fc-border);
+  border-radius: var(--fc-radius);
+  text-align: center;
+}
+
+/* -- Dark scheme ------------------------------------------------------- */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fc-bg: #0b1020;
+    --fc-surface: #141a2d;
+    --fc-surface-alt: #1b2340;
+    --fc-border: #2b3556;
+    --fc-border-strong: #586280;
+
+    --fc-text: #e6edf3;          /* 14:1 on --fc-bg */
+    --fc-text-muted: #b8c2d4;    /* 8:1 on --fc-bg */
+    --fc-text-inverse: #0b1020;
+
+    --fc-accent: #6ea8ff;        /* 7.6:1 on --fc-bg */
+    --fc-accent-hover: #9bc2ff;
+    --fc-accent-contrast: #0b1020;
+
+    --fc-success: #3fc27a;
+    --fc-danger: #ff7a7a;
+    --fc-focus: #ffcc33;
+  }
+}
+
+/* -- Reduced motion ---------------------------------------------------- *
+ *
+ * A single block disables every animation and transition referenced
+ * above. Individual rules above still set `transition` properties; the
+ * duration variables flip to 0, and the animations collapse to a single
+ * idle frame.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --fc-dur-fast: 0ms;
+    --fc-dur-med: 0ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .fc-status__progress:not([value]) {
+    animation: none;
+    background: var(--fc-surface-alt);
+  }
+
+  .fc-status__indicator--spin {
+    animation: none;
+    border-top-color: transparent;
+    border-color: var(--fc-accent);
+  }
+}

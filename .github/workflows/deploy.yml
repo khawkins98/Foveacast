@@ -1,0 +1,119 @@
+# GitHub Pages deploy for Foveacast.
+#
+# Follows the canonical Pages v4 deploy pattern from GitHub's own docs:
+# upload-pages-artifact + deploy-pages, the explicit pages/id-token
+# permissions required for OIDC-backed deployment, and a single-slot
+# concurrency group so queued deploys coalesce instead of racing.
+#
+# Why we ship `./docs` directly: the project is buildless. The folder
+# committed under `docs/` IS the site — it's what Vite serves in dev,
+# what a user opens when they unzip the repo, and what Pages publishes.
+# There is no transform step between source and production, on purpose
+# (the PRD's "unzip and open index.html" promise depends on it).
+#
+# Why the test suite runs INSIDE this job rather than in a separate
+# job that `needs:` a gate from ci.yml: GitHub Actions has no
+# cross-workflow `needs:` relationship. `workflow_run` can express a
+# dependency across workflows, but it runs the dependent workflow
+# against the default branch's copy of the YAML (not the commit that
+# triggered it) and has historically been a source of confusing
+# "passed but didn't actually gate" outcomes. Inlining the tests as
+# steps in the deploy job is the cleanest way to honour the PRD's
+# §Deployment requirement — "Run tests — fail the workflow if any
+# test fails" — without adding workflow-orchestration complexity we
+# would then have to reason about whenever CI behaviour changed.
+#
+# ci.yml still runs the same tests on every PR and push; it is the
+# tight feedback loop for contributors. This workflow re-runs them
+# as the last guard before a real deploy, so a broken main can never
+# ship to Pages even if something slipped past the PR check.
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Allow a manual re-run from the Actions tab without having to push
+  # an empty commit.
+  workflow_dispatch:
+
+# Minimum permissions needed for the OIDC-backed Pages deploy.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one in-flight Pages deploy at a time; a newer push supersedes
+# an older one that is still queued, but we don't cancel a deploy
+# that has already started — half-deployed Pages sites are worse
+# than a slightly stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Test toolchain setup. We only run a single Node version here
+      # (the floor the project supports) because ci.yml already covers
+      # the matrix across Node LTS lines on every push and PR. The
+      # goal of this step in the deploy workflow is to gate the
+      # artifact upload on a clean run, not to re-prove compatibility.
+      # Version is intentionally omitted: package.json's
+      # packageManager field is the source of truth. Passing
+      # `version:` as well conflicts with it and fails with
+      # ERR_PNPM_BAD_PM_VERSION.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      # --frozen-lockfile so the deploy-time test run exercises the
+      # exact dependency graph recorded in the lockfile, the same
+      # rule ci.yml enforces.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The gate. A red test run fails the whole deploy job, which
+      # means the Pages artifact is never uploaded and the site on
+      # https://khawkins98.github.io/Foveacast/ keeps serving the
+      # previous (green) commit. This is the PRD §Deployment contract.
+      - name: Run tests
+        run: pnpm test
+
+      # Mirror MSI-Net weights into docs/models/ so the Pages artefact
+      # ships its own data. The repo does not commit these files
+      # (they are gitignored at ~129 MB across five presets) — we
+      # fetch them fresh from Google Cloud Storage at deploy time.
+      # This removes the user-facing single point of failure where a
+      # GCS outage or bucket rename would break every cache-evicted
+      # visitor. The loader prefers `./models/{preset}/model.json`
+      # at runtime and falls back to GCS only if that HEAD fails.
+      - name: Mirror model weights
+        run: bash scripts/fetch-weights.sh
+
+      # The Pages tooling expects a specific artifact format produced
+      # by this action. Handing it `./docs` uploads the static-site
+      # folder verbatim — no build invocation, no transformation.
+      # The folder now includes the mirrored weights from the step
+      # above.
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./docs
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

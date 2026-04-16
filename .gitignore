@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build / dev artefacts
+dist/
+.vite/
+coverage/
+
+# Playwright run artefacts (traces, screenshots, reports). Everything
+# inside /tests/e2e/ that is NOT a *.spec.js file is regenerated per
+# run and should not be committed.
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+tests/e2e/.cache/
+
+# Logs
+*.log
+
+# OS cruft
+.DS_Store
+
+# Model weights never live in the repo — they are fetched from the model
+# CDN on first run and cached by the browser. The patterns below are a
+# defence-in-depth against an accidental `git add .` after a local
+# experiment. Reviewers should still reject any large binary that sneaks
+# past these patterns; size-based thresholds cannot be expressed in a
+# .gitignore file and must be enforced out of band.
+*.pb
+*.onnx
+*.bin
+# Mirrored model weights — populated by scripts/fetch-weights.sh
+docs/models/

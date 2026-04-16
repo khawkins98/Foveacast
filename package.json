@@ -1,0 +1,27 @@
+{
+  "name": "foveacast",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Free, offline-capable, open-source predictive attention-heatmap tool. Runs entirely in the browser.",
+  "scripts": {
+    "dev": "vite",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:no-mirror": "bash scripts/test-e2e-no-mirror.sh",
+    "smoke": "bash scripts/smoke-test.sh",
+    "weights": "bash scripts/fetch-weights.sh"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "jsdom": "^24",
+    "vite": "^5",
+    "vitest": "^1"
+  },
+  "packageManager": "pnpm@10.12.1+sha512.f0dda8580f0ee9481c5c79a1d927b9164f2c478e90992ad268bbb2465a736984391d6333d2c327913578b2804af33474ca554ba29c04a8b13060a717675ae3ac"
+}
