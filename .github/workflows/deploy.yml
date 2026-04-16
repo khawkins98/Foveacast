@@ -67,10 +67,12 @@ jobs:
       # the matrix across Node LTS lines on every push and PR. The
       # goal of this step in the deploy workflow is to gate the
       # artifact upload on a clean run, not to re-prove compatibility.
+      # Version is intentionally omitted: package.json's
+      # packageManager field is the source of truth. Passing
+      # `version:` as well conflicts with it and fails with
+      # ERR_PNPM_BAD_PM_VERSION.
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

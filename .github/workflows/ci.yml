@@ -36,10 +36,14 @@ jobs:
 
       # pnpm must be installed before setup-node, otherwise the
       # pnpm-cache option below has nothing to cache against.
+      #
+      # Version is intentionally omitted here: package.json carries
+      # `packageManager: pnpm@10...`, which the action reads and
+      # honours. Specifying `version:` as well would conflict with
+      # the packageManager field and fail with
+      # `ERR_PNPM_BAD_PM_VERSION`.
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
