@@ -134,7 +134,13 @@ async function fetchModelBytes(url, onProgress) {
  */
 export async function loadModel(onProgress) {
   const ort = /** @type {any} */ (globalThis).ort;
-  if (!ort || typeof ort.InferenceSession !== 'object' || typeof ort.InferenceSession.create !== 'function') {
+  // `ort.InferenceSession` is exposed as a class (typeof 'function'),
+  // not a plain object. The earlier `typeof === 'object'` check was a
+  // false-positive trip; a successful load still failed the guard and
+  // surfaced as "ORT Web is not available on globalThis" on first drop.
+  // The fix is to check that the constructor is callable and that its
+  // static `create` exists, which is the actual contract we rely on.
+  if (!ort || !ort.InferenceSession || typeof ort.InferenceSession.create !== 'function') {
     throw new Error(
       'ONNX Runtime Web is not available on globalThis. Ensure `onnxruntime-web` is loaded (via CDN script tag or vendored copy) before calling loadModel().',
     );

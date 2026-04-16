@@ -84,6 +84,29 @@ describe('loadModel', () => {
     await expect(loadModel()).rejects.toThrow(/ONNX Runtime Web is not available/);
   });
 
+  it('accepts the real-shape ort.InferenceSession (a class, not a plain object)', async () => {
+    // Regression for a false-positive guard: the earlier check was
+    // `typeof ort.InferenceSession === 'object'`, but ORT Web exposes
+    // InferenceSession as a class — typeof 'function'. A successful
+    // load hit the guard and surfaced as "ORT is not available" on
+    // first drop. This test pins the real global shape so that
+    // failure mode cannot come back.
+    class FakeInferenceSession {
+      static async create() {
+        return { fake: 'session' };
+      }
+    }
+    /** @type {any} */ (globalThis).ort = {
+      InferenceSession: FakeInferenceSession,
+      Tensor: function () {},
+      env: { wasm: {} },
+    };
+    globalThis.fetch = makeStreamingFetch(new Uint8Array(8));
+
+    const result = await loadModel();
+    expect(result.session).toEqual({ fake: 'session' });
+  });
+
   it('fetches the committed same-origin artefact and hands its bytes to ort.InferenceSession.create', async () => {
     const bytes = new Uint8Array([1, 2, 3, 4, 5]);
     const create = installOrtMock();
