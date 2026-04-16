@@ -68,6 +68,7 @@ const RETRY_LABELS = {
  * @property {() => void} showReady
  * @property {(label?: string) => void} showInference
  * @property {(err: ErrorParams) => void} showError
+ * @property {(message: string) => void} showDemoBanner
  * @property {() => void} clear
  */
 
@@ -275,6 +276,23 @@ export function createStatus() {
     root.setAttribute('aria-live', 'polite');
   }
 
+  // --- Demo mode -----------------------------------------------------
+  //
+  // Used only when `?demo=1` is in the URL. The banner makes clear that
+  // the rendered output is synthetic — we don't want anyone taking a
+  // screenshot of the demo and captioning it "here's what the model
+  // thinks about my page".
+
+  /** @param {string} message */
+  function showDemoBanner(message) {
+    const body = document.createElement('p');
+    body.className = 'fc-status__body';
+    body.textContent = message;
+
+    setBody('demo', [body]);
+    root.setAttribute('data-foveacast-status', 'demo');
+  }
+
   return {
     element: root,
     showFirstRun,
@@ -282,6 +300,7 @@ export function createStatus() {
     showReady,
     showInference,
     showError,
+    showDemoBanner,
     clear,
   };
 }

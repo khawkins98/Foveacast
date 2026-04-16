@@ -186,6 +186,13 @@ a:hover {
   border-left-color: var(--fc-success);
 }
 
+/* Demo-mode banner: yellow-ish accent so nobody mistakes synthetic
+   preview output for a real model prediction. */
+.fc-status--demo {
+  border-left-color: #c97b00;
+  background: color-mix(in srgb, #c97b00 6%, var(--fc-surface));
+}
+
 .fc-status__body {
   margin: 0;
   flex: 1 1 280px;

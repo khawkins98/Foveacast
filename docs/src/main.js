@@ -24,6 +24,7 @@ import {
   compositeImageAndHeatmap,
 } from './render/heatmap.js';
 import { downloadCompositeAsPng } from './render/download.js';
+import { isDemoModeRequested, runDemoMode } from './demo.js';
 
 /**
  * Human-readable preset codenames for the model-version footer line.
@@ -161,6 +162,32 @@ function boot() {
   // Populated here so the model-version indicator can be refreshed when
   // the preset changes. Commit 13 fleshes out the content.
   renderFooter();
+
+  // --- Demo mode short-circuit ------------------------------------------
+  // When `?demo=1` is present, skip the model download entirely and run
+  // a synthetic saliency map through the render pipeline. Normal flow
+  // resumes as soon as the user drops their own file (we still let the
+  // real model load in the background so a drop works immediately
+  // after the demo renders).
+  if (isDemoModeRequested()) {
+    runDemoMode({
+      outputPlaceholder,
+      outputCanvasWrap,
+      outputCaption,
+      outputSection,
+      onBanner: (message) => status.showDemoBanner(message),
+    }).catch((err) => {
+      console.error('Foveacast: demo mode failed.', err);
+      status.showError({
+        code: 'INFERENCE_FAILED',
+        message:
+          'Demo mode failed to render. This is unexpected — please file an issue. Real inference is unaffected.',
+      });
+    });
+    // Fall through: the normal `reloadModel()` still runs below so the
+    // user can drop a real file and get a real prediction without
+    // reloading the page.
+  }
 
   // --- Kick off model load ---------------------------------------------
   reloadModel().catch((err) => surfaceModelError(err));
