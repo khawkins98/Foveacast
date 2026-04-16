@@ -11,6 +11,11 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['tests/**/*.test.js'],
+    // `tests/setup.js` installs a narrow console.error filter that drops
+    // only jsdom's "Not implemented: HTMLCanvasElement.prototype.getContext"
+    // warnings. Every other error — including real test failures — still
+    // surfaces. See the top of that file for the rationale and scope.
+    setupFiles: ['./tests/setup.js'],
     // The scaffolding commit lands before any test files exist. Later
     // commits (per the overnight plan) populate `tests/`. Without this
     // flag, `vitest run` exits non-zero on a clean clone, which would
