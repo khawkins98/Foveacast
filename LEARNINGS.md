@@ -179,6 +179,20 @@ Open questions before committing effort:
 
 Suggested spike as a separate piece of work: run `torch.onnx.export` on a stock UNISAL checkpoint, validate the resulting graph in ORT on CPU first, and only then try it in ORT Web. That ordering catches export problems without the browser-runtime variable layered on top.
 
+## 2026-04-16 — UNISAL ONNX desk-research spike
+
+Went back and answered the three open questions from the V2 investigation entry. The full write-up is [`docs/spikes/unisal-onnx-research.md`](docs/spikes/unisal-onnx-research.md). The short version:
+
+The ONNX export itself should be clean. Every op UNISAL uses is standard PyTorch. The convolutional GRU is implemented from Conv2d + sigmoid + tanh rather than `nn.GRUCell`, and — more importantly — the image-only path bypasses the GRU entirely when `static=True` and `bypass_rnn=True`. That removes the one construct (the Python `for t in range(T)` loop) that would have forced us to deal with ONNX Loop ops or unrolling. Two things to handle at export time: the forward signature is 5-D (`[batch, time, channel, h, w]`), and the `source` string argument drives Python-side attribute lookups that will hard-code whichever dataset we pass at export. Neither is a blocker; both are scope for the export script.
+
+The ORT Web runtime cost is larger than expected. The default WebGPU-capable build is around 20 MB of WASM (~6 MB gzipped); a size-optimised source build drops to ~8 MB; the minimal-build path gets to ~3 MB but requires converting the model to ORT format and a local build that only links the ops UNISAL needs. TF.js today is 1.4 MB vendored. The weight-file side moves in the opposite direction — UNISAL is 5–20× smaller than MSI-Net per the PRD, so a single preset weight file is probably 5–15 MB against MSI-Net's ~24 MB. Net first-run total is a wash or slightly worse for the default build and clearly better for the minimal build.
+
+ORT Web falls back to single-threaded WASM without COEP headers, which is the behaviour we need for GitHub Pages. Not an error path, not a warning — just slower than it would be with cross-origin isolation. Given GitHub Pages cannot set COEP, this is the permanent browser-side performance floor for any V2 built on ORT Web.
+
+No community ONNX export exists. Searches across GitHub and HuggingFace turn up the reference PyTorch repo and the KDSalBox knowledge-distillation toolbox, nothing else. We own the export end-to-end.
+
+Recommendation going forward: proceed to a hands-on export spike on a one-day time box. Do *not* schedule a V2 integration until that spike validates the export and until a separate qualitative comparison confirms UNISAL actually outperforms MSI-Net on Foveacast's target content types. "UNISAL was trained on more diverse data" is a reason to look, not a reason to ship; accuracy on the actual screenshots is the metric that matters.
+
 ## 2026-04-16 — V3 SUM investigation (no code)
 
 V3 in the PRD is SUM (Saliency Unification through Mamba, WACV 2025 Oral), which matters because it is the only model in the field explicitly trained with a "user interface screenshot" condition. The blocker is well known: SUM's `requirements.txt` pulls in `mamba-ssm` and `causal-conv1d`, both of which ship as compiled CUDA C++ extensions with no ONNX operator equivalents. `torch.onnx.export` cannot trace what it cannot reach; WebAssembly cannot execute compiled CUDA. That is a hard wall, not a config tweak.

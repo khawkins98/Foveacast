@@ -63,11 +63,13 @@ Serialise `{ sourceImage, saliencyMap, preset, opacity }` to an IndexedDB record
 
 ### V2 — UNISAL via ONNX Runtime Web
 
-**Size:** 3–7 days of spike, 1–2 days of integration if the spike lands. **Status:** named in PRD; investigation notes in LEARNINGS.
+**Size:** 1 day of hands-on export spike, then a 2–3 day integration if the export lands AND a qualitative benchmark says UNISAL actually helps. **Status:** desk-research spike completed 2026-04-16. See [`docs/spikes/unisal-onnx-research.md`](spikes/unisal-onnx-research.md) and LEARNINGS.
 
-Swap MSI-Net for UNISAL. Standard PyTorch ops, a clean ONNX export path in principle. Trade-offs documented in LEARNINGS.md §V2 UNISAL investigation. The open questions are: ORT Web bundle size, WebGPU execution-provider coverage for UNISAL's op set, and whether there's a community export we can start from.
+Swap MSI-Net for UNISAL. The desk-research spike settled three things: the export is mechanically clean (all standard ops, image path bypasses the cGRU); no community ONNX export exists, so we own it end-to-end; and the ORT Web runtime cost is meaningfully higher than TF.js today — ~8–20 MB of wasm against 1.4 MB — offset by UNISAL's smaller weight file. Net first-run budget is a wash or slightly worse for the default ORT Web build, better for a minimal source build.
 
-The integration shape is clean — the PRD's module architecture was designed for exactly this swap — but the spike itself is research work and should be treated as such. Don't commit to a UNISAL merge before the ONNX export has validated on CPU against stock UNISAL output.
+The next step is the hands-on export (option B from the earlier scoping): run `torch.onnx.export` on the stock UNISAL SALICON checkpoint, validate against stock PyTorch output on a handful of sample images, report the artefact size and diff numbers.
+
+The commit to V2 itself is blocked on two gates: (1) option B validates the export end-to-end, and (2) a separate qualitative benchmark — the "Model-quality benchmarking" roadmap item below — confirms UNISAL outperforms MSI-Net on Foveacast's target content. Until (2) is answered, the runtime-cost trade-off is not justified.
 
 ### V3 — SUM (stretch)
 
