@@ -4,6 +4,43 @@ All notable changes to Foveacast are recorded here. Format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-04-16
+
+V2 per the PRD: the inference model and runtime both change. MSI-Net through TensorFlow.js is replaced by UNISAL through ONNX Runtime Web. The user-visible feature set is unchanged — drop a screenshot, get back a heatmap — but the bytes under the hood are different, and the preset picker is gone because UNISAL is a single fixed-shape model.
+
+This release is a breaking change for anyone with cached MSI-Net weights; the new model is served from `./models/unisal/model.onnx` and the old `./models/{preset}/` paths are no longer populated by any ship path.
+
+### Added
+
+- **UNISAL ONNX model, committed at `docs/models/unisal/model.onnx`** — 12.5 MB single-file artefact, exported from the stock `rdroste/unisal` SALICON checkpoint. No CDN dependency: the file is served same-origin from the repo. The export script lives at `scripts/unisal-onnx-export.py`, with the reproduction recipe documented in the script's docstring.
+- **ONNX Runtime Web runtime**, vendored at `docs/vendor/ort.wasm.min.js` + `docs/vendor/ort-wasm-simd-threaded.wasm` + `docs/vendor/ort-wasm-simd-threaded.mjs` (version 1.24.3, MIT licence). Runs single-threaded on GitHub Pages because COEP headers are not available; ORT Web handles the fallback automatically.
+- **Desk-research and hands-on export spike write-up** at `docs/spikes/unisal-onnx-research.md`. Answers every question the earlier V2 investigation had left open, including the ORT Web bundle reality, community-export status, and the log-probability output quirk.
+
+### Changed
+
+- **Inference model: MSI-Net (~25M params, 5 presets) → UNISAL (3.7M params, 1 shape).** UNISAL is ~6.7× smaller by parameter count. Input is a fixed 288×384 RGB tensor with ImageNet normalisation. The fixed shape removes the speed/quality trade-off the preset picker used to expose.
+- **Inference runtime: `@tensorflow/tfjs` 4.22 → `onnxruntime-web` 1.24.3.** Net first-load budget moved from ~1.4 MB of JS + ~24 MB of weights to ~12 MB of WASM + 12.5 MB of weights. Subsequent cached loads pay only the asset cache cost, which is comparable.
+- **Postprocess pipeline** gained a `logProbsToProbabilities` step (`exp(y - max(y))`) before the upsample/blur/normalise path. UNISAL's output is log-softmax over the grid; MSI-Net's was direct 0–255 intensity. The exp step turns the diffuse raw logits into a localised saliency peak.
+- **Preprocess layout** moved from NHWC BGR 0–255 (MSI-Net / VGG inheritance) to NCHW RGB ImageNet-normalised 0–1 (UNISAL / MobileNetV2 inheritance). The module is still framework-agnostic — no `onnxruntime-web` dependency.
+- **Preset picker removed** from the controls UI. Opacity, view toggle, and download button remain.
+- **Attribution footer** credits UNISAL (Apache 2.0) and ONNX Runtime Web (MIT) in place of MSI-Net and TensorFlow.js.
+- **First-run banner copy** cites the actual UNISAL download size (~13 MB) rather than MSI-Net's ~60 MB. Ready-state copy unchanged.
+- **`loadModel` signature simplified** from `loadModel(preset, onProgress)` to `loadModel(onProgress)`. Progress events now carry real `loaded` / `total` byte counts — `loader.js` fetches via a `ReadableStream` so the progress bar can show byte counts instead of falling back to opaque fractions.
+- **Demo-mode synthetic saliency** now generates log-probability-range values at UNISAL's native 288×384 shape so it flows through the same postprocess as real inference.
+- **Deploy workflow** no longer calls `scripts/fetch-weights.sh`. The UNISAL artefact is committed, so the Pages upload picks it up directly from the repo.
+
+### Removed
+
+- **`@tensorflow/tfjs` vendor** (`docs/vendor/tf.min.js`, `docs/vendor/LICENCE-TFJS.txt`).
+- **`scripts/fetch-weights.sh`** and **`scripts/test-e2e-no-mirror.sh`** — the former mirrored MSI-Net weights at deploy time, the latter simulated a missing mirror in CI. Neither is meaningful under V2's in-repo weight story.
+- **Preset-related code** across loader, controls, main, and tests: `PRESETS` constant, `resolveModelUrl`, `GCS_MODEL_URLS`, `LOCAL_MODEL_URLS`, `MODEL_URLS`, `PRESET_CODE_NAMES`, `onPresetChange` callback.
+
+### Notes
+
+- **Quality benchmark against MSI-Net: not done.** The spike doc recommended a qualitative comparison before committing to V2; we shipped anyway. If user-facing output looks worse on real content, the revert path is clean — the layer boundaries held, and a V1 restore is mechanically a diff revert plus re-running `scripts/fetch-weights.sh` (preserved in git history).
+- **WebGPU is off.** GitHub Pages cannot set `Cross-Origin-Embedder-Policy: require-corp`, which ORT Web's WebGPU EP needs for threading; the JSEP WASM variant is an extra ~10 MB for capability we cannot use. The ship build is the WASM-only `ort.wasm.min.js`.
+- **Model credit:** UNISAL (Droste, Jiao & Noble, ECCV 2020; Apache 2.0), single SALICON-trained export, ~3.7M parameters.
+
 ## [0.1.1] — 2026-04-16
 
 Post-release housekeeping. First pass of changes informed by actually using the shipped product, running Foveacast on its own landing page, and closing the smallest items from the overnight reviews that didn't block V1.

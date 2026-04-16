@@ -61,15 +61,13 @@ Serialise `{ sourceImage, saliencyMap, preset, opacity }` to an IndexedDB record
 
 ## Theme: model quality
 
-### V2 — UNISAL via ONNX Runtime Web
+### V2 — UNISAL via ONNX Runtime Web (shipped 0.2.0)
 
-**Size:** 1 day of hands-on export spike, then a 2–3 day integration if the export lands AND a qualitative benchmark says UNISAL actually helps. **Status:** desk-research spike completed 2026-04-16. See [`docs/spikes/unisal-onnx-research.md`](spikes/unisal-onnx-research.md) and LEARNINGS.
+**Status:** shipped in `0.2.0`. UNISAL replaced MSI-Net; ORT Web replaced TensorFlow.js. The spike notes remain at [`docs/spikes/unisal-onnx-research.md`](spikes/unisal-onnx-research.md); the ship-day write-up is in LEARNINGS. Delete from this roadmap once anything else on the V2 line ships (e.g. WebGPU unlocked if the distribution story changes, or a second UNISAL checkpoint tuned for a different source). For now, kept as a marker of what landed and a pointer to the open follow-up.
 
-Swap MSI-Net for UNISAL. The desk-research spike settled three things: the export is mechanically clean (all standard ops, image path bypasses the cGRU); no community ONNX export exists, so we own it end-to-end; and the ORT Web runtime cost is meaningfully higher than TF.js today — ~8–20 MB of wasm against 1.4 MB — offset by UNISAL's smaller weight file. Net first-run budget is a wash or slightly worse for the default ORT Web build, better for a minimal source build.
-
-The next step is the hands-on export (option B from the earlier scoping): run `torch.onnx.export` on the stock UNISAL SALICON checkpoint, validate against stock PyTorch output on a handful of sample images, report the artefact size and diff numbers.
-
-The commit to V2 itself is blocked on two gates: (1) option B validates the export end-to-end, and (2) a separate qualitative benchmark — the "Model-quality benchmarking" roadmap item below — confirms UNISAL outperforms MSI-Net on Foveacast's target content. Until (2) is answered, the runtime-cost trade-off is not justified.
+Open follow-ups tied directly to the V2 swap:
+- **Qualitative benchmark against MSI-Net** — still unanswered. The spike flagged it as a gate; the ship happened without it. This is the "Model-quality benchmarking" item below.
+- **Real-inference Playwright test** — the current E2E suite runs against demo mode (synthetic saliency), so the real ORT Web inference path is only tested by hand and by unit-level contract. A Playwright test that actually loads the 12.5 MB ONNX and runs inference on a committed fixture would close the only remaining gap in the four testing tiers.
 
 ### V3 — SUM (stretch)
 

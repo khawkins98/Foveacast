@@ -93,22 +93,18 @@ jobs:
       - name: Run tests
         run: pnpm test
 
-      # Mirror MSI-Net weights into docs/models/ so the Pages artefact
-      # ships its own data. The repo does not commit these files
-      # (they are gitignored at ~129 MB across five presets) — we
-      # fetch them fresh from Google Cloud Storage at deploy time.
-      # This removes the user-facing single point of failure where a
-      # GCS outage or bucket rename would break every cache-evicted
-      # visitor. The loader prefers `./models/{preset}/model.json`
-      # at runtime and falls back to GCS only if that HEAD fails.
-      - name: Mirror model weights
-        run: bash scripts/fetch-weights.sh
+      # V2 committed the UNISAL ONNX artefact directly at
+      # docs/models/unisal/model.onnx (12.5 MB). No fetch-at-deploy
+      # step is needed — the Pages upload below picks it up as part
+      # of the docs/ tree. V1's fetch-weights.sh, which pulled 120 MB
+      # of MSI-Net shards from Google Cloud Storage at deploy time,
+      # is no longer part of the ship path.
 
       # The Pages tooling expects a specific artifact format produced
       # by this action. Handing it `./docs` uploads the static-site
       # folder verbatim — no build invocation, no transformation.
-      # The folder now includes the mirrored weights from the step
-      # above.
+      # The UNISAL weights are committed to the repo so the folder
+      # is already complete at checkout time.
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

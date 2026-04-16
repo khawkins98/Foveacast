@@ -103,8 +103,8 @@ required_markers=(
   'id="fc-controls-mount"'
   'id="fc-output"'
   'src="./src/main.js"'
-  'tfjs@4.22.0'
-  'heatmap.js@2.0.5'
+  'ort.wasm.min.js'
+  'heatmap.min.js'
 )
 
 for marker in "${required_markers[@]}"; do

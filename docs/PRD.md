@@ -99,7 +99,9 @@ No account. No upload to a server. No configuration required.
 
 ## Versions
 
-### Version 1 — Static Web App (primary target)
+**Status as of 2026-04-16 (0.2.0):** V1 shipped at `0.1.0` and matured through `0.1.1`. V2a (UNISAL via ONNX Runtime Web) shipped at `0.2.0` — the model swap is live on the hosted site and reflected in the committed `docs/models/unisal/model.onnx` artefact. V2b (Tauri native) and V3 (SUM) remain future work; the sections below stand as the original spec for those phases, with the hands-on V2 findings captured in [`docs/spikes/unisal-onnx-research.md`](spikes/unisal-onnx-research.md) and `LEARNINGS.md`. Anything in the V1 and V2a sections that describes the *approach* is historically accurate; anything describing live runtime state should be cross-checked against the current code.
+
+### Version 1 — Static Web App (shipped 0.1.0)
 
 A self-contained static web application that runs entirely in the browser using TensorFlow.js inference.
 
@@ -123,11 +125,13 @@ A self-contained static web application that runs entirely in the browser using 
 
 Two parallel improvements that may ship together or separately depending on effort.
 
-**2a — UNISAL model upgrade (static web app, same distribution)**
+**2a — UNISAL model upgrade (static web app, same distribution) — shipped 0.2.0**
 
-Swap MSI-Net for UNISAL via ONNX Runtime Web. UNISAL (Apache 2.0, ECCV 2020) is smaller and faster than MSI-Net and was designed for joint image/video saliency — meaning it generalises better across content types. It is pure PyTorch with standard ops, making the ONNX export path straightforward in principle (though not yet attempted for browser deployment).
+Swapped MSI-Net for UNISAL via ONNX Runtime Web at `0.2.0`. UNISAL (Apache 2.0, ECCV 2020) is ~6.7× smaller than MSI-Net by parameter count (3.7M vs ~25M) and was designed for joint image/video saliency. The image-only forward path cleanly bypasses UNISAL's convolutional GRU when `static=True`, which is how the ONNX export is configured.
 
-Migration path: PyTorch model → `torch.onnx.export` → ONNX graph validation → ONNX Runtime Web (WebAssembly + WebGPU backends).
+Migration path, as executed: clone `rdroste/unisal` → patch the model for `source="SALICON"` and `static=True` → `torch.onnx.export` → inline external data via `onnx.save_model(save_as_external_data=False)` → validate in `onnxruntime` CPU against stock PyTorch output (max \|Δ\| = 5.3e-05) → commit the 12.5 MB single-file artefact to `docs/models/unisal/model.onnx` → load in the browser via `onnxruntime-web`'s WASM execution provider. The export script lives at `scripts/unisal-onnx-export.py`; the validation at `scripts/unisal-onnx-realimage-check.py`.
+
+WebGPU is not enabled. Pages cannot set `Cross-Origin-Embedder-Policy`, which the WebGPU execution provider requires; the WASM-only build is the permanent choice.
 
 **2b — Tauri native app (optional, parallel track)**
 
@@ -192,8 +196,8 @@ Key research:
 
 | Version | Model | Role | Licence | Browser path |
 |---|---|---|---|---|
-| V1 | MSI-Net | Ship now | MIT ✓ | TF.js ✓ proven |
-| V2 | UNISAL | Upgrade path | Apache 2.0 ✓ | ONNX conversion (standard ops, feasible) |
+| V1 | MSI-Net | Shipped 0.1.0 | MIT ✓ | TF.js — historical |
+| V2 | UNISAL | Shipped 0.2.0 | Apache 2.0 ✓ | ONNX Runtime Web — live |
 | V3 | SUM | Stretch goal | MIT ✓ | ONNX conversion (CUDA kernel blocker — see investigation log) |
 
 ---

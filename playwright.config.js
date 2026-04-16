@@ -1,11 +1,15 @@
 // Playwright config for Foveacast end-to-end tests.
 //
-// Scope: chromium only, demo-mode only. The full TF.js model-load path
-// is deliberately NOT exercised here — it depends on Google Cloud
-// Storage being reachable, takes 40–60 s on a cold cache, and fails in
-// ways unrelated to our code. The `?demo=1` path exercises the same
-// render pipeline with a synthetic saliency map and is the regression
-// surface that would have caught 5bc68c3's detached-container bug.
+// Scope: chromium only, demo-mode only. The real UNISAL inference path
+// is deliberately NOT exercised here — loading the 12.5 MB ONNX and
+// running inference on a committed fixture would take enough wall-clock
+// time to slow every run, and the render-pipeline risks it would catch
+// are already covered by the demo-mode suite. Adding a "real inference
+// in a real browser" test is a live follow-up in ROADMAP / LEARNINGS.
+//
+// The `?demo=1` path exercises the same render pipeline with a
+// synthetic saliency map and is the regression surface that caught
+// 5bc68c3's detached-container bug after V1 shipped.
 //
 // This test suite is NOT run by `pnpm test` (which is vitest) — it has
 // its own `pnpm test:e2e` script so unit tests stay fast and the e2e
@@ -21,8 +25,8 @@ export default defineConfig({
   // so the two suites never step on each other.
   testMatch: /.*\.spec\.js/,
 
-  // Fail fast locally; retry once to shake out any tf.js CDN jitter if
-  // a future test does exercise the real load path.
+  // Fail fast locally; retry once to shake out any transient network
+  // jitter if a future test does exercise the real inference path.
   retries: process.env.CI ? 2 : 1,
   workers: 1,
 
