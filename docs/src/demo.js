@@ -48,8 +48,17 @@ export function isDemoModeRequested() {
     const params = new URLSearchParams(window.location.search);
     if (!params.has('demo')) return false;
     const value = params.get('demo');
-    if (value === null) return true; // bare `?demo`
-    return value === '1' || value.toLowerCase() === 'true';
+    // URLSearchParams normalises a bare `?demo` to an empty string,
+    // not null. Treating empty string as truthy honours the comment
+    // above — a user who types the param without a value clearly
+    // wants demo mode on.
+    if (value === null || value === '') return true;
+    const normalised = value.toLowerCase();
+    // Explicit off values (`?demo=0` / `?demo=false`) defeat demo
+    // mode even if the key is present, in case we ever want to set
+    // it negative by default from another context.
+    if (normalised === '0' || normalised === 'false') return false;
+    return normalised === '1' || normalised === 'true';
   } catch {
     return false;
   }
