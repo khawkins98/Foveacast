@@ -320,10 +320,22 @@ a:hover {
   outline-offset: 3px;
 }
 
-.fc-dropzone--dragging {
+.fc-dropzone--dragging,
+/* When a file is being dragged anywhere over the document, lift the
+   drop zone so the user can see the target even if the cursor is far
+   from it. The `body.fc-page-dragover` class is toggled from
+   ui/page-drop.js while any file-carrying drag is in flight. */
+body.fc-page-dragover .fc-dropzone {
   border-color: var(--fc-accent);
   background: color-mix(in srgb, var(--fc-accent) 10%, var(--fc-surface));
   transform: scale(1.005);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.fc-page-dragover .fc-dropzone,
+  .fc-dropzone--dragging {
+    transform: none;
+  }
 }
 
 .fc-dropzone--disabled {

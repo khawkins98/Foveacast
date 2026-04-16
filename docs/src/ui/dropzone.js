@@ -8,20 +8,21 @@
 // regressions. The module itself is small, pure DOM, and has ample
 // inline comments below explaining every branch.
 //
+// SCOPE NOTE (UX commit 1):
+//   Drop handling for dropped *files* now lives on `document` in
+//   `ui/page-drop.js`, so a misdropped file anywhere on the page is
+//   caught instead of navigating the browser away. This module keeps
+//   its own `dragenter`/`dragover`/`dragleave` handlers for the
+//   element-local hover treatment, but it no longer calls `onFile` /
+//   `onError` from a `drop` event — the page-level handler owns that
+//   path to avoid double-fires. Click-to-pick still lives here.
+//
 // PRD references:
 //   - §Accessibility: keyboard-activatable drop zone, Tab + Enter/Space.
 //   - §Error States: verbatim messages for UNSUPPORTED_TYPE and TOO_LARGE.
 //   - §First-Run: "Ready once model loads…" label during the disabled state.
 
-/** Maximum accepted file size, per PRD §Error States. */
-const MAX_BYTES = 20 * 1024 * 1024;
-
-/**
- * MIME types we accept. PRD explicitly lists PNG and JPEG.
- * (`image/jpg` is not a registered MIME type but some older browsers
- * send it; we accept it to be tolerant of real-world variance.)
- */
-const ACCEPTED_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg']);
+import { validateDroppedFile } from './file-validation.js';
 
 /**
  * @typedef {Object} DropzoneError
@@ -98,36 +99,18 @@ export function createDropzone({ onFile, onError }) {
   let enabled = true;
   let busy = false;
 
-  /** Validate and hand off a single file. Returns true if accepted. */
+  /**
+   * Validate and hand off a single file (used by the click-to-pick
+   * flow). Returns true if accepted. Drop-initiated files go through
+   * the document-level handler in `ui/page-drop.js` — we deliberately
+   * do NOT call this from a `drop` event here anymore.
+   */
   function handleFile(file) {
-    if (!file) return false;
-
-    // Type check. Some OSes drop files with empty `type` (e.g. a
-    // Finder-copied PNG without metadata). Fall back to extension
-    // sniffing so PNG/JPEG still make it through.
-    const type = (file.type || '').toLowerCase();
-    const name = (file.name || '').toLowerCase();
-    const extOk = name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg');
-    const typeOk = ACCEPTED_TYPES.has(type) || extOk;
-
-    if (!typeOk) {
-      onError({
-        code: 'UNSUPPORTED_TYPE',
-        message:
-          'Foveacast accepts PNG and JPEG screenshots. Try saving your image as a PNG first.',
-      });
+    const result = validateDroppedFile(file);
+    if (!result.ok) {
+      onError(result.error);
       return false;
     }
-
-    if (file.size > MAX_BYTES) {
-      onError({
-        code: 'TOO_LARGE',
-        message:
-          'That image is too large. Try a screenshot under 20MB, or use a lower screen resolution.',
-      });
-      return false;
-    }
-
     onFile(file);
     return true;
   }
@@ -164,13 +147,12 @@ export function createDropzone({ onFile, onError }) {
   });
 
   element.addEventListener('drop', (ev) => {
+    // The document-level handler in `ui/page-drop.js` owns file
+    // dispatch now; we only kill the browser's default and clear the
+    // visual hover state. Calling `handleFile` here would double-fire
+    // with the page handler and process the same drop twice.
     ev.preventDefault();
     setDragging(false);
-    if (!enabled || busy) return;
-
-    const files = ev.dataTransfer && ev.dataTransfer.files;
-    if (!files || files.length === 0) return;
-    handleFile(files[0]);
   });
 
   // Click → open picker. We trigger on the container itself, not on

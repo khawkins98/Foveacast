@@ -25,6 +25,7 @@ import {
 } from './render/heatmap.js';
 import { downloadCompositeAsPng } from './render/download.js';
 import { isDemoModeRequested, runDemoMode } from './demo.js';
+import { installPageDrop } from './ui/page-drop.js';
 
 /**
  * Human-readable preset codenames for the model-version footer line.
@@ -108,7 +109,11 @@ function boot() {
   statusMount.appendChild(status.element);
 
   // --- Dropzone ---------------------------------------------------------
-  const dropzone = createDropzone({
+  // Single callback pair shared by the drop-zone click-to-pick flow
+  // and the document-level drop handler. Factor it so there is one
+  // place to change behaviour.
+  const fileCallbacks = {
+    /** @param {File} file */
     onFile: (file) => {
       // Kick off async work but don't await — we want the event handler
       // to return promptly.
@@ -120,14 +125,23 @@ function boot() {
         });
       });
     },
+    /** @param {{ code: string, message: string }} err */
     onError: (err) => {
-      // Validation failures from the dropzone (UNSUPPORTED_TYPE /
-      // TOO_LARGE) arrive here. Surface them via the same banner.
       status.showError({ code: err.code, message: err.message });
     },
-  });
+  };
+
+  const dropzone = createDropzone(fileCallbacks);
   dropzone.setEnabled(false); // Disabled until the model finishes loading.
   dropzoneMount.appendChild(dropzone.element);
+
+  // Accept a file dropped anywhere on the page. Before this, dropping
+  // one pixel outside the drop-zone element navigated the browser away
+  // from Foveacast and opened the file in the tab — the worst failure
+  // mode for a one-purpose tool. The document-level handler also gates
+  // on the same enabled/busy state (via the shared callbacks: the
+  // handleFile below will reject early if the model isn't ready).
+  installPageDrop(fileCallbacks);
 
   // --- Controls ---------------------------------------------------------
   const controls = createControls({
