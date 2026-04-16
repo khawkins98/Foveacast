@@ -243,6 +243,20 @@ The spike doc said a qualitative MSI-Net vs UNISAL benchmark was the gate before
 
 **What this reinforces about V3.** SUM's value proposition — a model explicitly trained on UI screenshots — becomes more compelling after seeing how badly SALICON-trained models miss UI-specific attention targets like CTAs. The Mamba CUDA-kernel blocker stays the same, but the urgency of cracking it is higher than the V1 build suggested.
 
+## 2026-04-16 — Wider model survey; V3 pivots from SUM to UMSI++
+
+After the V1-vs-V2 benchmark made clear that both shipped-candidate models were SALICON-limited, cast a wider net. Full write-up in [`docs/spikes/model-survey-2026-04.md`](docs/spikes/model-survey-2026-04.md); short version here.
+
+The survey looked for post-2023 saliency models that were (a) permissively licensed, (b) ONNX-exportable, and (c) ideally evaluated on UI / web / document content rather than natural scenes. Ten candidates came back, most of which fall out immediately — closed-source (UniAR), non-commercial licence (ViNet-S), or no UI evidence (SalTR, MDS-ViTNet). Two survive the filter.
+
+**UMSI++ (the model UEyes actually ships)** is the surprise of the survey. It is in MSI-Net's architectural family, which means our existing pipeline (NCHW preprocess, ImageNet normalisation, the ORT Web loader scaffolding from the V2 work on PR #4) likely drops in with minor tweaks. And it was trained on 1,980 UI screenshots with real eye-tracking data via the UEyes dataset — webpages, desktop, mobile, posters. That is the training-data match Foveacast has been missing since V1. The catch is the licence: the UEyes repo has no `LICENSE` file at root, so the code is technically all-rights-reserved until the authors say otherwise. An email to Yue Jiang's group is faster to resolve than SUM's Mamba CUDA blocker is to engineer around, so this moves to the top of the V3 list.
+
+**SUM** stays in the backup slot. The Mamba CPU-fallback story still has not matured upstream in the way the original PRD hoped. If UMSI++'s licence doesn't clear, we revisit SUM. If it does, SUM can wait.
+
+The V3 plan drafted earlier (desk research → hands-on export → browser integration, each phase gated) carries over unchanged. Only the model under investigation changes. PR #4's branch stays the starting point — its ORT Web infrastructure, Playwright real-load test, and comparison tooling all apply to a UMSI++ spike the same way they applied to a SUM one.
+
+One meta-note worth naming: the survey almost didn't happen. The overnight V1 build deferred "wider model survey" as out of scope, the V2 work went with UNISAL because the PRD had already chosen it, and it took an unflattering benchmark against real eye-tracking data to make the case for going back and re-surveying the field. If a PRD's model choice is older than a year or two, it is worth re-asking the question before spending engineering effort on it — the lag between "model published" and "model known-good in practice" is short enough that a one-hour survey can reshape a multi-day spike.
+
 ## 2026-04-16 — V2 shipped: UNISAL + ORT Web end-to-end
 
 Turned the export artefact into a shipped release. `0.2.0` is live; MSI-Net through TF.js is out of the repo; the landing page runs UNISAL through `onnxruntime-web`. The release went smoother than any of us had a right to expect, for one specific reason, and one specific concern is carried forward.
