@@ -278,6 +278,25 @@ SUM stays in the backup slot. If the fine-tune path turns out to have a blocker 
 
 **The meta-lesson.** Agent summaries are useful for narrowing a search space; they are not sources of truth about what a repo actually contains. The "same family as MSI-Net" claim was almost certainly the agent pattern-matching on a name (UMSI-NET-family) rather than reading the architecture code. For any decision that flows from an agent-produced research summary, a 10-minute pass through the real code — file listing, README, any `src/` folder — is cheap insurance against building a plan on a false premise. Adding this to the "how I'd do this again" file.
 
+## 2026-04-16 — Splitting the model-training work into a companion repo
+
+V3 direction settled: fine-tune MSI-Net (MIT) on the UEyes dataset (CC BY 4.0) to get a Foveacast-owned saliency model trained on UI content. The implementation question that followed was "does this live in Foveacast or in its own repo?" Picked its own repo.
+
+The reasons are all pragmatic rather than ideological. Foveacast's README leans on "buildless static web app, vendored dependencies, nothing runs on a server." A training pipeline is the opposite of that — Python, PyTorch or TF, GB-scale dataset, checkpoints, TensorBoard, probably GPU-specific config. Mixing the two blurs the Foveacast positioning and starts making "clone and run" ambiguous ("run what? the web app or the training?"). Separating the repos keeps Foveacast's "clone, pnpm install, pnpm dev" story honest and gives the training work somewhere to exist where its concerns (dataset download, checkpoint management, reproducibility) are first-class.
+
+Attribution cleanliness also matters. The fine-tuned model's provenance chain is MSI-Net (Alexander Kroner, MIT) → UEyes dataset (Jiang et al. 2023, CHI '23, CC BY 4.0) → our fine-tune (MIT). Putting that chain in a companion repo's README makes it one place to maintain; Foveacast's attribution footer then carries a one-line "model from `foveacast-training` vX.Y" link. Single source of truth for where the weights came from and what licence they carry.
+
+The companion repo will own:
+- Training script and UEyes loader.
+- MSI-Net architecture reference (either vendored from Kroner's upstream or ported to PyTorch, decided at setup).
+- Evaluation harness, including runs against the four committed comparison screenshots in `docs/spikes/comparison/`.
+- ONNX export step.
+- Released `.onnx` artefacts tagged by training run.
+
+Foveacast's job is narrower: consume a specific release of the training repo's artefact, drop it at `docs/models/foveacast-v3/model.onnx`, wire it into the loader. That happens in a separate PR against Foveacast, gated on a good training result.
+
+PR #4 pauses here. Branch + commits + comparison evidence + spike docs all preserved. The work continues in the companion repo, and when there's a trained model good enough to merge, it comes back here for the integration PR.
+
 ## 2026-04-16 — V2 shipped: UNISAL + ORT Web end-to-end
 
 Turned the export artefact into a shipped release. `0.2.0` is live; MSI-Net through TF.js is out of the repo; the landing page runs UNISAL through `onnxruntime-web`. The release went smoother than any of us had a right to expect, for one specific reason, and one specific concern is carried forward.
