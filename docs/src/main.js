@@ -172,6 +172,11 @@ function boot() {
     },
   });
   controls.setDisabled(true); // Enabled once the model is ready.
+  // Progressive disclosure: controls stay hidden until there is
+  // actually something to control (first demo render or first
+  // inference result). Pre-drop they are noise competing with the
+  // drop zone for attention.
+  controls.setVisible(false);
   controlsMount.appendChild(controls.element);
 
   // --- Footer (attribution) --------------------------------------------
@@ -197,12 +202,13 @@ function boot() {
     })
       .then(() => {
         // As soon as the demo renders, the user has a canvas to
-        // control — enable the controls and the dropzone right away
-        // even though the background model is still loading. If the
-        // user drops a file before the model is ready, the drop is
-        // queued and auto-runs once load resolves.
+        // control — enable and reveal the controls plus the dropzone
+        // right away even though the background model is still
+        // loading. If the user drops a file before the model is
+        // ready, the drop is queued and auto-runs once load resolves.
         dropzone.setEnabled(true);
         controls.setDisabled(false);
+        controls.setVisible(true);
       })
       .catch((err) => {
         console.error('Foveacast: demo mode failed.', err);
@@ -400,6 +406,9 @@ function boot() {
       state.lastOrigDims = [origH, origW];
 
       renderOutput();
+      // Reveal controls now that there is a real result to operate on
+      // (non-demo path). Safe to call repeatedly — no-op after first.
+      controls.setVisible(true);
       status.clear();
 
       // PRD §Accessibility: after inference completes, move focus to

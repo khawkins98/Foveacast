@@ -95,6 +95,31 @@ test.describe('Foveacast — demo mode end-to-end', () => {
     await expect(banner).toContainText(/real MSI-Net/i);
   });
 
+  test('progressive disclosure: controls are hidden on a fresh load and revealed after the first render', async ({
+    page,
+  }) => {
+    // Navigate without ?demo=1 first — the background model load
+    // would take ~60s, which would dominate the test budget, so we
+    // short-circuit the assertion as soon as the fresh-load state is
+    // observable. We only care that the controls panel is hidden
+    // before any render has happened.
+    await page.goto('/');
+    const controls = page.locator('#fc-controls-mount > *').first();
+    // First visible element under the mount should have hidden
+    // because createControls defaults to hidden=false but main.js
+    // calls setVisible(false) on boot.
+    await expect(controls).toBeHidden({ timeout: 5_000 });
+
+    // Now check the reveal path via demo mode (faster than a real
+    // model load).
+    await page.goto('/?demo=1');
+    await expect(page.locator('#fc-output[data-foveacast-ready="true"]')).toBeVisible({
+      timeout: 15_000,
+    });
+    // After demo renders, the controls panel should be visible.
+    await expect(page.locator('#fc-controls-mount > *').first()).toBeVisible();
+  });
+
   test('dropzone and controls are interactive as soon as demo renders, even while the background model is still loading', async ({
     page,
   }) => {

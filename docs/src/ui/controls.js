@@ -52,6 +52,7 @@ let instanceCount = 0;
  * @property {(view: ViewMode) => void} setView
  * @property {(value: number) => void} setOpacity
  * @property {(disabled: boolean) => void} setDisabled
+ * @property {(visible: boolean) => void} setVisible
  */
 
 /**
@@ -239,11 +240,25 @@ export function createControls(options = {}) {
     root.classList.toggle('fc-controls--disabled', d);
   }
 
+  /**
+   * Show or hide the whole controls panel. Used for progressive
+   * disclosure: before there is anything to control (no dropped file,
+   * no demo render), these controls are noise. We toggle the `hidden`
+   * attribute rather than `display:none` so the accessibility tree
+   * honours the change without CSS-only tricks.
+   *
+   * @param {boolean} visible
+   */
+  function setVisible(visible) {
+    root.hidden = !visible;
+  }
+
   return {
     element: root,
     setPreset,
     setView,
     setOpacity,
     setDisabled,
+    setVisible,
   };
 }

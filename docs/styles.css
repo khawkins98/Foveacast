@@ -139,10 +139,27 @@ a:hover {
   margin-bottom: 0.1em;
 }
 
+/* The HTML `hidden` attribute applies `display: none` via the user-agent
+   stylesheet, but author-level `display: grid/flex/block` rules beat
+   it. We use `hidden` for progressive disclosure (a11y-friendly) and
+   for mount-point cleanup, so enforce it globally. */
+[hidden] {
+  display: none !important;
+}
+
 .fc-header__tag {
   color: var(--fc-text-muted);
   margin: 0;
   font-size: 1.05rem;
+}
+
+/* One-line promise under the tagline. Short enough to register at a
+   glance before the drop zone becomes the focal point. */
+.fc-header__promise {
+  color: var(--fc-text);
+  margin: 0.25rem 0 0;
+  font-size: 0.95rem;
+  font-weight: 500;
 }
 
 .fc-main {
