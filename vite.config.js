@@ -17,44 +17,66 @@ import { readFileSync, existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 /**
- * Custom Vite middleware that short-circuits requests under `/models/`
- * and serves the raw bytes directly.
+ * Custom Vite middleware that short-circuits requests under specific
+ * path prefixes and serves the raw bytes directly, bypassing Vite's
+ * transform pipeline.
  *
- * Why this exists: TensorFlow.js loads weight shards (group1-shard1of6,
- * etc.) that have no file extension. Vite's import-analysis plugin sees
- * those extensionless files and attempts to parse them as JavaScript
- * source, which blows up with "Failed to parse source for import
- * analysis". The net effect is a 500 Internal Server Error for every
- * weight shard during `pnpm dev`, which breaks the E2E test that
- * exercises the demo-mode background model load.
+ * Why this exists — two separate dev-server quirks, same fix:
  *
- * GitHub Pages (the production host) serves static files unchanged, so
- * the issue is dev-server-specific. This plugin pre-empts Vite's
- * middleware stack for `/models/*` URLs and responds with the raw file
- * bytes and a conservative `application/octet-stream` content type.
+ *   1. `/models/*` — TensorFlow.js loads weight shards
+ *      (group1-shard1of6, etc.) with no file extension. Vite's
+ *      import-analysis plugin sees those files and attempts to parse
+ *      them as JavaScript source, returning 500 on every shard.
+ *
+ *   2. `/vendor/*` — Vite mutates the bytes of some vendored scripts
+ *      before serving them (observed 9 KB heatmap.min.js becoming
+ *      50 KB with a source-map stub). The mutation breaks the SRI
+ *      `integrity=` hashes in index.html, which are computed from
+ *      the bytes on disk. The browser then refuses to execute the
+ *      script.
+ *
+ * GitHub Pages (the production host) serves static files verbatim,
+ * so both issues are dev-server-specific. This plugin pre-empts
+ * Vite's middleware stack for both path prefixes and responds with
+ * the raw file bytes.
+ *
+ * The conservative `application/octet-stream` is overridden for
+ * known extensions (JSON, JS) so the browser and SRI both accept the
+ * response.
  */
-function serveModelsAsStatic() {
+function servePassthroughStatic() {
+  /** Prefixes we handle and the folder each is rooted under. */
+  const prefixes = [
+    { url: '/models/', dir: 'models', fallbackOn404: false },
+    { url: '/vendor/', dir: 'vendor', fallbackOn404: false },
+  ];
+
   return {
-    name: 'foveacast-serve-models-as-static',
+    name: 'foveacast-serve-passthrough-static',
     configureServer(server) {
-      const modelsRoot = resolve(server.config.root || process.cwd(), 'models');
+      const root = server.config.root || process.cwd();
+
       server.middlewares.use((req, res, next) => {
         const url = req.url || '';
         // Strip querystring + hash before matching.
         const pathPart = url.split('?')[0].split('#')[0];
-        if (!pathPart.startsWith('/models/')) {
+
+        const match = prefixes.find((p) => pathPart.startsWith(p.url));
+        if (!match) {
           next();
           return;
         }
-        const filePath = join(modelsRoot, pathPart.slice('/models/'.length));
+
+        const filePath = join(resolve(root, match.dir), pathPart.slice(match.url.length));
         if (!existsSync(filePath) || !statSync(filePath).isFile()) {
           // Respond with a real 404. If we `next()` here, Vite's
           // default handler serves something (often the SPA index
           // fallback) with a 200 — `resolveModelUrl`'s HEAD probe
-          // then thinks the local mirror exists, tf.js fetches the
-          // fallback as JSON, and parsing fails noisily.
-          // A 404 tells the client the mirror is not there, so it
-          // falls back to GCS instead.
+          // would then think the local mirror exists, tf.js would
+          // fetch the fallback as JSON, and parsing would fail
+          // noisily. A 404 tells the client the resource is not
+          // there, so it can fall back (or, for /vendor/, surface a
+          // clear error).
           res.statusCode = 404;
           res.setHeader('Content-Type', 'text/plain');
           res.end('Not Found');
@@ -62,8 +84,8 @@ function serveModelsAsStatic() {
         }
         try {
           const bytes = readFileSync(filePath);
-          const isJson = filePath.endsWith('.json');
-          res.setHeader('Content-Type', isJson ? 'application/json' : 'application/octet-stream');
+          const contentType = pickContentType(filePath);
+          res.setHeader('Content-Type', contentType);
           res.setHeader('Content-Length', String(bytes.length));
           res.setHeader('Cache-Control', 'no-cache');
           res.end(bytes);
@@ -77,12 +99,27 @@ function serveModelsAsStatic() {
   };
 }
 
+/**
+ * Pick a sensible Content-Type for pass-through static serving.
+ * Vite's own static-file handler normally does this for us; since
+ * we are bypassing it, we do it ourselves.
+ *
+ * @param {string} filePath
+ */
+function pickContentType(filePath) {
+  if (filePath.endsWith('.json')) return 'application/json';
+  if (filePath.endsWith('.js')) return 'text/javascript';
+  if (filePath.endsWith('.css')) return 'text/css';
+  if (filePath.endsWith('.txt') || filePath.endsWith('.md')) return 'text/plain';
+  return 'application/octet-stream';
+}
+
 export default defineConfig({
   // Serve the GitHub Pages publish folder directly. No intermediate
   // build output, no duplicated source tree.
   root: 'docs',
 
-  plugins: [serveModelsAsStatic()],
+  plugins: [servePassthroughStatic()],
 
   server: {
     // Open the browser automatically on `pnpm dev` for a faster

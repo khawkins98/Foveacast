@@ -22,8 +22,26 @@
       offline, and the script bytes are pinned to what was reviewed at
       commit time. TF.js is ~1.4 MB, heatmap.js is ~12 KB.
     -->
-    <script src="./vendor/tf.min.js"></script>
-    <script src="./vendor/heatmap.min.js"></script>
+    <!--
+      Subresource integrity hashes are sha384 of the exact bytes
+      committed under docs/vendor/. They defend against an attacker
+      silently replacing the vendored files — the browser refuses to
+      execute a script whose hash does not match. Update both the
+      vendored file and the hash together, or the app will fail to
+      load with a helpful console message pointing at the mismatch.
+      Hashes are also recorded in docs/vendor/README.md so a review
+      can diff the table against the bytes on disk.
+    -->
+    <script
+      src="./vendor/tf.min.js"
+      integrity="sha384-vE8hbVJ4lezako5rlvE7bY0BVzWlFhZncPlckrqNwcUQpVtgbENTgZ8TBbnPjZre"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="./vendor/heatmap.min.js"
+      integrity="sha384-BlRWQS67hrnZlggSB+aRUTIWyxdjmsWxRnta6UvociBjKrx7/QuODVy7TJ0ov3Pi"
+      crossorigin="anonymous"
+    ></script>
 
     <link rel="stylesheet" href="./styles.css" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
