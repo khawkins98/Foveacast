@@ -6,6 +6,15 @@ dist/
 .vite/
 coverage/
 
+# Playwright run artefacts (traces, screenshots, reports). Everything
+# inside /tests/e2e/ that is NOT a *.spec.js file is regenerated per
+# run and should not be committed.
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+tests/e2e/.cache/
+
 # Logs
 *.log
 

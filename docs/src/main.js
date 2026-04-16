@@ -184,21 +184,32 @@ function boot() {
           'Demo mode failed to render. This is unexpected — please file an issue. Real inference is unaffected.',
       });
     });
-    // Fall through: the normal `reloadModel()` still runs below so the
-    // user can drop a real file and get a real prediction without
-    // reloading the page.
+    // Fall through: the normal `reloadModel()` still runs below, but
+    // in silent mode — we don't want its cache-load banner to stomp
+    // the demo banner the moment the demo render completes. The model
+    // still loads in the background so a subsequent file drop runs
+    // real inference without a page reload.
+    reloadModel({ silent: true }).catch((err) => surfaceModelError(err));
+  } else {
+    // --- Kick off model load (normal path) ------------------------------
+    reloadModel().catch((err) => surfaceModelError(err));
   }
-
-  // --- Kick off model load ---------------------------------------------
-  reloadModel().catch((err) => surfaceModelError(err));
 
   // --- Exposed helpers (closures over `state`) --------------------------
 
   /**
    * Load the model for `state.preset` with a first-run-vs-cache banner
    * heuristic (see FIRST_RUN_THRESHOLD_MS).
+   *
+   * `silent` suppresses the cache-load / first-run / ready banners so
+   * the demo-mode background load does not stomp the demo banner. The
+   * dropzone enable / controls enable / error surfacing all still run
+   * normally — only the chatty status transitions are skipped.
+   *
+   * @param {{ silent?: boolean }} [options]
    */
-  async function reloadModel() {
+  async function reloadModel(options = {}) {
+    const { silent = false } = options;
     state.loadedModel = null;
     dropzone.setEnabled(false);
     controls.setDisabled(true);
@@ -206,12 +217,16 @@ function boot() {
     const startedAt = performance.now();
     let firstRunShown = false;
 
-    // Default to the cache-load banner. If progress stretches past the
-    // threshold, we switch to the first-run banner with the ~60MB copy.
-    status.showCacheLoad();
+    if (!silent) {
+      // Default to the cache-load banner. If progress stretches past
+      // the threshold we switch to the first-run banner with the
+      // ~60MB copy.
+      status.showCacheLoad();
+    }
 
     try {
       const loaded = await loadModel(state.preset, (progress) => {
+        if (silent) return;
         const elapsed = performance.now() - startedAt;
         if (!firstRunShown && elapsed > FIRST_RUN_THRESHOLD_MS && progress.fraction < 0.95) {
           firstRunShown = true;
@@ -223,7 +238,7 @@ function boot() {
       state.loadedModel = loaded;
       dropzone.setEnabled(true);
       controls.setDisabled(false);
-      status.showReady();
+      if (!silent) status.showReady();
       renderFooter();
     } catch (err) {
       // Re-throw so the outer catch can choose the right error code.
