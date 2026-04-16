@@ -223,7 +223,16 @@ function boot() {
     // model keeps loading in the background so a user drop works as
     // soon as load resolves — directly if already ready, or via the
     // queued-file path if the drop happened first.
-    reloadModel({ silent: true }).catch((err) => surfaceModelError(err));
+    // Silent background load — if it fails, stay silent. The user is
+    // in demo mode; they asked for a preview, not real inference. If
+    // they later drop a file, `handleFile` will detect that no model
+    // is loaded and THAT is the moment to show the download banner
+    // (via the queued-drop path). Surfacing an error banner now would
+    // confuse the demo experience and fail E2E tests that assert no
+    // console errors during demo render.
+    reloadModel({ silent: true }).catch((err) => {
+      console.warn('Foveacast: background model load failed in demo mode.', err);
+    });
   } else {
     // --- Kick off model load (normal path) ------------------------------
     reloadModel().catch((err) => surfaceModelError(err));

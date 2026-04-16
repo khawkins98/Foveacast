@@ -27,7 +27,13 @@ test.describe('Foveacast — demo mode end-to-end', () => {
     const consoleErrors = [];
     page.on('pageerror', (err) => pageErrors.push(err));
     page.on('console', (msg) => {
-      if (msg.type() === 'error') consoleErrors.push(msg.text());
+      if (msg.type() === 'error') {
+        // Combine text and location URL so downstream filters can
+        // match against either. Chromium's network-layer 404 errors
+        // put the URL in `.location()`, not in `.text()`.
+        const url = msg.location && msg.location().url;
+        consoleErrors.push(url ? `${msg.text()} [${url}]` : msg.text());
+      }
     });
     // @ts-expect-error — stashing test state on the page object.
     page.__foveacastErrors = { pageErrors, consoleErrors };
@@ -75,11 +81,20 @@ test.describe('Foveacast — demo mode end-to-end', () => {
     // @ts-expect-error — stashed in beforeEach.
     const { pageErrors, consoleErrors } = page.__foveacastErrors;
     expect(pageErrors.map(String)).toEqual([]);
-    // The console error filter is intentionally lenient: TF.js emits a
-    // benign "WebGL is not supported" warning in headless chromium and
-    // we don't want that to break the suite.
+    // The console-error filter is intentionally lenient about
+    // network- and backend-related noise that is expected in this
+    // environment:
+    //   - TF.js emits "WebGL is not supported" in headless chromium
+    //     and falls back to CPU cleanly.
+    //   - The loader HEAD-probes `./models/{preset}/model.json` to
+    //     prefer the local mirror; that 404s in dev-without-mirror
+    //     (including CI), at which point the loader falls back to
+    //     GCS. Chromium auto-logs the 404 to the console as an
+    //     error, but the behaviour is correct.
     const meaningfulErrors = consoleErrors.filter(
-      (m) => !/WebGL|webgl|backend/i.test(m),
+      (m) =>
+        !/WebGL|webgl|backend/i.test(m) &&
+        !(/404/.test(m) && /\/models\//.test(m)),
     );
     expect(meaningfulErrors).toEqual([]);
   });

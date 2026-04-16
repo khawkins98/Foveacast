@@ -48,7 +48,16 @@ function serveModelsAsStatic() {
         }
         const filePath = join(modelsRoot, pathPart.slice('/models/'.length));
         if (!existsSync(filePath) || !statSync(filePath).isFile()) {
-          next();
+          // Respond with a real 404. If we `next()` here, Vite's
+          // default handler serves something (often the SPA index
+          // fallback) with a 200 — `resolveModelUrl`'s HEAD probe
+          // then thinks the local mirror exists, tf.js fetches the
+          // fallback as JSON, and parsing fails noisily.
+          // A 404 tells the client the mirror is not there, so it
+          // falls back to GCS instead.
+          res.statusCode = 404;
+          res.setHeader('Content-Type', 'text/plain');
+          res.end('Not Found');
           return;
         }
         try {
