@@ -70,18 +70,52 @@
       <main id="fc-main" class="fc-main" tabindex="-1">
         <!-- Mount points: status banner, dropzone, controls, output canvas. -->
         <div id="fc-status-mount" class="fc-mount fc-mount--status"></div>
-        <div id="fc-dropzone-mount" class="fc-mount fc-mount--dropzone"></div>
+
+        <!--
+          The drop zone sits alongside a short helper block at wide
+          viewports. The helper absorbs some of the wandering attention
+          the rule-of-thirds-biased heatmap model otherwise spends on
+          empty page margins (observed by running Foveacast on its own
+          landing page — see LEARNINGS.md dated 2026-04-16).
+          Below the desktop breakpoint the helper stacks under the
+          drop zone so mobile-narrow viewports don't waste vertical
+          space on it.
+        -->
+        <div class="fc-drop-row">
+          <div id="fc-dropzone-mount" class="fc-mount fc-mount--dropzone"></div>
+          <aside class="fc-drop-helper" aria-labelledby="fc-drop-helper-heading">
+            <h2 id="fc-drop-helper-heading" class="fc-drop-helper__heading">
+              What this does
+            </h2>
+            <ul class="fc-drop-helper__list">
+              <li>Predicts where a typical viewer will look first on your screenshot.</li>
+              <li>Runs the model in your browser — your image never leaves this tab.</li>
+              <li>Drop a file, click to choose one, or paste a screenshot (Cmd-V / Ctrl-V).</li>
+              <li>Works on PNG or JPEG, up to 20&nbsp;MB, desktop Chrome or Firefox.</li>
+            </ul>
+            <p class="fc-drop-helper__caveat">
+              It's a prediction, not an eye-tracking study. Useful for a sanity check before publish.
+            </p>
+          </aside>
+        </div>
+
         <div id="fc-controls-mount" class="fc-mount fc-mount--controls"></div>
 
+        <!--
+          `hidden` on first load — same progressive-disclosure
+          principle as the controls panel. There is nothing to show
+          before a screenshot has been dropped, and a reserved empty
+          box competes with the drop zone for attention. main.js
+          removes the hidden attribute when the first heatmap
+          renders (demo or real).
+        -->
         <section
           id="fc-output"
           class="fc-output"
           aria-label="Heatmap output"
           tabindex="-1"
+          hidden
         >
-          <div class="fc-output__placeholder" id="fc-output-placeholder">
-            Your heatmap will appear here once you drop a screenshot.
-          </div>
           <div class="fc-output__canvas-wrap" id="fc-output-canvas-wrap" hidden>
             <!-- main.js appends the composited canvas here. -->
           </div>

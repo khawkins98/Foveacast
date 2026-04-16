@@ -177,6 +177,53 @@ export function installPageDrop(options) {
     onFile(file);
   }
 
+  /**
+   * Clipboard paste handler. If the clipboard carries an image
+   * (screenshot taken with Cmd/Win+Shift+4, a copy from Figma, etc.),
+   * we pick the first image item, turn it into a `File`, and route
+   * it through the same validation + `onFile` pathway drops use.
+   *
+   * WHY: on macOS in particular, "take a screenshot and paste it"
+   * is a single keystroke (Cmd-Ctrl-Shift-4). Requiring the user to
+   * save the screenshot to disk first, find it in Downloads, and
+   * drag it back is pointless friction. Paste closes that gap.
+   *
+   * Scope: we only consume the paste when the clipboard actually
+   * contains an image. Text pastes (into the URL bar, into dev
+   * tools, into a future search box) still work normally.
+   *
+   * @param {ClipboardEvent} ev
+   */
+  function onPaste(ev) {
+    const items = ev.clipboardData && ev.clipboardData.items;
+    if (!items || items.length === 0) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind !== 'file') continue;
+      if (!item.type || !item.type.startsWith('image/')) continue;
+
+      const file = item.getAsFile();
+      if (!file) continue;
+
+      // Clipboard-derived files usually come with a name like
+      // "image.png" — fine for validation, but a more descriptive
+      // default helps the user remember what they pasted.
+      const named = file.name && file.name !== 'image.png'
+        ? file
+        : renameFile(file, `pasted-screenshot-${Date.now()}.png`);
+
+      ev.preventDefault();
+      const result = validateDroppedFile(named);
+      if (!result.ok) {
+        onError(result.error);
+      } else {
+        onFile(named);
+      }
+      return; // One file per paste; ignore additional items.
+    }
+  }
+
   // Capture phase so we see the event before any element-level handler
   // gets a chance to stopPropagation. Even if the drop zone's own
   // handler runs afterwards, the file is only dispatched once — from
@@ -185,6 +232,7 @@ export function installPageDrop(options) {
   doc.addEventListener('dragover', onDragOver, true);
   doc.addEventListener('dragleave', onDragLeave, true);
   doc.addEventListener('drop', onDrop, true);
+  doc.addEventListener('paste', onPaste, true);
 
   return {
     dispose() {
@@ -192,8 +240,32 @@ export function installPageDrop(options) {
       doc.removeEventListener('dragover', onDragOver, true);
       doc.removeEventListener('dragleave', onDragLeave, true);
       doc.removeEventListener('drop', onDrop, true);
+      doc.removeEventListener('paste', onPaste, true);
       removeDragClass();
       dragDepth = 0;
     },
   };
+}
+
+/**
+ * Return a new File with the same bytes and type as `original` but a
+ * friendlier `name`. Browsers don't let us rename a File in place —
+ * but the File constructor accepts a Blob-like array plus a name.
+ *
+ * @param {File} original
+ * @param {string} newName
+ * @returns {File}
+ */
+function renameFile(original, newName) {
+  try {
+    return new File([original], newName, {
+      type: original.type,
+      lastModified: original.lastModified,
+    });
+  } catch {
+    // Some older engines don't let us construct a File from a File.
+    // Fall through to returning the original — the worst case is a
+    // slightly less descriptive filename on the eventual download.
+    return original;
+  }
 }

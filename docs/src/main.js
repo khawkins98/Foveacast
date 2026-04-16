@@ -94,15 +94,26 @@ function boot() {
   }
 
   // PRD §Browser Support: mobile users see a friendly desktop-only
-  // message instead of the app. Must run before any model code.
-  if (mountMobileGuard(appRoot)) return;
+  // message instead of the app. The guard is dismissible via a
+  // "Proceed anyway" button — see mobile-guard.js for the copy. When
+  // dismissed, it writes a localStorage sentinel and then we reload
+  // the page. Reload is simpler and more reliable than reconstructing
+  // index.html's mount-point DOM from JS: on the next boot, the
+  // sentinel is set, the guard returns early, and the app
+  // bootstraps normally.
+  if (
+    mountMobileGuard(appRoot, {
+      onProceed: () => window.location.reload(),
+    })
+  ) {
+    return;
+  }
 
   // Mount points — these exist in index.html.
   const statusMount = mustGet('fc-status-mount');
   const dropzoneMount = mustGet('fc-dropzone-mount');
   const controlsMount = mustGet('fc-controls-mount');
   const outputSection = mustGet('fc-output');
-  const outputPlaceholder = mustGet('fc-output-placeholder');
   const outputCanvasWrap = mustGet('fc-output-canvas-wrap');
   const outputCaption = mustGet('fc-output-caption');
 
@@ -194,7 +205,6 @@ function boot() {
 
   if (demoMode) {
     runDemoMode({
-      outputPlaceholder,
       outputCanvasWrap,
       outputCaption,
       outputSection,
@@ -464,7 +474,10 @@ function boot() {
   /** Draw the composited canvas (or plain image / side-by-side) into the output wrap. */
   function renderOutput() {
     if (!state.lastImage || !state.lastHeatmapCanvas) return;
-    outputPlaceholder.hidden = true;
+    // Reveal the output section — it's hidden on first load so the
+    // pre-drop page isn't cluttered by a reserved empty box (same
+    // progressive-disclosure principle as the controls panel).
+    outputSection.hidden = false;
     outputCanvasWrap.hidden = false;
     outputCanvasWrap.textContent = '';
     outputCanvasWrap.classList.toggle(

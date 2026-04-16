@@ -4,7 +4,47 @@ All notable changes to Foveacast are recorded here. Format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-04-16
+
+Post-release housekeeping. First pass of changes informed by actually using the shipped product, running Foveacast on its own landing page, and closing the smallest items from the overnight reviews that didn't block V1.
+
 ### Added
+
+- **`docs/ROADMAP.md`** — candidate themes and features for `0.2.0`, organised by theme (feature depth, model quality, UX polish, distribution, trust/infra). Includes a short versioning note explaining that the PRD's "V1/V2/V3" numbering is about model generations and is orthogonal to semver. Menu, not a plan; the maintainer picks.
+- **Dismissible mobile guard** — "Proceed anyway (at my own risk)" button on the desktop-only notice, with honest "inference may still fail" copy. The choice is remembered in `localStorage` so a reload doesn't re-prompt.
+- **Heatmap-informed layout pass** — tighter header, a short "What this does" helper block alongside the drop zone at wide viewports (absorbs the wandering attention the model otherwise spends on empty right-hand margins), stronger drop-zone border and padding. Observations and the before-state are documented in `LEARNINGS.md`.
+- **`download.js` unit tests** — 6 cases covering the PNG-blob-and-anchor flow, including URL revoke hygiene and null-blob rejection.
+- **`heatmap.js` private-API snapshot test** — fails loudly if a future library bump renames the `_renderer.canvas` field we reach for in the render layer.
+- **`resolveModelUrl` unit tests** — HEAD → 404 → GCS fallback coverage, pinning the specific shape of bug that shipped to CI the first time and was only caught by Playwright.
+- **`pnpm test:e2e:no-mirror`** — runs the Playwright suite against a simulated CI environment (no populated `docs/models/` folder). One command to verify "will this pass CI?" before pushing.
+
+### Fixed
+
+- **Off-PRD error strings removed from `main.js`.** The last inline user-facing message (`"Demo mode failed to render…"`) now routes through a new `DEMO_FAILED` code in `STATUS_ERROR_MESSAGES`. All user-visible copy now flows through one constant.
+- **CI was red on the post-ship commits.** pnpm version-conflict (`packageManager` vs. workflow `version:`) fixed by deferring to `package.json`. Playwright was failing against a no-mirror environment due to a cascade (Vite middleware falling through on missing `/models/*`, Chromium auto-logging 404s without URLs in `.text()`, the silent background model load surfacing errors during demo mode). Each failure's root cause is now covered by either middleware or test-filter changes; the `pnpm test:e2e:no-mirror` script exists so the class of bug can't recur unnoticed.
+
+### Changed
+
+- **Header tightened** to reduce first-fixation weight on page chrome; drop-zone dashed border from 2px to 3px.
+- **Controls labels** moved to verb-first copy ("Adjust overlay strength", "Show", "Model detail") after progressive disclosure made them more visible than they used to be.
+- **Model-ready banner** now reads "Model loaded — drop a screenshot to start." and stays on screen until the user drops a file, instead of auto-dismissing after 1.5 s with no next action.
+- **`engines` field in `package.json`** declares the Node 20 floor.
+- **SRI hashes** on vendored scripts (`docs/vendor/tf.min.js`, `docs/vendor/heatmap.min.js`) — sha384 `integrity=` attributes on the script tags plus the same hashes recorded in `docs/vendor/README.md`. Browser refuses to execute bytes that don't match.
+- **Structured error codes from `loadModel`**, replacing the string-sniff against TF.js error messages that would break on a minor-version bump.
+- **First-run localStorage sentinel** (`foveacast:has-run:v1`) — true first-time visitors now see the "Downloading the attention model (~60MB)" banner immediately instead of a misleading "Loading from cache" banner that upgrades after 800ms.
+- **Vite dev-server middleware** now serves both `/models/*` and `/vendor/*` raw (previously only `/models/*`). Without this, Vite's import-analysis plugin mutated the vendored heatmap.js bytes, breaking the SRI check.
+- **`LEARNINGS.md`** gained eight new entries covering the four-reviewer review loop as a process, the UX iteration story, the resilience trilogy (vendoring + weight mirroring + SRI), Vite dev-server quirks, the shipping-day Pages flow, the four testing tiers that emerged, structured errors vs. string-sniffing, and the meta-moment of running Foveacast on itself to inform layout.
+- **`CONTRIBUTING.md`** coding guide expanded (comments, tests, layer discipline, failure handling, accessibility, dependencies, prose voice, size discipline). `CLAUDE.md` added for AI-assisted workflow notes.
+
+### Notes
+
+- **Model in use:** unchanged from 0.1.0 — MSI-Net, default preset Standard (120×160). No model swap; this release is cleanup and polish.
+
+## [0.1.0] — 2026-04-16
+
+First public cut of Foveacast. V1 per the PRD: a buildless static web app that predicts visual-attention heatmaps entirely in the browser.
+
+### Added (0.1.0 original)
 
 - **Demo mode (`?demo=1`)** — renders a synthetic saliency map over the committed example screenshot without touching the model or the network. Useful for evaluators who want to see output in under a second, and for automated tests that need a fast, deterministic end-to-end surface. A yellow banner and a tiled diagonal watermark in the canvas itself keep the preview from being mistaken for a real prediction.
 - **Drop-anywhere support.** A file dropped anywhere on the page is accepted and routed to the same pipeline the drop-zone uses. Before this, dropping a file one pixel outside the drop-zone rectangle navigated the browser away from Foveacast — the worst failure mode for a one-purpose tool.
@@ -30,11 +70,7 @@ All notable changes to Foveacast are recorded here. Format follows [Keep a Chang
 - `scripts/smoke-test.sh` header clarified: it is a liveness check for the dev server, not an end-to-end test. End-to-end coverage now lives in the Playwright suite.
 - `docs/src/model/loader.js` now calls `resolveModelUrl(preset)`, which prefers the same-origin `./models/{preset}/model.json` mirror and falls back to the GCS bucket for filesystem / dev-server usage where no mirror has been fetched.
 
-## [0.1.0] — 2026-04-16
-
-First public cut of Foveacast. V1 per the PRD: a buildless static web app that predicts visual-attention heatmaps entirely in the browser.
-
-### Added
+### Added (0.1.0 foundation)
 
 - Static web app under `docs/` served directly by GitHub Pages, with no build step between the source tree and the published site.
 - MSI-Net Graph Model loader targeting `@tensorflow/tfjs@4.22.0` from jsDelivr, with progress events during the first-run weight download.
