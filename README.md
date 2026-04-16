@@ -121,6 +121,8 @@ Full licence text for Foveacast itself is in [LICENSE](LICENSE) (MIT, Ken Hawkin
 
 ## Contributing and maintenance
 
-[CONTRIBUTING.md](CONTRIBUTING.md) covers the practical side — how to set up, the tiers of testing, what goes into a PR, and the files that need updating alongside code. Read it before opening a PR.
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the practical side — how to set up, the tiers of testing, what goes into a PR, the files that need updating alongside code, and the coding guide (comments, layer discipline, accessibility, dependencies). Read it before opening a PR.
+
+If you work on Foveacast with [Claude Code](https://claude.com/claude-code) or another AI coding assistant, [CLAUDE.md](CLAUDE.md) carries the project-specific instructions for the assistant — testing defaults, commit conventions, pitfalls to avoid, and what needs explicit user confirmation. The assistant reads that file automatically.
 
 A running log of technical decisions, dead ends, and notes for future work lives in [LEARNINGS.md](LEARNINGS.md). [TODO.md](TODO.md) is the prioritised list of known follow-ups — the cheap ones, the ones that matter for resilience, and the ones we explicitly declined. Release history is in [CHANGELOG.md](CHANGELOG.md). The PRD at [docs/PRD.md](docs/PRD.md) is the source of truth for scope, non-goals, and the model roadmap — read it before proposing anything larger than a bug fix.

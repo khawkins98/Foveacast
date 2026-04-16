@@ -102,12 +102,94 @@ PRs should carry:
 - Any known limitations or follow-ups.
 - A screenshot or a short loom for anything user-visible.
 
-## Style
+## Coding guide
 
-- **Comments**: write them. Foveacast's default is ample JSDoc on exported functions and inline comments that explain *why* for anything non-obvious. This is the opposite of the common "comments are a smell" rule and it is deliberate — the project is expected to be picked up by people who didn't build it.
-- **Humanizer pass**: long-form prose (README, CHANGELOG, LEARNINGS, in-UI copy) should read like a human wrote it. The `humanizer` skill helps if you're using an AI-assisted workflow.
-- **Accessibility**: every UI change needs to clear WCAG 2.1 AA. Keyboard operable, screen-reader labels, `prefers-reduced-motion` respected, AA contrast. Non-negotiable.
-- **No new dependencies without a reason.** Every dependency is a long-term support cost. The PR description should say why the existing tools can't do the job.
+This is the project's stance on how we write code. It is opinionated on purpose — consistency across a small codebase is worth more than matching any particular external convention. If you disagree with something here, open an issue before adopting a different style in a PR.
+
+### Ample comments, explaining why
+
+Default to writing comments — this is the opposite of the common "comments are a smell" rule and it is deliberate. Foveacast is expected to be picked up by people who didn't build it, often months after the original context has decayed. A one-line comment that captures why is worth more than a diff that someone has to reverse-engineer.
+
+Minimum bar:
+
+- Every exported function has a JSDoc block: one-line purpose, `@param` types with short descriptions, `@returns`.
+- Every non-obvious branch has an inline comment explaining the decision. "Non-obvious" means: a reader who understands JavaScript but not this codebase would ask why.
+- Every module header explains what lives there and why — particularly the load-bearing invariants (e.g. "nothing outside `model/` imports `@tensorflow/tfjs`").
+- Workarounds for external library quirks (heatmap.js private fields, TF.js backend selection, jsdom gaps) get a comment naming the library and the problem, so a future maintainer can tell whether the workaround is still needed.
+
+What comments are NOT for:
+
+- Restating what the code obviously does. `// increment counter` on `counter++` is noise.
+- Changelog or PR-context chatter (`// added for issue #42`). Those belong in commit messages and `LEARNINGS.md`.
+- Commented-out code. Delete it; `git log` remembers.
+
+### Tests before or alongside the code
+
+Tests are not optional. Write them with the code, not after. See the [What goes into a change → Tests](#1-tests) section above for the three tiers (vitest / smoke / playwright) and when each is appropriate.
+
+Specifics:
+
+- **Pure functions (pipeline, file validation, demo helpers) get vitest unit tests.** One test per behaviour, assertion-rich, no mocking beyond what is necessary. A test that mocks out the thing it should be testing — like the render layer's earlier heatmap.js mock that hid the detached-container bug — is worse than no test at all.
+- **UI behaviour that depends on the DOM, the browser, or a library's real runtime behaviour gets a Playwright test.** This is how we catch the class of bug that unit-test mocks hide.
+- **Bug fixes land with a regression test.** The test should fail without the fix and pass with it. This is the single cheapest thing you can do to make the codebase more resilient over time.
+- **Never disable a failing test as part of unrelated work.** If a test is blocking you and you think it's wrong, open a separate PR to delete or fix it and explain why.
+
+### Layer discipline
+
+The `model / pipeline / render / ui` layer boundary is load-bearing. Specifically:
+
+- **Nothing outside `model/` imports `@tensorflow/tfjs`.** If you need tensor operations elsewhere, the fix is almost always to add a contract-level function in `model/` and call that. The grep test is `grep -r "@tensorflow/tfjs" docs/src/ | grep -v 'docs/src/model/'` — this should return nothing.
+- **Nothing outside `render/` imports `heatmap.js`.** Same rule.
+- **`pipeline/` is pure.** No DOM, no browser APIs, no library dependencies. Functions take arrays and numbers, return arrays and numbers. This makes it trivially testable.
+- **`ui/` is allowed to depend on the DOM and on `pipeline/` / `render/` / `model/` — but should not reach "through" those layers to their dependencies.** E.g. the UI layer should not call `tf.tensor` directly even if `model/` happens to re-export `tf`.
+
+### Failure handling
+
+- **Validate at the edge, trust inside.** User input (dropped files, URL params) gets validated once at the boundary. After that, internal code can assume shapes are correct.
+- **Errors carry a `code` and a `message`.** Codes are for branching and tests; messages are for humans. `STATUS_ERROR_MESSAGES` is the single source of truth for user-facing strings — do not inline variants at call sites.
+- **Every error state must offer the user a next action.** A dead end is worse than a crash. If the next action is "refresh the page", say that; if it is "drop a smaller file", say that.
+- **Do not catch errors you cannot handle.** `try { ... } catch { /* swallowed */ }` is a code smell. Either handle, or let it propagate to the single top-level handler in `main.js`.
+
+### Accessibility, non-negotiably
+
+Every UI change has to clear WCAG 2.1 AA. The tiers that matter:
+
+- **Keyboard**: every interactive control is reachable with Tab and operable with Enter / Space. Focus visible.
+- **Screen reader**: `aria-label` or real text on every control, `aria-live` on status regions, `alt` on informative images.
+- **Motion**: respect `prefers-reduced-motion` on every animation, not just the big ones.
+- **Contrast**: AA (≥4.5:1 for body text, ≥3:1 for large). Use the browser devtools contrast picker if in doubt.
+
+`?demo=1` is the fastest way to exercise the full UI in a browser; use it during manual testing.
+
+### Dependencies
+
+- **No new runtime dependencies without a reason.** Each one is a maintenance cost, a supply-chain exposure, and a reason future contributors need to learn something. The PR description should explain why existing tools can't do the job.
+- **Dev dependencies get a lower bar** but still need justification. "Because it's popular" is not enough.
+- **No native-build dependencies ever.** Anything that needs `node-gyp` or a C compiler breaks the "pnpm install" promise for contributors who don't happen to have a working build toolchain.
+
+### Prose in the codebase
+
+Anything humans read — README, CHANGELOG, LEARNINGS, CONTRIBUTING, PRD, in-UI copy, commit messages — should sound like a human wrote it. Plain, direct, honest about uncertainty, no marketing register.
+
+Concretely, avoid these AI-writing tells:
+
+- "Seamlessly", "delightfully", "robust solution", "best-in-class", "cutting-edge", "powered by".
+- Inflated verbs: "leverage" (use), "utilise" (use), "facilitate" (help).
+- The rule of three for no reason: "fast, simple, and reliable" when one or two adjectives would do.
+- Starting sentences with "Simply" — the user does not need reassurance that your thing is simple; show them.
+- Em-dash overuse — which is hypocritical of this guide, I know — but pick one or two per paragraph, not six.
+
+The `humanizer` skill in the Claude Code CLI helps if you are writing with AI assistance. Run it over long-form prose before committing.
+
+### Commit-by-commit hygiene
+
+Every commit should build green, pass tests, and do one conceptual thing. A PR with nine tightly-scoped commits is much easier to review than a single commit with 400 lines of mixed-intent changes. Conventional Commits + good subject lines + `why`-focused bodies = a git log that reads like documentation instead of archaeology.
+
+### Size discipline
+
+- **Prefer small modules over large ones.** A file past 400 lines is a hint to look for a module boundary. Not a hard rule, but a useful one.
+- **Prefer small PRs over large ones.** If your change is getting large, consider shipping the foundation first and the user-visible change as a follow-up.
+- **Prefer explicit code over clever code.** `if (x) return a; return b;` is almost always better than a ternary chain.
 
 ## Destructive and shared-state actions
 
