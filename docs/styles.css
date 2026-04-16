@@ -135,8 +135,13 @@ a:hover {
 }
 
 .fc-header__title {
-  font-size: clamp(1.75rem, 2.4vw + 1rem, 2.4rem);
-  margin-bottom: 0.1em;
+  /* Tightened vs. the V1 ship. Running Foveacast on its own landing
+     page showed the H1 eating first-fixation attention that
+     properly belongs to the drop zone. The clamp ceiling is lower
+     here and the vertical rhythm tightens below. */
+  font-size: clamp(1.55rem, 1.8vw + 1rem, 2rem);
+  margin: 0 0 0.05em;
+  letter-spacing: -0.01em;
 }
 
 /* The HTML `hidden` attribute applies `display: none` via the user-agent
@@ -160,6 +165,63 @@ a:hover {
   margin: 0.25rem 0 0;
   font-size: 0.95rem;
   font-weight: 500;
+}
+
+/* -- Drop row (zone + helper) ----------------------------------------- */
+
+/* Wide viewports: drop zone on the left, short "what this does" helper
+   block on the right. The helper absorbs attention that would
+   otherwise drift into the empty right-hand margin (observed by
+   running Foveacast on its own landing page). Below the breakpoint
+   it stacks so narrow viewports don't pay vertical space for it. */
+.fc-drop-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+  align-items: stretch;
+}
+
+@media (min-width: 900px) {
+  .fc-drop-row {
+    grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+    gap: 1.5rem;
+  }
+}
+
+.fc-drop-helper {
+  background: var(--fc-surface);
+  border: 1px solid var(--fc-border);
+  border-radius: var(--fc-radius);
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.fc-drop-helper__heading {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--fc-text);
+}
+
+.fc-drop-helper__list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--fc-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.fc-drop-helper__list li + li {
+  margin-top: 0.3rem;
+}
+
+.fc-drop-helper__caveat {
+  margin: 0.25rem 0 0;
+  color: var(--fc-text-muted);
+  font-size: 0.85rem;
+  font-style: italic;
 }
 
 .fc-main {
@@ -310,9 +372,13 @@ a:hover {
 
 .fc-dropzone {
   background: var(--fc-surface);
-  border: 2px dashed var(--fc-border-strong);
+  /* Thicker dash than V1 — running Foveacast on itself showed the
+     drop zone losing first-fixation weight to the page chrome; a
+     more confident border and larger interior help the user's eye
+     find the target. */
+  border: 3px dashed var(--fc-border-strong);
   border-radius: var(--fc-radius);
-  padding: clamp(1.25rem, 3vw, 2.5rem);
+  padding: clamp(1.5rem, 3.5vw, 2.75rem);
   text-align: center;
   cursor: pointer;
   transition:
@@ -320,7 +386,7 @@ a:hover {
     border-color var(--fc-dur-fast) var(--fc-ease),
     transform var(--fc-dur-fast) var(--fc-ease);
   position: relative;
-  min-height: 160px;
+  min-height: 180px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -620,6 +686,43 @@ body.fc-page-dragover .fc-dropzone {
   border: 1px solid var(--fc-border);
   border-radius: var(--fc-radius);
   text-align: center;
+}
+
+/* "Proceed anyway" section of the mobile guard. Visually demoted from
+   the main message so the recommended path (stop here, come back on
+   a desktop) stays the primary affordance, but reachable enough that
+   a user who knows what they're doing can continue. */
+.fc-mobile-guard__actions {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--fc-border);
+}
+
+.fc-mobile-guard__caveat {
+  margin: 0 0 0.75rem;
+  color: var(--fc-text-muted);
+  font-size: 0.9rem;
+}
+
+.fc-mobile-guard__proceed {
+  background: transparent;
+  color: var(--fc-text);
+  border: 1px solid var(--fc-border-strong);
+  border-radius: var(--fc-radius-sm);
+  padding: 0.5rem 1rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.fc-mobile-guard__proceed:hover,
+.fc-mobile-guard__proceed:focus-visible {
+  border-color: var(--fc-accent);
+  background: color-mix(in srgb, var(--fc-accent) 6%, var(--fc-surface));
+}
+
+.fc-mobile-guard__proceed:focus-visible {
+  outline: 3px solid var(--fc-focus);
+  outline-offset: 3px;
 }
 
 /* -- Dark scheme ------------------------------------------------------- */

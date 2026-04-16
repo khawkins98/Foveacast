@@ -129,6 +129,22 @@ The tiers answer four different questions: "is my pure logic correct?", "does th
 
 Worth restating because it was the most expensive lesson of the build: a test that mocks the library you're testing against is worse than no test. A green suite communicates "covered"; if the coverage is illusory, the green is a lie.
 
+## 2026-04-16 — Running Foveacast on itself
+
+The first thing anyone builds a predictive-attention tool for is themselves. I dropped a screenshot of the Foveacast landing page into Foveacast and looked at where it said people were likely to look first.
+
+The heatmap was mostly encouraging and slightly humbling:
+
+- **The status banner and the drop zone were the two hotspots.** That's what they should be. "Model loaded — drop a screenshot to start." pulled real attention, and the drop zone itself was high-heat — the first-fixation crosshair landed on its top edge, which is the one thing the user needs to notice.
+- **The `<h1>` and the tagline under it ate a noticeable share of first attention.** For a one-purpose tool that is actually a cost: every fixation on the brand is a fixation not on the drop zone. The header can stand down a little.
+- **The one-line promise — "Free. No account. Nothing leaves your machine." — attracted more heat than I expected.** That line is doing the work I hoped it would. Keep it prominent; don't bury it.
+- **The right margin had drifting green patches over empty space.** Nothing to look at, but the model's learned priors for web layouts assume symmetry, and our single-column layout leaves that symmetric space unused. Not a bug — a nudge that a two-column treatment at wider viewports could absorb that wandering attention usefully, perhaps with a small "what this does" helper block.
+- **The attribution footer and bias disclosure got warm.** Good: those need to be seen, and they are, without stealing from the primary action.
+
+The general lesson — and the reason this entry exists — is that a predictive tool used on its own UI is a near-free UX audit. The heatmap doesn't give you answers, but it tells you where the eye is working and where it is wasted, in the same way you'd otherwise have to pay a UX researcher to tell you. If anything about the landing page changes in V1.1, the new version should be run through Foveacast before merging.
+
+Changes that came directly out of this audit shipped in the 0.1.1 patch: a tighter header, a small "what this does" helper block to use the empty right-hand space at wider viewports, and a visually stronger drop zone so the ratio of "first-fixation on the actual target" to "first-fixation on chrome" improves.
+
 ## 2026-04-16 — Structured errors beat string-sniffing
 
 `main.js` used to classify model-load failures by calling `.includes('fetch')` on the TF.js error message. That was a tripwire for every TF.js minor bump — the library's error wording has changed before and will change again. The maintainer review flagged this as High severity; the fix was to classify at the source (inside `loader.js`) and attach a structured `code` property to the thrown error.

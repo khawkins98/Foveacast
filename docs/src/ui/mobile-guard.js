@@ -35,6 +35,49 @@ export const MOBILE_MESSAGE =
   'Foveacast is designed for desktop use. The attention model needs more memory and CPU than a phone or tablet can reliably provide. Please open this page on a laptop or desktop computer.';
 
 /**
+ * Secondary copy shown on the "proceed anyway" button and its warning
+ * line. The framing is deliberately honest: the tool may work, or it
+ * may run out of memory halfway through inference. The user has
+ * asked to take the risk; we let them.
+ */
+export const MOBILE_PROCEED_LABEL = 'Proceed anyway (at my own risk)';
+
+/**
+ * localStorage sentinel that remembers a user's choice to bypass the
+ * guard, so they don't have to dismiss it on every reload. The
+ * `:v1` suffix leaves room to bump the key if the guard's scope
+ * changes (e.g. iOS Safari gets its own tier in V2).
+ */
+const BYPASS_KEY = 'foveacast:mobile-guard-bypass:v1';
+
+/**
+ * @param {Storage} [storage]
+ * @returns {boolean}
+ */
+function hasBypassed(storage) {
+  try {
+    const store = storage || (typeof window !== 'undefined' ? window.localStorage : null);
+    if (!store) return false;
+    return store.getItem(BYPASS_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * @param {Storage} [storage]
+ */
+function rememberBypass(storage) {
+  try {
+    const store = storage || (typeof window !== 'undefined' ? window.localStorage : null);
+    if (!store) return;
+    store.setItem(BYPASS_KEY, '1');
+  } catch {
+    /* ignore — remembering is best-effort; the guard will just reappear next time */
+  }
+}
+
+/**
  * Mobile-viewport breakpoint. Width-only because height on mobile
  * varies wildly with the address bar state.
  *
@@ -102,12 +145,30 @@ export function isMobileBrowser() {
  * caller (main.js) is expected to bail out of any further bootstrap
  * when the return value is `true`.
  *
+ * The guard is dismissible: a "Proceed anyway" button lets a user who
+ * understands the constraint (or who is testing on a narrow window
+ * that happens to look mobile) continue to the real app. The choice
+ * is remembered in localStorage so a reload doesn't force them to
+ * dismiss it again.
+ *
  * @param {HTMLElement} container
- * @returns {boolean} Whether the guard fired.
+ * @param {{ storage?: Storage, onProceed?: () => void }} [options]
+ *   - `storage` lets tests inject a fake Storage.
+ *   - `onProceed` is called by the "Proceed anyway" button. main.js
+ *     passes a rebooting function so the real app starts. Tests pass
+ *     a spy.
+ * @returns {boolean} Whether the guard fired (i.e. the app should
+ *   *not* continue to boot).
  */
-export function mountMobileGuard(container) {
+export function mountMobileGuard(container, options = {}) {
+  const { storage, onProceed } = options;
+
   if (!isMobileBrowser()) return false;
   if (!container) return false;
+
+  // If the user previously dismissed the guard, treat this visit as
+  // desktop-equivalent and let the app boot.
+  if (hasBypassed(storage)) return false;
 
   container.textContent = '';
 
@@ -126,6 +187,35 @@ export function mountMobileGuard(container) {
   body.textContent = MOBILE_MESSAGE;
   wrap.appendChild(body);
 
+  // Proceed-anyway escape. Honest copy above the button: we aren't
+  // blocking anyone; we're telling them what the constraint is and
+  // letting them decide. The button sets the bypass sentinel, removes
+  // the guard, and calls back into main.js to restart bootstrapping.
+  const actions = document.createElement('div');
+  actions.className = 'fc-mobile-guard__actions';
+
+  const caveat = document.createElement('p');
+  caveat.className = 'fc-mobile-guard__caveat';
+  caveat.textContent =
+    'If you know what you are doing — for example, testing on a narrow browser window, or on a tablet with plenty of memory — you can bypass this notice. Inference may still fail.';
+  actions.appendChild(caveat);
+
+  const proceed = document.createElement('button');
+  proceed.type = 'button';
+  proceed.className = 'fc-mobile-guard__proceed';
+  proceed.textContent = MOBILE_PROCEED_LABEL;
+  proceed.addEventListener('click', () => {
+    rememberBypass(storage);
+    // Clear the guard out of the container so the caller can rebuild
+    // the normal layout on top of an empty root.
+    container.textContent = '';
+    if (typeof onProceed === 'function') {
+      onProceed();
+    }
+  });
+  actions.appendChild(proceed);
+
+  wrap.appendChild(actions);
   container.appendChild(wrap);
   return true;
 }

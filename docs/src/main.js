@@ -94,8 +94,20 @@ function boot() {
   }
 
   // PRD §Browser Support: mobile users see a friendly desktop-only
-  // message instead of the app. Must run before any model code.
-  if (mountMobileGuard(appRoot)) return;
+  // message instead of the app. The guard is dismissible via a
+  // "Proceed anyway" button — see mobile-guard.js for the copy. When
+  // dismissed, it writes a localStorage sentinel and then we reload
+  // the page. Reload is simpler and more reliable than reconstructing
+  // index.html's mount-point DOM from JS: on the next boot, the
+  // sentinel is set, the guard returns early, and the app
+  // bootstraps normally.
+  if (
+    mountMobileGuard(appRoot, {
+      onProceed: () => window.location.reload(),
+    })
+  ) {
+    return;
+  }
 
   // Mount points — these exist in index.html.
   const statusMount = mustGet('fc-status-mount');
