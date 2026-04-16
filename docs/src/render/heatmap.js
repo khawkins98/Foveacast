@@ -12,8 +12,14 @@
 //
 //   1. `h337.create({ container })` requires an actual DOM element as
 //      its container and mutates that element by appending a canvas.
-//      There is no "offscreen" mode — we construct a detached <div>,
-//      size it explicitly, and extract the canvas after creation.
+//      There is no "offscreen" mode. The container MUST be attached to
+//      the live document when `create()` runs, because heatmap.js reads
+//      `container.offsetWidth` / `offsetHeight` to size its internal
+//      canvas — and a detached element reports both as 0, which later
+//      trips `getImageData` with `IndexSizeError: source height is 0`.
+//      We attach the container to `document.body` hidden, let h337
+//      rasterise, then detach. The returned canvas keeps working after
+//      the container is gone.
 //
 //   2. `setData({ max, min, data })` expects `data` as an array of
 //      `{ x, y, value }` objects (one per sampled pixel). Passing the
@@ -72,27 +78,50 @@ export function renderHeatmapCanvas(normalisedMap, width, height, options = {}) 
     );
   }
 
-  // Detached container — h337 mutates it but the DOM tree never sees it.
+  // Hidden-but-attached container. heatmap.js derives its internal
+  // canvas size from `container.offsetWidth` / `offsetHeight` at
+  // `create()` time, and those are only non-zero when the element is
+  // part of the rendered document tree. We attach it out-of-flow and
+  // invisible, then detach after extracting the canvas.
   const container = typeof document !== 'undefined' ? document.createElement('div') : null;
   if (!container) {
     throw new Error('renderHeatmapCanvas requires a DOM (document) to host the heatmap container.');
   }
   container.style.width = `${width}px`;
   container.style.height = `${height}px`;
-  // Position off-screen defensively; in practice the container is
-  // never attached to the document, but belt-and-braces protects
-  // against surprises if a caller ever appends it for debugging.
-  container.style.position = 'absolute';
+  container.style.position = 'fixed';
   container.style.left = '-99999px';
-  container.style.top = '-99999px';
+  container.style.top = '0';
+  container.style.visibility = 'hidden';
+  container.style.pointerEvents = 'none';
+  // `aria-hidden` keeps the off-screen element out of the accessibility
+  // tree even for the millisecond it is attached.
+  container.setAttribute('aria-hidden', 'true');
 
-  const heatmapInstance = h337.create({
-    container,
-    radius,
-    blur,
-    maxOpacity: opacity,
-    minOpacity: 0,
-  });
+  if (!document.body) {
+    throw new Error('renderHeatmapCanvas requires document.body to exist — call after DOMContentLoaded.');
+  }
+  document.body.appendChild(container);
+
+  let heatmapInstance;
+  try {
+    heatmapInstance = h337.create({
+      container,
+      // Pass `width` and `height` explicitly as a belt-and-braces
+      // measure: heatmap.js 2.x honours them when present and falls
+      // back to offsetWidth/offsetHeight otherwise.
+      width,
+      height,
+      radius,
+      blur,
+      maxOpacity: opacity,
+      minOpacity: 0,
+    });
+  } catch (err) {
+    // Ensure we never leak the container if create() throws.
+    container.remove();
+    throw err;
+  }
 
   // Stride sampling. At preset `very_high` (240×320) we would submit
   // 76 800 points without striding — enough to make h337 stutter on
@@ -112,18 +141,26 @@ export function renderHeatmapCanvas(normalisedMap, width, height, options = {}) 
     }
   }
 
-  heatmapInstance.setData({ max: 1, min: 0, data });
+  let canvas;
+  try {
+    heatmapInstance.setData({ max: 1, min: 0, data });
 
-  // h337 exposes its canvas via a private `_renderer.canvas` field.
-  // The library has no stable public accessor, so we pluck it here and
-  // pray nobody ships a major version that renames it. Documented as a
-  // known fragility in LEARNINGS.md.
-  const canvas =
-    (heatmapInstance._renderer && heatmapInstance._renderer.canvas) ||
-    (typeof heatmapInstance.getCanvas === 'function' && heatmapInstance.getCanvas());
+    // h337 exposes its canvas via a private `_renderer.canvas` field.
+    // The library has no stable public accessor, so we pluck it here
+    // and pray nobody ships a major version that renames it.
+    // Documented as a known fragility in LEARNINGS.md.
+    canvas =
+      (heatmapInstance._renderer && heatmapInstance._renderer.canvas) ||
+      (typeof heatmapInstance.getCanvas === 'function' && heatmapInstance.getCanvas());
 
-  if (!canvas) {
-    throw new Error('heatmap.js did not expose a canvas on the instance.');
+    if (!canvas) {
+      throw new Error('heatmap.js did not expose a canvas on the instance.');
+    }
+  } finally {
+    // Always detach the container, even if setData or canvas
+    // extraction throws. The canvas is a separate element and keeps
+    // rendering after its former parent container is gone.
+    container.remove();
   }
 
   return canvas;

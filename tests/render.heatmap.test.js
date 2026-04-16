@@ -139,6 +139,75 @@ describe('renderHeatmapCanvas', () => {
 
     expect(canvas).toBe(fakeCanvas);
   });
+
+  // Regression test for the "source height is 0" IndexSizeError.
+  // heatmap.js sizes its internal canvas from `container.offsetWidth`
+  // and `offsetHeight`, which are 0 on a detached element. The
+  // container must be attached to document.body at the moment
+  // `h337.create` runs, and detached again once the canvas is
+  // extracted. Both conditions are asserted here.
+  it('attaches the container to document.body during create() and detaches after', () => {
+    const { stub, create } = makeH337Stub();
+    /** @type {any} */ (globalThis).h337 = stub;
+
+    let wasAttachedDuringCreate = false;
+    let containerRefDuringCreate = null;
+    create.mockImplementationOnce((config) => {
+      containerRefDuringCreate = config.container;
+      wasAttachedDuringCreate = document.body.contains(config.container);
+      const fake = { width: config.width || 0, height: config.height || 0, __isFakeHeatmapCanvas: true };
+      return {
+        _renderer: { canvas: fake },
+        setData: vi.fn(),
+      };
+    });
+
+    const width = 64;
+    const height = 48;
+    const map = new Float32Array(width * height).fill(0.5);
+    renderHeatmapCanvas(map, width, height);
+
+    expect(wasAttachedDuringCreate).toBe(true);
+    expect(document.body.contains(containerRefDuringCreate)).toBe(false);
+  });
+
+  it('passes explicit width and height to h337.create (belt-and-braces against offsetWidth=0)', () => {
+    const { stub, create } = makeH337Stub();
+    /** @type {any} */ (globalThis).h337 = stub;
+
+    const width = 120;
+    const height = 160;
+    const map = new Float32Array(width * height).fill(0.5);
+    renderHeatmapCanvas(map, width, height);
+
+    const config = create.mock.calls[0][0];
+    expect(config.width).toBe(width);
+    expect(config.height).toBe(height);
+  });
+
+  it('detaches the container even if setData throws', () => {
+    const { stub, create } = makeH337Stub();
+    /** @type {any} */ (globalThis).h337 = stub;
+
+    let containerRef = null;
+    create.mockImplementationOnce((config) => {
+      containerRef = config.container;
+      const fake = { width: config.width, height: config.height };
+      return {
+        _renderer: { canvas: fake },
+        setData: () => {
+          throw new Error('boom');
+        },
+      };
+    });
+
+    const width = 16;
+    const height = 16;
+    const map = new Float32Array(width * height).fill(0.5);
+
+    expect(() => renderHeatmapCanvas(map, width, height)).toThrow(/boom/);
+    expect(document.body.contains(containerRef)).toBe(false);
+  });
 });
 
 describe('compositeImageAndHeatmap', () => {
