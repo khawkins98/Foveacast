@@ -83,3 +83,97 @@ describe('loadModel', () => {
     expect(secondArg === undefined || secondArg.onProgress === undefined).toBe(true);
   });
 });
+
+describe('loadModel — structured error classification', () => {
+  /** @type {any} */
+  let originalTf;
+
+  beforeEach(() => {
+    originalTf = /** @type {any} */ (globalThis).tf;
+  });
+
+  afterEach(() => {
+    /** @type {any} */ (globalThis).tf = originalTf;
+  });
+
+  it('classifies a TypeError from fetch as MODEL_DOWNLOAD_FAILED', async () => {
+    const netErr = new TypeError('Failed to fetch');
+    /** @type {any} */ (globalThis).tf = {
+      loadGraphModel: vi.fn().mockRejectedValue(netErr),
+    };
+
+    try {
+      await loadModel('medium');
+      throw new Error('expected loadModel to reject');
+    } catch (err) {
+      expect(/** @type {any} */ (err).code).toBe('MODEL_DOWNLOAD_FAILED');
+      expect(/** @type {any} */ (err).cause).toBe(netErr);
+      expect(/** @type {any} */ (err).url).toContain('medium/model.json');
+    }
+  });
+
+  it('classifies an HTTP-status failure as MODEL_DOWNLOAD_FAILED', async () => {
+    // tf.js wraps non-2xx responses this way.
+    const httpErr = new Error('Request failed with status 404');
+    /** @type {any} */ (globalThis).tf = {
+      loadGraphModel: vi.fn().mockRejectedValue(httpErr),
+    };
+
+    try {
+      await loadModel('low');
+      throw new Error('expected loadModel to reject');
+    } catch (err) {
+      expect(/** @type {any} */ (err).code).toBe('MODEL_DOWNLOAD_FAILED');
+    }
+  });
+
+  it('classifies a JSON parse error as MODEL_LOAD_FAILED', async () => {
+    // Downloaded bytes were garbled — this is the post-download path.
+    const parseErr = new SyntaxError('Unexpected token < in JSON at position 0');
+    /** @type {any} */ (globalThis).tf = {
+      loadGraphModel: vi.fn().mockRejectedValue(parseErr),
+    };
+
+    try {
+      await loadModel('high');
+      throw new Error('expected loadModel to reject');
+    } catch (err) {
+      expect(/** @type {any} */ (err).code).toBe('MODEL_LOAD_FAILED');
+    }
+  });
+
+  it('follows the cause chain to find a TypeError', async () => {
+    // Some environments wrap the underlying TypeError in a plain
+    // Error. The classifier should still recognise the inner network
+    // failure via `cause`.
+    const inner = new TypeError('NetworkError when attempting to fetch resource');
+    const wrapper = /** @type {any} */ (new Error('loadGraphModel failed'));
+    wrapper.cause = inner;
+
+    /** @type {any} */ (globalThis).tf = {
+      loadGraphModel: vi.fn().mockRejectedValue(wrapper),
+    };
+
+    try {
+      await loadModel('very_low');
+      throw new Error('expected loadModel to reject');
+    } catch (err) {
+      expect(/** @type {any} */ (err).code).toBe('MODEL_DOWNLOAD_FAILED');
+    }
+  });
+
+  it('falls back to MODEL_LOAD_FAILED for unclassified errors', async () => {
+    const weird = new Error('mysterious library internal');
+    /** @type {any} */ (globalThis).tf = {
+      loadGraphModel: vi.fn().mockRejectedValue(weird),
+    };
+
+    try {
+      await loadModel('medium');
+      throw new Error('expected loadModel to reject');
+    } catch (err) {
+      expect(/** @type {any} */ (err).code).toBe('MODEL_LOAD_FAILED');
+      expect(/** @type {any} */ (err).cause).toBe(weird);
+    }
+  });
+});

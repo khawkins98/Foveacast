@@ -138,11 +138,90 @@ export async function loadModel(preset, onProgress) {
       }
     : undefined;
 
-  const model = await tf.loadGraphModel(url, tfOnProgress ? { onProgress: tfOnProgress } : undefined);
+  let model;
+  try {
+    model = await tf.loadGraphModel(url, tfOnProgress ? { onProgress: tfOnProgress } : undefined);
+  } catch (err) {
+    // Classify the failure at the site it happens. `tf.loadGraphModel`
+    // wraps a `fetch` for model.json + a sequence of fetches for each
+    // weight shard, then parses. Distinguishing "couldn't download"
+    // from "downloaded but something is wrong with the bytes" matters
+    // for the user-facing message and for the recovery action the UI
+    // offers (MODEL_DOWNLOAD_FAILED → retry; MODEL_LOAD_FAILED → clear
+    // cached data and reload).
+    //
+    // Why we don't string-sniff TF.js messages: those strings have
+    // changed between TF.js versions and will again. Checking the
+    // error constructor / cause where possible, and the fetch-level
+    // signals where the library exposes them, is more stable.
+    throw decorateLoadError(err, url);
+  }
 
   return {
     model,
     preset,
     inputDims: PRESETS[preset],
   };
+}
+
+/**
+ * Classify a thrown error from `tf.loadGraphModel` into a structured
+ * error with a `code` property that the UI layer can branch on
+ * without inspecting the message.
+ *
+ * Heuristics, in order of reliability:
+ *   1. A `TypeError` from `fetch` (network failure) or a cause chain
+ *      with `TypeError`. Browsers throw `TypeError: Failed to fetch`
+ *      (Chrome/Firefox) or `TypeError: NetworkError when attempting
+ *      to fetch` (Firefox) on the network-unreachable path. This is
+ *      the most reliable network signal.
+ *   2. An error whose message contains HTTP status wording like
+ *      "Request failed with status" — TF.js wraps non-2xx fetches
+ *      this way. Treat as download failure.
+ *   3. Anything else (JSON parse error, shape mismatch, unexpected
+ *      token, etc.) is classified as a load/parse failure.
+ *
+ * The returned error carries the original as `cause` so stack traces
+ * are preserved for console debugging.
+ *
+ * @param {unknown} err
+ * @param {string} url - The URL we were trying to load from.
+ * @returns {Error & { code: 'MODEL_DOWNLOAD_FAILED' | 'MODEL_LOAD_FAILED', cause?: unknown, url?: string }}
+ */
+function decorateLoadError(err, url) {
+  const original = /** @type {any} */ (err);
+
+  // Walk the cause chain — modern engines expose the underlying
+  // TypeError from fetch via `error.cause` or `error.name`.
+  const causes = [];
+  let cursor = original;
+  let safetyDepth = 0;
+  while (cursor && safetyDepth < 5) {
+    causes.push(cursor);
+    cursor = cursor.cause;
+    safetyDepth += 1;
+  }
+
+  const isNetworkTypeError = causes.some(
+    (e) => e && (e.name === 'TypeError' || e instanceof TypeError),
+  );
+  const messageBlob = causes.map((e) => String((e && e.message) || e)).join(' | ');
+  const looksLikeHttpFailure = /Request failed with status/i.test(messageBlob);
+
+  const code =
+    isNetworkTypeError || looksLikeHttpFailure
+      ? 'MODEL_DOWNLOAD_FAILED'
+      : 'MODEL_LOAD_FAILED';
+
+  const decorated = /** @type {Error & { code: string, cause: unknown, url: string }} */ (
+    new Error(
+      code === 'MODEL_DOWNLOAD_FAILED'
+        ? `Model download failed (${url})`
+        : `Model load failed after download (${url}): ${messageBlob}`,
+    )
+  );
+  decorated.code = code;
+  decorated.cause = original;
+  decorated.url = url;
+  return decorated;
 }

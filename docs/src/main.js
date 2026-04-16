@@ -298,20 +298,25 @@ function boot() {
   }
 
   /**
-   * Decide which PRD error code a model-loading failure maps to. A
-   * network/fetch failure is MODEL_DOWNLOAD_FAILED; everything else
-   * (parsing, incompatible format, unknown) is MODEL_LOAD_FAILED.
+   * Route a model-loading failure to the right PRD error code. The
+   * classification work happens inside `loader.js` now — errors
+   * thrown from `loadModel` carry a structured `code` of either
+   * `MODEL_DOWNLOAD_FAILED` or `MODEL_LOAD_FAILED`. Sniffing strings
+   * out of TF.js error messages (which is what this function used to
+   * do) was a well-known tripwire for TF.js minor bumps.
+   *
+   * For anything not from our loader (shouldn't happen in normal
+   * flow, but defensive), fall back to MODEL_LOAD_FAILED.
+   *
    * @param {unknown} err
    */
   function surfaceModelError(err) {
     console.error('Foveacast: model load failed.', err);
-    const msg = String((/** @type {any} */ (err) && /** @type {any} */ (err).message) || err).toLowerCase();
-    const looksNetwork =
-      msg.includes('fetch') ||
-      msg.includes('network') ||
-      msg.includes('failed to load') ||
-      msg.includes('err_');
-    const code = looksNetwork ? 'MODEL_DOWNLOAD_FAILED' : 'MODEL_LOAD_FAILED';
+    const structuredCode = /** @type {any} */ (err) && /** @type {any} */ (err).code;
+    const code =
+      structuredCode === 'MODEL_DOWNLOAD_FAILED' || structuredCode === 'MODEL_LOAD_FAILED'
+        ? structuredCode
+        : 'MODEL_LOAD_FAILED';
     status.showError({
       code,
       onRetry: () => {
