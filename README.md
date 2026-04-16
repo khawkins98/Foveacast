@@ -12,9 +12,7 @@ It is aimed at comms staff, web officers, and UX-aware developers who want a qui
 
 ## Try it
 
-A hosted build is served from GitHub Pages:
-
-<https://khawkins98.github.io/Foveacast/>
+**Live at <https://khawkins98.github.io/Foveacast/>** — open it in desktop Chrome or Firefox, drop a screenshot, wait for the one-time model download, read the heatmap.
 
 ### Instant preview with demo mode
 
@@ -118,6 +116,14 @@ Full licence text for Foveacast itself is in [LICENSE](LICENSE) (MIT, Ken Hawkin
 - Output is a probabilistic estimate based on population-average gaze patterns, not measured eye-tracking data. Saliency models have documented biases that reflect their training distribution; the UI carries a non-dismissible note to that effect.
 - Images above 20 MB are rejected at the drop zone, and anything wider than 2560 px is downsampled before inference to keep memory behaviour predictable on modest hardware.
 - Recommended machine is 8 GB RAM with a reasonably modern CPU; the High and Very high presets are slow on anything smaller. Pick Fast or Low on older hardware.
+
+## How this was built
+
+Foveacast started as a hypothesis: the underlying science (visual saliency prediction) is well-established, the models are open source, and the browser is now capable enough to run inference locally. If all three are true, the thing a $200-per-seat SaaS sells is packaging and integrations — not the core capability.
+
+V1 is the test of that hypothesis. It was specified, researched, reviewed, and built with heavy AI assistance (Claude Code, Claude Sonnet/Opus). The process is documented in [LEARNINGS.md](LEARNINGS.md) — not as a polished case study, but as a running log written at the time the decisions were made. That file carries: the moment we discovered the MSI-Net TF.js weights were not where the PRD said they were, the bug that shipped because vitest mocked at exactly the wrong layer and was only caught by a user on first drop, the four-reviewer loop that pointed at the UX cliffs we didn't see in our own work, the ship-day pitfalls with GitHub Pages enablement and deploy retry, and the moment we ran Foveacast on its own landing page and used the heatmap to inform the next layout pass.
+
+If you're curious about the shape of AI-assisted development on a small, opinionated project, [LEARNINGS.md](LEARNINGS.md) is the primary source. The [CHANGELOG.md](CHANGELOG.md) is the secondary source. A retrospective blog post may eventually draw from both.
 
 ## Contributing and maintenance
 
