@@ -18,7 +18,17 @@ A hosted build is served from GitHub Pages:
 
 (The repo owner will fill in the real URL once the project has a permanent home.)
 
-Want to see the output without waiting on the ~60 MB first-run model download? Append `?demo=1` to the URL. Demo mode renders a synthetic saliency map over a committed example screenshot using the real render pipeline, so you can see what the tool looks like in under a second. The banner above the output makes clear that demo output is a preview, not a real prediction — drop your own screenshot (or remove `?demo=1`) to run real inference.
+### Instant preview with demo mode
+
+Don't want to wait on the ~60 MB first-run model download just to see what the tool looks like? Append `?demo=1` to the URL:
+
+```
+https://<owner>.github.io/Foveacast/?demo=1
+```
+
+Demo mode loads a committed example screenshot and renders a synthetic saliency map through the real postprocess → fixation → heatmap → composite pipeline. You see output in under a second, no network round-trip to the model CDN. The banner above the output says plainly that demo output is a synthetic preview, not a real MSI-Net prediction — drop your own screenshot or remove `?demo=1` to run real inference.
+
+Demo mode also doubles as the target for the Playwright end-to-end test suite (see [Run the tests](#run-the-tests)).
 
 ## Run locally
 
