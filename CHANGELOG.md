@@ -10,7 +10,7 @@ Post-release housekeeping. First pass of changes informed by actually using the 
 
 ### Added
 
-- **`docs/ROADMAP.md`** — candidate themes and features for V1.1, organised by theme (feature depth, model quality, UX polish, distribution, trust/infra). Menu, not a plan; the maintainer picks.
+- **`docs/ROADMAP.md`** — candidate themes and features for `0.2.0`, organised by theme (feature depth, model quality, UX polish, distribution, trust/infra). Includes a short versioning note explaining that the PRD's "V1/V2/V3" numbering is about model generations and is orthogonal to semver. Menu, not a plan; the maintainer picks.
 - **Dismissible mobile guard** — "Proceed anyway (at my own risk)" button on the desktop-only notice, with honest "inference may still fail" copy. The choice is remembered in `localStorage` so a reload doesn't re-prompt.
 - **Heatmap-informed layout pass** — tighter header, a short "What this does" helper block alongside the drop zone at wide viewports (absorbs the wandering attention the model otherwise spends on empty right-hand margins), stronger drop-zone border and padding. Observations and the before-state are documented in `LEARNINGS.md`.
 - **`download.js` unit tests** — 6 cases covering the PNG-blob-and-anchor flow, including URL revoke hygiene and null-blob rejection.

@@ -1,16 +1,22 @@
 # Roadmap
 
-What we might do next, grouped by theme and sized so a V1.1 scope can be assembled from three to five items. This file is a menu, not a plan — the actual V1.1 scope is whatever the maintainer picks and commits to.
+What we might do next, grouped by theme and sized so a `0.2.0` scope can be assembled from three to five items. This file is a menu, not a plan — the actual `0.2.0` scope is whatever the maintainer picks and commits to.
 
 Status is honest about what's researched, what's speculative, and what requires user research before sizing.
 
 Near-term items that are already queued up live in [TODO.md](../TODO.md). The roadmap is for the step above that: features and directions that warrant a minor-version bump.
 
+## Versioning note
+
+Foveacast is pre-1.0. Semver releases climb `0.1.0` → `0.1.1` → `0.2.0` → `0.3.0` → eventually `1.0.0` when the product and API shape feel stable enough to freeze. A breaking change in the pre-1.0 phase can land under a minor bump; a `1.0.0` release will mean we are committing to a stable public surface.
+
+The PRD's "Version 1 / 2 / 3" numbering refers to **model generations** — MSI-Net (V1), UNISAL (V2), SUM (V3). It is orthogonal to semver. A V2 model swap could ship under `0.2.0` or `0.3.0` or any later minor; the semver number tracks what's changed for users, not which model is under the hood.
+
 ---
 
 ## Immediate context
 
-V1 (0.1.0) shipped 2026-04-16 with the core drop-screenshot-get-heatmap loop. The 0.1.1 patch added post-ship housekeeping, layout and mobile-guard refinements informed by running Foveacast on its own landing page, and rounded out test coverage for the remaining gaps from the overnight reviews. The product is usable and live. The next inflection is whether V1.1 deepens the feature set, sharpens the model, widens distribution, or does some combination of the three.
+`0.1.0` shipped 2026-04-16 with the core drop-screenshot-get-heatmap loop (V1 per the PRD — MSI-Net through TensorFlow.js). The `0.1.1` patch added post-ship housekeeping, layout and mobile-guard refinements informed by running Foveacast on its own landing page, and rounded out test coverage for the remaining gaps from the overnight reviews. The product is usable and live. The next inflection is whether `0.2.0` deepens the feature set, sharpens the model, widens distribution, or does some combination of the three.
 
 ## Decision principles
 
@@ -147,17 +153,17 @@ An `?cdn=1` flag that loads TF.js and heatmap.js from jsDelivr instead of `docs/
 
 **Size:** 2–3 days including a proper privacy policy. **Status:** carefully out of scope for now.
 
-If we ever want to know which presets are actually used, how long inference takes across real hardware, or how often the first-drop-fails error path fires, we need some signal. Anything we build here has to be off by default, honest in its copy, zero-PII, and inspectable in the network panel. Not V1.1 material unless a specific question demands it.
+If we ever want to know which presets are actually used, how long inference takes across real hardware, or how often the first-drop-fails error path fires, we need some signal. Anything we build here has to be off by default, honest in its copy, zero-PII, and inspectable in the network panel. Not `0.2.0` material unless a specific question demands it.
 
 ---
 
-## What I'd recommend for V1.1 (one opinion, not a decision)
+## What I'd recommend for `0.2.0` (one opinion, not a decision)
 
 If the goal is "a meaningful step that lands in a couple of weeks":
 
 1. **Viewport comparison** — the PRD's highest-probability early request and the feature most likely to produce repeat use.
 2. **Attention-ordered regions (AOI list)** — small, high-value, changes the product's answerable questions.
-3. **V2 UNISAL spike** — research track, does not have to ship in V1.1 but should start.
+3. **V2 UNISAL spike** — research track, does not have to ship in `0.2.0` but should start.
 4. **Branch protection as code** — its own small PR.
 5. **`@axe-core/playwright` in CI** — small, compounds for every future UI change.
 
