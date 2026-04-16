@@ -95,6 +95,45 @@ test.describe('Foveacast — demo mode end-to-end', () => {
     await expect(banner).toContainText(/real MSI-Net/i);
   });
 
+  test('the composited canvas carries a demo watermark that survives cropping', async ({
+    page,
+  }) => {
+    // Watermark prevents someone cropping a demo screenshot and
+    // posting it as a real MSI-Net prediction. The banner above the
+    // canvas is easy to crop out; the watermark tiled into the pixels
+    // is not. We sample a vertical-strip centred on the canvas — a
+    // crop of just that strip would be a plausible social-media grab
+    // and should still contain watermark ink.
+    await page.goto('/?demo=1');
+    const canvas = page.locator('#fc-output-canvas-wrap canvas');
+    await expect(canvas).toBeVisible({ timeout: 15_000 });
+
+    const hasWatermarkInk = await canvas.evaluate((el) => {
+      const c = /** @type {HTMLCanvasElement} */ (el);
+      const ctx = c.getContext('2d');
+      if (!ctx) return false;
+      const stripWidth = Math.max(20, Math.floor(c.width * 0.35));
+      const stripX = Math.floor((c.width - stripWidth) / 2);
+      const sample = ctx.getImageData(stripX, 0, stripWidth, c.height).data;
+      // Watermark ink: white fill over black stroke at ~0.55 alpha.
+      // After compositing over varied heatmap colours the locally
+      // brightest pixels with near-neutral hue are a strong signal.
+      // We count pixels whose min(R,G,B) is high AND channels are
+      // close to each other — characteristic of the white fill.
+      let brightNeutral = 0;
+      for (let i = 0; i < sample.length; i += 4) {
+        const r = sample[i];
+        const g = sample[i + 1];
+        const b = sample[i + 2];
+        const min = Math.min(r, g, b);
+        const max = Math.max(r, g, b);
+        if (min > 200 && max - min < 25) brightNeutral += 1;
+      }
+      return brightNeutral > 30;
+    });
+    expect(hasWatermarkInk).toBe(true);
+  });
+
   test('the composited canvas contains non-trivial heatmap colour', async ({
     page,
   }) => {

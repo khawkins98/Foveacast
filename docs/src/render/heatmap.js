@@ -182,11 +182,12 @@ export function renderHeatmapCanvas(normalisedMap, width, height, options = {}) 
  *   opacity?: number,
  *   showFixation?: boolean,
  *   fixation?: { x: number, y: number } | null,
+ *   watermark?: { text: string } | null,
  * }} [options]
  * @returns {HTMLCanvasElement}
  */
 export function compositeImageAndHeatmap(imageSource, heatmapCanvas, options = {}) {
-  const { opacity = 0.6, showFixation = true, fixation = null } = options;
+  const { opacity = 0.6, showFixation = true, fixation = null, watermark = null } = options;
 
   if (typeof document === 'undefined') {
     throw new Error('compositeImageAndHeatmap requires a DOM (document).');
@@ -231,7 +232,72 @@ export function compositeImageAndHeatmap(imageSource, heatmapCanvas, options = {
     drawFixationCrosshair(ctx, fixation.x, fixation.y);
   }
 
+  // 4. Optional watermark. Only the demo path passes one in — normal
+  //    inference renders clean. The watermark is drawn last so it sits
+  //    above both the heatmap and the crosshair; this is deliberate,
+  //    because the watermark's job is to be visible on any crop.
+  if (watermark && watermark.text) {
+    drawDiagonalWatermark(ctx, width, height, watermark.text);
+  }
+
   return canvas;
+}
+
+/**
+ * Draw a tiled diagonal watermark across the canvas.
+ *
+ * Design rationale:
+ *   - Text is rotated ~20° and repeated on a diagonal grid so that any
+ *     reasonable crop still contains at least one legible copy. A
+ *     single corner-pinned watermark would be trivially cropped out
+ *     and defeat the point (UX review P0 #3).
+ *   - Black stroke under white fill gives legibility over any heatmap
+ *     colour and any underlying screenshot content.
+ *   - Global alpha ~0.55 keeps the output readable as a heatmap while
+ *     keeping the watermark assertive enough to notice.
+ *   - Font size scales with the canvas min-dimension so the mark stays
+ *     proportional across preset resolutions.
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} width
+ * @param {number} height
+ * @param {string} text
+ */
+function drawDiagonalWatermark(ctx, width, height, text) {
+  ctx.save();
+
+  const minDim = Math.min(width, height);
+  const fontSize = Math.max(14, Math.round(minDim * 0.035));
+  ctx.font = `600 ${fontSize}px system-ui, -apple-system, Segoe UI, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.globalAlpha = 0.55;
+  ctx.lineWidth = Math.max(2, Math.round(fontSize * 0.12));
+
+  // Tile on a diagonal grid. Angle is shallow enough that the text
+  // stays readable horizontally at a glance.
+  const angleRad = (-20 * Math.PI) / 180;
+  const stepX = Math.max(220, Math.round(width * 0.32));
+  const stepY = Math.max(140, Math.round(height * 0.22));
+
+  // Rotate the whole space, then stamp in a grid covering a rectangle
+  // larger than the canvas so rotation doesn't leave corners bare.
+  ctx.translate(width / 2, height / 2);
+  ctx.rotate(angleRad);
+  const extent = Math.max(width, height) * 1.2;
+
+  for (let y = -extent; y <= extent; y += stepY) {
+    // Alternate rows get offset so the pattern doesn't look gridded.
+    const rowOffset = (Math.round(y / stepY) % 2) * (stepX / 2);
+    for (let x = -extent; x <= extent; x += stepX) {
+      ctx.strokeStyle = 'black';
+      ctx.strokeText(text, x + rowOffset, y);
+      ctx.fillStyle = 'white';
+      ctx.fillText(text, x + rowOffset, y);
+    }
+  }
+
+  ctx.restore();
 }
 
 /**

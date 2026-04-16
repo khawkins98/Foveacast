@@ -229,11 +229,19 @@ describe('compositeImageAndHeatmap', () => {
       fill: vi.fn(),
       moveTo: vi.fn(),
       lineTo: vi.fn(),
+      // Text + transform APIs for the watermark path.
+      strokeText: vi.fn(),
+      fillText: vi.fn(),
+      translate: vi.fn(),
+      rotate: vi.fn(),
       globalCompositeOperation: 'source-over',
       globalAlpha: 1,
       strokeStyle: '',
       fillStyle: '',
       lineWidth: 1,
+      font: '',
+      textAlign: 'start',
+      textBaseline: 'alphabetic',
     };
     originalGetContext = HTMLCanvasElement.prototype.getContext;
     // eslint-disable-next-line no-extend-native
@@ -303,6 +311,36 @@ describe('compositeImageAndHeatmap', () => {
     });
 
     expect(ctxStub.arc).not.toHaveBeenCalled();
+  });
+
+  it('draws a tiled watermark when the watermark option is provided', () => {
+    const fakeImage = { naturalWidth: 400, naturalHeight: 300 };
+    const fakeHeatmap = { width: 400, height: 300 };
+
+    compositeImageAndHeatmap(fakeImage, fakeHeatmap, {
+      watermark: { text: 'FOVEACAST DEMO — SYNTHETIC' },
+    });
+
+    // Rotation + translation used by the watermark grid.
+    expect(ctxStub.translate).toHaveBeenCalled();
+    expect(ctxStub.rotate).toHaveBeenCalled();
+    // Tiled across canvas — many stamps, each stamp is stroke + fill.
+    expect(ctxStub.strokeText.mock.calls.length).toBeGreaterThan(3);
+    expect(ctxStub.fillText.mock.calls.length).toBeGreaterThan(3);
+    // The correct text is what gets stamped.
+    expect(ctxStub.strokeText.mock.calls[0][0]).toBe('FOVEACAST DEMO — SYNTHETIC');
+  });
+
+  it('does not draw a watermark when the option is omitted (normal inference path)', () => {
+    const fakeImage = { naturalWidth: 400, naturalHeight: 300 };
+    const fakeHeatmap = { width: 400, height: 300 };
+
+    compositeImageAndHeatmap(fakeImage, fakeHeatmap, {
+      showFixation: false,
+    });
+
+    expect(ctxStub.strokeText).not.toHaveBeenCalled();
+    expect(ctxStub.fillText).not.toHaveBeenCalled();
   });
 
   it('clamps opacity into [0, 1]', () => {

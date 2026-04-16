@@ -186,10 +186,15 @@ export async function runDemoMode(mounts) {
   const heatmapCanvas = renderHeatmapCanvas(processed, origW, origH);
 
   // 5. Composite and mount.
+  // Demo output carries a diagonal watermark baked into the canvas
+  // itself. A banner above the output is easy to crop out; a pixel
+  // watermark is not. Defence in depth so nobody ships a demo
+  // screenshot captioned as a real model prediction.
   const composite = compositeImageAndHeatmap(workCanvas, heatmapCanvas, {
     opacity: 0.6,
     showFixation: true,
     fixation,
+    watermark: { text: 'FOVEACAST DEMO — SYNTHETIC' },
   });
   composite.setAttribute(
     'aria-label',
