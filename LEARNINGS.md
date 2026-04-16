@@ -209,6 +209,40 @@ Net: the technical story for V2 is no longer "can we get UNISAL into the browser
 
 The ONNX artefact itself is committed to `docs/models/unisal/model.onnx` on the spike branch. If V2 ships, this is already the production artefact; if the spike branch gets archived, nothing is lost because the recipe in `scripts/unisal-onnx-export.py` is reproducible.
 
+## 2026-04-16 — V1 vs V2 qualitative benchmark (with ground truth)
+
+The spike doc said a qualitative MSI-Net vs UNISAL benchmark was the gate before committing to V2. We shipped V2 without it. After shipping, I ran the A/B on four screenshots — two without ground truth and two with real eye-tracking data from a published usability study. The result is strong enough that it deserves a record separate from the PR comment thread.
+
+**Ground-truth source.** The two ACS (American Community Survey) screens in the comparison folder come from [ResearchGate figure 4, "Round 1 Welcome Screen"](https://www.researchgate.net/figure/Round-1-Welcome-Screen_fig4_235343733) — a published Census Bureau usability study with participant eye-tracking heatmaps overlaid. The "counts" legend in the ground-truth images is participant fixation counts, which makes them directly comparable to a saliency prediction: where the real users looked, and how intensely. For UI content specifically, this is the kind of signal that would take weeks to collect in-house — having someone else's study already on the internet is a gift, and we should use it.
+
+**Comparison screenshots, all in `docs/spikes/comparison/`:**
+
+- `undrr-gar-*` — UNDRR Global Assessment Report page. Dense UN/NGO text content. No ground truth.
+- `youtube-home-*` — YouTube logged-out home page. Thumbnail grid, category chips, Shorts reel. No ground truth.
+- `acs-welcome-*` — ACS welcome screen with Begin button. Ground truth present.
+- `acs-question-*` — ACS survey question page with sidebar navigation. Ground truth present.
+
+**What the no-ground-truth screens showed.** MSI-Net produces a visibly more granular output on both — individual page elements register as distinct hotspots; UNISAL produces a central blob. For a designer reviewing a layout, "which of these elements competes for attention" is the question being asked, and MSI-Net answers it with more resolution. That alone is a readable product win, but it is subjective.
+
+**What the ACS welcome screen showed.** Both models miss the Begin button that real participants fixated on most. MSI-Net's fixation falls on the title; UNISAL's lands in the negative space between text lines. Neither prediction is "right" — they both behave like natural-scene models, weighing text and faces over CTAs, because that is what they were trained to do. This is the strongest evidence that the SALICON-training-data limit is the ceiling for this kind of content regardless of which SALICON-trained model we pick.
+
+**What the ACS question screen showed.** This is where the comparison got interesting. Real-participant fixations clustered on (a) the question "What is your sex?" with its radio buttons, (b) the right-hand "Where You Are" navigation box, and (c) the Previous/Next buttons. MSI-Net's predicted heatmap has clear hotspots on the first two — the question area AND the right sidebar — plus visible warmth on the button row. UNISAL's predicted heatmap is one large central blob with barely any sidebar activation. **MSI-Net's prediction tracks the real eye-tracking data meaningfully better than UNISAL's on this screen.** Whatever slight "newer model" theoretical advantage UNISAL has on natural scenes does not carry over to UI forms.
+
+**The pattern across all four:**
+
+| Screen | Content type | Ground truth? | MSI-Net | UNISAL |
+|---|---|---|---|---|
+| UNDRR GAR | Dense text | No | Granular hotspots on accordion items | Single central blob |
+| YouTube home | Thumbnail grid | No | Each tile resolves separately | Uniform red over upper 2/3 |
+| ACS welcome | Form CTA | Yes | Diffuse, misses Begin | Diffuse, misses Begin |
+| ACS question | Form + sidebar | Yes | **Tracks ground truth hotspots** | Central blob, weak sidebar |
+
+**Conclusion.** The architectural wins of V2 (12.5 MB in-repo artefact, no GCS dependency, single-file ONNX, proof that the layer boundary cleanly supports a model swap) are real and measurable. The output-quality argument for V2 is not landing. On the one comparison with ground-truth signal and enough structure to differentiate, MSI-Net is materially closer to what real users looked at.
+
+**What this changes about the V2 decision.** At minimum: the "no clear winner" framing the PR comment offered after n=2 was too generous. With n=4 and two ground-truth comparisons, MSI-Net looks better for Foveacast's target content (UI screenshots). The reasonable paths forward are (1) revert V2 and keep the architecture work + ONNX artefact as proof-of-concept, (2) ship both and expose a model toggle, or (3) ship V2 anyway because the architectural discipline wins are worth more than the output-quality loss on this specific content class. None of these three is obviously right, and the call is a product judgement the maintainer has to make with eyes open rather than by default. This LEARNINGS entry is the eyes-open record.
+
+**What this reinforces about V3.** SUM's value proposition — a model explicitly trained on UI screenshots — becomes more compelling after seeing how badly SALICON-trained models miss UI-specific attention targets like CTAs. The Mamba CUDA-kernel blocker stays the same, but the urgency of cracking it is higher than the V1 build suggested.
+
 ## 2026-04-16 — V2 shipped: UNISAL + ORT Web end-to-end
 
 Turned the export artefact into a shipped release. `0.2.0` is live; MSI-Net through TF.js is out of the repo; the landing page runs UNISAL through `onnxruntime-web`. The release went smoother than any of us had a right to expect, for one specific reason, and one specific concern is carried forward.
