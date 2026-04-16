@@ -13,11 +13,67 @@
 // directory. Tests do not use Vite — they run under Vitest with jsdom —
 // so this file stays minimal.
 import { defineConfig } from 'vite';
+import { readFileSync, existsSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
+/**
+ * Custom Vite middleware that short-circuits requests under `/models/`
+ * and serves the raw bytes directly.
+ *
+ * Why this exists: TensorFlow.js loads weight shards (group1-shard1of6,
+ * etc.) that have no file extension. Vite's import-analysis plugin sees
+ * those extensionless files and attempts to parse them as JavaScript
+ * source, which blows up with "Failed to parse source for import
+ * analysis". The net effect is a 500 Internal Server Error for every
+ * weight shard during `pnpm dev`, which breaks the E2E test that
+ * exercises the demo-mode background model load.
+ *
+ * GitHub Pages (the production host) serves static files unchanged, so
+ * the issue is dev-server-specific. This plugin pre-empts Vite's
+ * middleware stack for `/models/*` URLs and responds with the raw file
+ * bytes and a conservative `application/octet-stream` content type.
+ */
+function serveModelsAsStatic() {
+  return {
+    name: 'foveacast-serve-models-as-static',
+    configureServer(server) {
+      const modelsRoot = resolve(server.config.root || process.cwd(), 'models');
+      server.middlewares.use((req, res, next) => {
+        const url = req.url || '';
+        // Strip querystring + hash before matching.
+        const pathPart = url.split('?')[0].split('#')[0];
+        if (!pathPart.startsWith('/models/')) {
+          next();
+          return;
+        }
+        const filePath = join(modelsRoot, pathPart.slice('/models/'.length));
+        if (!existsSync(filePath) || !statSync(filePath).isFile()) {
+          next();
+          return;
+        }
+        try {
+          const bytes = readFileSync(filePath);
+          const isJson = filePath.endsWith('.json');
+          res.setHeader('Content-Type', isJson ? 'application/json' : 'application/octet-stream');
+          res.setHeader('Content-Length', String(bytes.length));
+          res.setHeader('Cache-Control', 'no-cache');
+          res.end(bytes);
+        } catch (err) {
+          // Surface the error honestly rather than 500'ing silently.
+          res.statusCode = 500;
+          res.end(String((err && err.message) || err));
+        }
+      });
+    },
+  };
+}
 
 export default defineConfig({
   // Serve the GitHub Pages publish folder directly. No intermediate
   // build output, no duplicated source tree.
   root: 'docs',
+
+  plugins: [serveModelsAsStatic()],
 
   server: {
     // Open the browser automatically on `pnpm dev` for a faster
