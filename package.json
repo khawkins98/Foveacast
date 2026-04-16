@@ -14,6 +14,9 @@
     "smoke": "bash scripts/smoke-test.sh",
     "weights": "bash scripts/fetch-weights.sh"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "jsdom": "^24",
