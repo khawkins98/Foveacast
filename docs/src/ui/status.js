@@ -200,16 +200,18 @@ export function createStatus() {
   function showReady() {
     const body = document.createElement('p');
     body.className = 'fc-status__body';
-    body.textContent = 'Model ready.';
+    // Carries the next action on purpose. "Model ready." on its own
+    // left screen-reader users with no clue what to do, and the
+    // auto-dismiss meant sighted users sometimes missed it entirely.
+    body.textContent = 'Model loaded \u2014 drop a screenshot to start.';
 
     setBody('ready', [body]);
 
-    // Auto-dismiss after 1.5s. Keeping the banner on screen indefinitely
-    // would steal attention from the drop zone, which is the actual
-    // next step for the user.
-    readyTimeout = setTimeout(() => {
-      clear();
-    }, 1500);
+    // Stay on screen. The caller clears this banner when a drop
+    // arrives (via `status.clear()` in the inference success path),
+    // so there is no need for a timer to race against. Leaving the
+    // message up until the user takes the next step is what makes
+    // the message useful.
   }
 
   // --- Inference -----------------------------------------------------

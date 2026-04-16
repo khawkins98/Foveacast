@@ -94,7 +94,10 @@ export function createControls(options = {}) {
 
   const opacityLabel = document.createElement('label');
   opacityLabel.htmlFor = `${prefix}-opacity`;
-  opacityLabel.textContent = 'Overlay opacity';
+  // Verb-first labels: the user is acting on the heatmap, not
+  // contemplating a property. Nudges the controls from "settings
+  // panel" feel toward "live controls" feel.
+  opacityLabel.textContent = 'Adjust overlay strength';
   opacityWrap.appendChild(opacityLabel);
 
   const opacityInput = document.createElement('input');
@@ -134,7 +137,7 @@ export function createControls(options = {}) {
   const viewWrap = document.createElement('fieldset');
   viewWrap.className = 'fc-controls__field fc-controls__field--group';
   const viewLegend = document.createElement('legend');
-  viewLegend.textContent = 'View';
+  viewLegend.textContent = 'Show';
   viewWrap.appendChild(viewLegend);
 
   /** @type {HTMLInputElement[]} */
@@ -172,7 +175,7 @@ export function createControls(options = {}) {
 
   const presetLabel = document.createElement('label');
   presetLabel.htmlFor = `${prefix}-preset`;
-  presetLabel.textContent = 'Quality preset';
+  presetLabel.textContent = 'Model detail';
   presetWrap.appendChild(presetLabel);
 
   const presetSelect = document.createElement('select');

@@ -14,11 +14,6 @@ Full review documents are at `/tmp/foveacast-review-{ux,frontend,writing,maintai
 
 ## Deferred from the UX batch (already landed: drop-anywhere, demo watermark, enable-on-demo-render, progressive disclosure)
 
-### P1 — Controls panel copy does not match the moment
-
-Progressive disclosure fixed the over-visibility problem, but the opacity slider, view radios, preset picker, and download button still carry generic labels (`Opacity`, `View`, `Preset`). Once they appear they should carry verbs that match the current state — e.g. "Adjust overlay opacity", "Switch view: heatmap / original / side-by-side", "Model preset: Standard (change?)".
-
-**Size:** 20 minutes, copy-only. Humanizer pass before committing.
 
 ### P2 — "Need more?" modal reads as a link list
 
@@ -42,18 +37,9 @@ When a file is being dragged over the page (`body.fc-page-dragover`), a tiny thu
 
 ## Deferred from the frontend / DX batch
 
-### P1 — No unit tests for `inference.js`, `demo.js`, `download.js`, or `main.js`
+### P1 — Remaining unit tests for `download.js`
 
-**Source:** frontend review P1 #3 and #4.
-
-`inference.js` admits this at the top of the file; the others never got coverage. Specifically testable:
-
-- `inference.js`: `[1, H, W, 3]` input shape, tensor disposal (VRAM leak), Float32Array copy semantics.
-- `demo.js`: `isDemoModeRequested` against `?demo=1`, `?demo=true`, bare `?demo`, `?demo=0`; `makeSyntheticSaliency` shape + value range.
-- `download.js`: fake canvas `toBlob` mock, assert URL created / revoked / anchor click happened in order.
-- `main.js` `surfaceModelError` string-sniff: mock an `Error('Failed to fetch')` vs `Error('SyntaxError: Unexpected token')` and assert the right code is surfaced. This is the tripwire the maintainer review flagged.
-
-**Size:** 2–3 hours for all four files.
+**Source:** frontend review P1 #4. `inference.js`, `demo.js`, and the `main.js surfaceModelError` classifier now have coverage — only `download.js` is left. A fake canvas `toBlob` mock with assertions on URL created / revoked / anchor click order would take ~30 minutes.
 
 ### P2 — Reliance on `heatmapInstance._renderer.canvas` private API
 
@@ -80,23 +66,11 @@ pnpm action in CI pins Node 20, but the repo does not declare its Node floor. A 
 
 **Size:** 30 minutes.
 
-### P1 — Model-ready banner says `Model ready.` and disappears
-
-**Source:** writing review P2 #5. After 1.5 s of "Model ready.", the banner vanishes — screen-reader users hear the announcement and get no next step. Change to "Model loaded — drop a screenshot to start." and keep it until the user drops something (or 10 seconds, whichever first).
-
-**Size:** 15 minutes.
-
 ### P2 — Voice audit: one section slips into AI-register
 
 The CONTRIBUTING.md section titled "Style" has a line — `"— the project is expected to be picked up by people who didn't build it."` — that is fine, but the paragraph around it reads more like a policy document than the rest of the voice. A humanizer pass would bring it into line.
 
 **Size:** 15 minutes.
-
-### P2 — Licence text for vendored libraries
-
-docs/vendor/README.md lists the licences but does not inline the MIT / Apache 2.0 texts. Strictly speaking the MIT and Apache 2.0 licences require distribution of the full licence text alongside the code. Add `docs/vendor/LICENCE-TFJS.txt` (Apache 2.0) and `docs/vendor/LICENCE-HEATMAPJS.txt` (MIT).
-
-**Size:** 10 minutes.
 
 ---
 
