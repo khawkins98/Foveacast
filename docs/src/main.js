@@ -4,11 +4,12 @@
 // modules (status, dropzone, controls) together, loads the model, and
 // drives the end-to-end inference → render → composite pipeline.
 //
-// Architecture note: the UI layer never imports `@tensorflow/tfjs` or
-// `heatmap.js` directly. Both are loaded from CDN <script> tags in
-// `index.html` and reached through the `model/` and `render/` modules.
-// Keeping that isolation intact is what lets Phase 2 swap TF.js for
-// ONNX Runtime Web without touching anything below.
+// Architecture note: the UI layer never imports `onnxruntime-web` or
+// `heatmap.js` directly. Both are loaded from vendored <script> tags
+// in `index.html` and reached through the `model/` and `render/`
+// modules. V2 proved the value of that boundary — swapping MSI-Net
+// through TensorFlow.js for UNISAL through ORT Web happened inside
+// `model/` and the surrounding layers never noticed.
 
 import { mountMobileGuard } from './ui/mobile-guard.js';
 import { createStatus } from './ui/status.js';
@@ -29,18 +30,6 @@ import { installPageDrop } from './ui/page-drop.js';
 import { readHasRunSentinel, writeHasRunSentinel } from './ui/has-run-sentinel.js';
 
 /**
- * Human-readable preset codenames for the model-version footer line.
- * Matches the PRD copy (§Attribution) and mirrors the control labels.
- */
-const PRESET_CODE_NAMES = Object.freeze({
-  very_low: 'Fast (48×64)',
-  low: 'Low (72×96)',
-  medium: 'Standard (120×160)',
-  high: 'High (168×224)',
-  very_high: 'Very high (240×320)',
-});
-
-/**
  * Threshold (ms) above which we treat the first onProgress tick as a
  * genuine network download rather than a cache hit. WHY a time-based
  * heuristic is still here alongside the localStorage sentinel below:
@@ -53,22 +42,25 @@ const PRESET_CODE_NAMES = Object.freeze({
 const FIRST_RUN_THRESHOLD_MS = 800;
 
 /**
- * Application state. Kept in a plain object rather than a class to keep
- * this file boring — there is only one of it and it lives for the page's
- * entire lifetime.
+ * Application state. Kept in a plain object rather than a class to
+ * keep this file boring — there is only one of it and it lives for
+ * the page's entire lifetime.
+ *
+ * V2 removed the `preset` field because UNISAL ships as a single
+ * fixed-shape ONNX graph.
+ *
  * @type {{
- *   preset: import('./ui/controls.js').ControlsController extends any ? string : never,
- *   loadedModel: { model: any, inputDims: [number, number], preset: string } | null,
+ *   loadedModel: { session: any, inputDims: [number, number] } | null,
  *   lastImage: HTMLImageElement | ImageBitmap | HTMLCanvasElement | null,
  *   lastHeatmapCanvas: HTMLCanvasElement | null,
  *   lastFixation: { x: number, y: number } | null,
  *   lastOrigDims: [number, number] | null,
  *   opacity: number,
  *   view: 'overlay' | 'original' | 'sidebyside',
+ *   queuedFile: File | null,
  * }}
  */
 const state = {
-  preset: 'medium',
   loadedModel: null,
   lastImage: null,
   lastHeatmapCanvas: null,
@@ -166,14 +158,6 @@ function boot() {
       state.view = view;
       renderOutput();
     },
-    onPresetChange: (preset) => {
-      state.preset = preset;
-      // A new preset means new weights; teardown any previous state and
-      // reload. We leave the last image on screen while the new model
-      // downloads — swapping models does not invalidate the composite
-      // on display, only the next inference.
-      reloadModel().catch((err) => surfaceModelError(err));
-    },
     onDownload: () => {
       const compositeCanvas = outputCanvasWrap.querySelector('canvas');
       if (!compositeCanvas) return;
@@ -251,8 +235,8 @@ function boot() {
   // --- Exposed helpers (closures over `state`) --------------------------
 
   /**
-   * Load the model for `state.preset` with a first-run-vs-cache banner
-   * heuristic (see FIRST_RUN_THRESHOLD_MS).
+   * Load the UNISAL model with a first-run-vs-cache banner heuristic
+   * (see `FIRST_RUN_THRESHOLD_MS`).
    *
    * `silent` suppresses the cache-load / first-run / ready banners so
    * the demo-mode background load does not stomp the demo banner. The
@@ -287,56 +271,52 @@ function boot() {
       }
     }
 
-    try {
-      const loaded = await loadModel(state.preset, (progress) => {
-        if (silent) return;
-        const elapsed = performance.now() - startedAt;
-        if (!firstRunShown && elapsed > FIRST_RUN_THRESHOLD_MS && progress.fraction < 0.95) {
-          firstRunShown = true;
-        }
-        if (firstRunShown) {
-          status.showFirstRun(progress);
-        }
-      });
-      state.loadedModel = loaded;
-      writeHasRunSentinel(); // Flip the bit after a successful load.
-      dropzone.setEnabled(true);
-      controls.setDisabled(false);
-      if (!silent) status.showReady();
-      renderFooter();
-
-      // Drain any file the user dropped while we were still loading.
-      // This is the second half of the demo-mode queued-drop flow.
-      if (state.queuedFile) {
-        const pending = state.queuedFile;
-        state.queuedFile = null;
-        status.element.removeAttribute('data-foveacast-queued');
-        // Don't await — same reason the dropzone onFile doesn't await:
-        // we want the caller to return promptly.
-        handleFile(pending).catch((err) => {
-          console.error('Foveacast: queued-file inference failed.', err);
-          status.showError({
-            code: 'INFERENCE_FAILED',
-            onRetry: () => status.clear(),
-          });
-        });
+    const loaded = await loadModel((progress) => {
+      if (silent) return;
+      const elapsed = performance.now() - startedAt;
+      if (!firstRunShown && elapsed > FIRST_RUN_THRESHOLD_MS && progress.fraction < 0.95) {
+        firstRunShown = true;
       }
-    } catch (err) {
-      // Re-throw so the outer catch can choose the right error code.
-      throw err;
+      if (firstRunShown) {
+        status.showFirstRun(progress);
+      }
+    });
+    state.loadedModel = loaded;
+    writeHasRunSentinel(); // Flip the bit after a successful load.
+    dropzone.setEnabled(true);
+    controls.setDisabled(false);
+    if (!silent) status.showReady();
+    renderFooter();
+
+    // Drain any file the user dropped while we were still loading.
+    // This is the second half of the demo-mode queued-drop flow.
+    if (state.queuedFile) {
+      const pending = state.queuedFile;
+      state.queuedFile = null;
+      status.element.removeAttribute('data-foveacast-queued');
+      // Don't await — same reason the dropzone onFile doesn't await:
+      // we want the caller to return promptly.
+      handleFile(pending).catch((err) => {
+        console.error('Foveacast: queued-file inference failed.', err);
+        status.showError({
+          code: 'INFERENCE_FAILED',
+          onRetry: () => status.clear(),
+        });
+      });
     }
   }
 
   /**
-   * Route a model-loading failure to the right PRD error code. The
-   * classification work happens inside `loader.js` now — errors
-   * thrown from `loadModel` carry a structured `code` of either
-   * `MODEL_DOWNLOAD_FAILED` or `MODEL_LOAD_FAILED`. Sniffing strings
-   * out of TF.js error messages (which is what this function used to
-   * do) was a well-known tripwire for TF.js minor bumps.
+   * Route a model-loading failure to the right PRD error code.
    *
-   * For anything not from our loader (shouldn't happen in normal
-   * flow, but defensive), fall back to MODEL_LOAD_FAILED.
+   * Errors thrown from `loadModel` carry a structured `code` of either
+   * `MODEL_DOWNLOAD_FAILED` or `MODEL_LOAD_FAILED`. For anything not
+   * from our loader (shouldn't happen in normal flow, but defensive),
+   * fall back to `MODEL_LOAD_FAILED`.
+   *
+   * V2 simplified the retry: ORT Web caches the `.onnx` bytes in the
+   * browser's ordinary HTTP cache, so "clear cached data and retry"
+   * is just a hard reload. No IndexedDB housekeeping to chase.
    *
    * @param {unknown} err
    */
@@ -351,22 +331,6 @@ function boot() {
       code,
       onRetry: () => {
         if (code === 'MODEL_LOAD_FAILED') {
-          // PRD §Error States: "Clear cached data and retry" should
-          // clear the cached weights. tf.js caches inside IndexedDB
-          // under the URL key when IndexedDBLoader is used; the simple
-          // HTTP cache path (what we use) is cleared by a hard reload.
-          // We surface both: reload will re-fetch; tf.io removal is a
-          // best-effort extra.
-          try {
-            const tf = /** @type {any} */ (globalThis).tf;
-            if (tf && tf.io && typeof tf.io.removeModel === 'function') {
-              // Best-effort — ignore failures, this API is only used
-              // when models were saved via tf.io.
-              tf.io.removeModel(`indexeddb://${state.preset}`).catch(() => {});
-            }
-          } catch {
-            /* ignore */
-          }
           window.location.reload();
           return;
         }
@@ -542,8 +506,8 @@ function boot() {
 
   /**
    * Render (or refresh) the attribution footer. The footer carries:
-   *   - Model version indicator (updates when the preset changes).
-   *   - Credits for MSI-Net, TensorFlow.js, and heatmap.js.
+   *   - Model version indicator.
+   *   - Credits for UNISAL, ONNX Runtime Web, and heatmap.js.
    *   - Non-dismissible bias disclosure (PRD §Attribution).
    *   - A "Need more?" button that opens the commercial-alternatives
    *     modal, per PRD §Positioning and Alternatives.
@@ -555,8 +519,7 @@ function boot() {
 
     const modelLine = document.createElement('p');
     modelLine.className = 'fc-footer__line fc-footer__model';
-    const codeName = PRESET_CODE_NAMES[state.preset] || state.preset;
-    modelLine.textContent = `Model: MSI-Net · ${codeName}`;
+    modelLine.textContent = 'Model: UNISAL · SALICON (288×384)';
     footer.appendChild(modelLine);
 
     // Attribution lines are built as individual nodes rather than one
@@ -568,17 +531,17 @@ function boot() {
     credits.appendChild(
       textAndLink(
         'Attention prediction powered by ',
-        'MSI-Net',
-        'https://github.com/alexanderkroner/saliency',
-        ' by Alexander Kroner (MIT). ',
+        'UNISAL',
+        'https://github.com/rdroste/unisal',
+        ' by Richard Droste et al. (Apache 2.0). ',
       ),
     );
     credits.appendChild(
       textAndLink(
         'Inference via ',
-        'TensorFlow.js',
-        'https://www.tensorflow.org/js',
-        ' (Apache 2.0). ',
+        'ONNX Runtime Web',
+        'https://onnxruntime.ai/docs/tutorials/web/',
+        ' (MIT). ',
       ),
     );
     credits.appendChild(

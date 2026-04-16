@@ -26,12 +26,11 @@ import {
 import { downsampleIfLarge } from './pipeline/preprocess.js';
 
 /**
- * Native resolution of the synthetic saliency map, in `[H, W]`.
- * Chosen to match the `medium` preset's input dims so the postprocess
- * upsampling ratio matches what a real model run would produce on a
- * typical screenshot.
+ * Native resolution of the synthetic saliency map, in `[H, W]`. Matches
+ * UNISAL's SALICON export shape so the postprocess upsampling ratio
+ * matches what a real model run would produce.
  */
-const DEMO_SALIENCY_DIMS = /** @type {[number, number]} */ ([120, 160]);
+const DEMO_SALIENCY_DIMS = /** @type {[number, number]} */ ([288, 384]);
 
 /**
  * Path to the committed example screenshot. Relative to `index.html`.
@@ -65,12 +64,17 @@ export function isDemoModeRequested() {
 }
 
 /**
- * Generate a synthetic saliency map with two Gaussian blobs positioned
- * at plausible web-page "hotspots" — roughly the top-left rule-of-thirds
+ * Generate a synthetic saliency map with two "blob" peaks positioned
+ * at plausible web-page hotspots — roughly the top-left rule-of-thirds
  * intersection and a secondary call-to-action area mid-page right.
  *
- * Values are in `[0, 255]` to mirror the real model output range before
- * postprocess. The map is a plain row-major Float32Array.
+ * Output values are **log-probabilities** in roughly `[-25, -7]`, the
+ * range UNISAL emits in practice. Feeding 0–1 or 0–255 values into
+ * the V2 postprocess pipeline would blow up the `exp` step; keeping
+ * the demo in log-space means the same postprocess function that
+ * handles real model output handles synthetic output too.
+ *
+ * The map is a plain row-major Float32Array.
  *
  * @param {[number, number]} dims - `[height, width]`.
  * @returns {Float32Array}
@@ -79,18 +83,23 @@ export function makeSyntheticSaliency(dims) {
   const [h, w] = dims;
   const out = new Float32Array(h * w);
 
-  // Blob configuration: each blob is a 2D isotropic Gaussian centred at
-  // (cx, cy) with standard deviation `sigma`, scaled by `peak`.
-  // Coordinates are given as fractions of width/height so the same
-  // configuration works at any resolution.
+  // Blob configuration: each blob is a 2D isotropic Gaussian centred
+  // at (cx, cy) with standard deviation `sigma`, contributing a
+  // negative-quadratic term to the log-probability. A larger peak
+  // means a higher log-probability (less negative).
+  //
+  // Background log-prob = -25 (consistent with log-softmax over a
+  // 288×384 grid of roughly uniform probability, plus some headroom).
+  // Blob peaks add positive mass so the max log-prob is around -7.
+  const backgroundLogProb = -25;
   const blobs = [
-    { fx: 0.30, fy: 0.22, sigma: 0.12, peak: 220 },
-    { fx: 0.72, fy: 0.55, sigma: 0.09, peak: 150 },
+    { fx: 0.30, fy: 0.22, sigma: 0.12, peakBoost: 18 },
+    { fx: 0.72, fy: 0.55, sigma: 0.09, peakBoost: 12 },
   ];
 
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
-      let v = 0;
+      let boost = 0;
       for (const blob of blobs) {
         const cx = blob.fx * w;
         const cy = blob.fy * h;
@@ -98,11 +107,9 @@ export function makeSyntheticSaliency(dims) {
         const sy = blob.sigma * h;
         const dx = (x - cx) / sx;
         const dy = (y - cy) / sy;
-        v += blob.peak * Math.exp(-0.5 * (dx * dx + dy * dy));
+        boost += blob.peakBoost * Math.exp(-0.5 * (dx * dx + dy * dy));
       }
-      // Clamp at 255 so the synthetic map stays in the same numeric
-      // range as a real MSI-Net output.
-      out[y * w + x] = Math.min(255, v);
+      out[y * w + x] = backgroundLogProb + boost;
     }
   }
 
@@ -166,7 +173,7 @@ export async function runDemoMode(mounts) {
   // and treats it as a model output.
   if (onBanner) {
     onBanner(
-      'Demo mode — this heatmap is a synthetic preview, not a real MSI-Net prediction. ' +
+      'Demo mode — this heatmap is a synthetic preview, not a real UNISAL prediction. ' +
         'Drop a screenshot or remove ?demo=1 from the URL to run real inference.',
     );
   }

@@ -1,20 +1,28 @@
 // Saliency-map post-processing.
 //
-// The raw output of MSI-Net is a `[inputH × inputW]` Float32 tensor — i.e.
-// one scalar per input-resolution pixel. Before this map is useful for an
-// overlay, the PRD (§Post-processing pipeline) requires three steps:
+// The raw output of UNISAL is a `[inputH × inputW]` Float32 tensor of
+// **log-probabilities**: one log-softmax value per input-resolution
+// pixel. Before this map is useful for an overlay, we apply four steps:
 //
-//   1. Bilinearly upsample to the original screenshot's dimensions so each
-//      saliency value aligns with a real-world pixel on the user's canvas.
-//   2. Apply a Gaussian blur with σ ≈ 20-40 px at 1× resolution, which
+//   1. Convert log-probabilities to probabilities via `exp`. The raw
+//      output range of about `[-23, -8]` is consistent with log-softmax
+//      over the 288×384 grid; applying `exp(y - y.max())` recovers the
+//      proper probability-like saliency map without numerical overflow.
+//      (V1's MSI-Net emitted 0–255 intensity directly and did not need
+//      this step — that is the only pipeline-math difference between
+//      V1 and V2.)
+//   2. Bilinearly upsample to the original screenshot's dimensions so
+//      each saliency value aligns with a real-world pixel on the user's
+//      canvas.
+//   3. Apply a Gaussian blur with σ ≈ 20–40 px at 1× resolution, which
 //      smooths out the staircase edges introduced by the upsample and
 //      produces visually-pleasant contour lines after the heatmap.js
 //      colour ramp is applied.
-//   3. Rescale to [0, 1] so the heatmap library's default colour ramp has
-//      consistent dynamic range regardless of the absolute raw values.
+//   4. Rescale to [0, 1] so the heatmap library's default colour ramp
+//      has consistent dynamic range regardless of the absolute values.
 //
-// All functions here are pure — they take and return typed arrays, never
-// touch a canvas — so they unit-test cleanly under jsdom or node.
+// All functions here are pure — they take and return typed arrays,
+// never touch a canvas — so they unit-test cleanly under jsdom or node.
 
 /**
  * Bilinearly upsample (or downsample) a single-channel saliency map.
@@ -179,23 +187,49 @@ export function normaliseToUnit(data) {
 }
 
 /**
- * Full post-processing pipeline: upsample raw saliency to the screenshot's
- * dimensions, blur, then normalise to `[0, 1]`.
+ * Convert a log-probability saliency map into a probability-like map
+ * via a numerically-stable `exp(y - max(y))`. Subtracting the max
+ * before `exp` keeps the result in `[0, 1]` and prevents `Infinity`
+ * for log-probs close to zero (which should not happen for UNISAL
+ * output, but cheap to guard against).
  *
- * Default `sigmaPx = 28` sits in the middle of the PRD's specified 20-40 px
- * range. 28 gives a visibly smooth contour without washing out the
- * location of the attention peak; in practice the right number depends on
- * screenshot resolution, and a future version can expose this as a slider
- * or scale it with image size.
+ * Returns a NEW Float32Array; the input is not mutated. If the input
+ * is empty, returns an empty array rather than erroring.
  *
- * @param {Float32Array} raw - Raw saliency, length `srcH * srcW`.
+ * @param {Float32Array} data - Log-probability saliency map.
+ * @returns {Float32Array}
+ */
+export function logProbsToProbabilities(data) {
+  const out = new Float32Array(data.length);
+  if (data.length === 0) return out;
+  let max = data[0];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i] > max) max = data[i];
+  }
+  for (let i = 0; i < data.length; i++) {
+    out[i] = Math.exp(data[i] - max);
+  }
+  return out;
+}
+
+/**
+ * Full post-processing pipeline: exp → upsample → blur → normalise.
+ *
+ * Default `sigmaPx = 28` sits in the middle of the PRD's specified
+ * 20–40 px range. 28 gives a visibly smooth contour without washing
+ * out the location of the attention peak; in practice the right
+ * number depends on screenshot resolution, and a future version can
+ * expose this as a slider or scale it with image size.
+ *
+ * @param {Float32Array} raw - UNISAL log-probability output, length `srcH * srcW`.
  * @param {[number, number]} srcDims - Model output dims `[srcH, srcW]`.
  * @param {[number, number]} targetDims - Final dims `[h, w]` to upsample to.
  * @param {number} [sigmaPx=28] - Gaussian sigma in target-space pixels.
  * @returns {Float32Array} Length `targetH * targetW`, values in `[0, 1]`.
  */
 export function postprocess(raw, srcDims, targetDims, sigmaPx = 28) {
-  const upsampled = upsampleBilinear(raw, srcDims, targetDims);
+  const probs = logProbsToProbabilities(raw);
+  const upsampled = upsampleBilinear(probs, srcDims, targetDims);
   const blurred = gaussianBlur(upsampled, targetDims, sigmaPx);
   return normaliseToUnit(blurred);
 }

@@ -29,7 +29,7 @@ const ERROR_MESSAGES = {
   TOO_LARGE:
     'That image is too large. Try a screenshot under 20MB, or use a lower screen resolution.',
   INFERENCE_FAILED:
-    'Something went wrong during analysis. Try the Fast preset, or use a smaller image.',
+    'Something went wrong during analysis. Try a smaller screenshot, or reload the page.',
   DEMO_FAILED:
     'Demo mode failed to render. Real inference is unaffected \u2014 drop a screenshot to run it, or reload to try the demo again.',
 };
@@ -155,7 +155,7 @@ export function createStatus() {
     const body = document.createElement('p');
     body.className = 'fc-status__body';
     body.textContent =
-      'Downloading the attention model (one-time, ~60MB). This takes a minute on first open; after that it\u2019s instant.';
+      'Downloading the attention model (one-time, ~13 MB). Quick on a decent connection; after that it\u2019s instant.';
 
     const bar = document.createElement('progress');
     bar.className = 'fc-status__progress';
@@ -166,7 +166,8 @@ export function createStatus() {
     const readout = document.createElement('span');
     readout.className = 'fc-status__readout';
     // Prefer byte counts when the caller has them; fall back to a bare
-    // percentage otherwise (tf.js's onProgress typically omits bytes).
+    // percentage otherwise. ORT Web with our custom fetch populates
+    // both, but Content-Length is not always set by every server.
     if (
       typeof progress.loaded === 'number' &&
       typeof progress.total === 'number' &&

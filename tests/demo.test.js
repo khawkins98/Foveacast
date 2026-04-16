@@ -5,9 +5,11 @@
 // or the real-model path. A bug here is a user-visible bug.
 //
 // `makeSyntheticSaliency` generates the map the demo pipeline
-// renders. The shape / value-range contract matters: postprocess
-// expects 0–255 so it can normalise, and the row-major order is
-// what the rest of the pipeline assumes.
+// renders. The shape / value-range contract matters: under V2 the
+// postprocess pipeline applies `exp(y - max(y))` first, so the demo
+// has to produce values in a log-probability-like range rather than
+// the 0–255 MSI-Net outputs were in. Row-major order is what the
+// rest of the pipeline assumes.
 //
 // `runDemoMode` is covered by Playwright (end-to-end) — it needs
 // the DOM, an image fetch, and the real render stack, and mocking
@@ -98,22 +100,29 @@ describe('makeSyntheticSaliency', () => {
     expect(map.length).toBe(24 * 32);
   });
 
-  it('produces values in the 0–255 range (mirrors real model output)', () => {
+  it('produces values in the log-probability range UNISAL emits', () => {
+    // UNISAL output in practice sits between roughly -25 and -7. The
+    // demo should land in the same band so the postprocess `exp` step
+    // behaves the same on demo output as on real model output.
     const map = makeSyntheticSaliency([60, 80]);
     for (let i = 0; i < map.length; i++) {
-      expect(map[i]).toBeGreaterThanOrEqual(0);
-      expect(map[i]).toBeLessThanOrEqual(255);
+      expect(map[i]).toBeGreaterThanOrEqual(-30);
+      expect(map[i]).toBeLessThanOrEqual(0);
     }
   });
 
-  it('has non-trivial energy — the demo should actually show something', () => {
-    // Every-pixel-zero would render an invisible heatmap. The
-    // synthetic blobs should contribute enough energy that the sum
-    // of the map is meaningfully above zero.
+  it('has a peak meaningfully above its background', () => {
+    // Every-pixel-identical would render a flat heatmap. The
+    // synthetic blobs should create at least a few nats of spread
+    // between the background and the peak.
     const map = makeSyntheticSaliency([120, 160]);
-    let sum = 0;
-    for (let i = 0; i < map.length; i++) sum += map[i];
-    expect(sum).toBeGreaterThan(1000);
+    let min = map[0];
+    let max = map[0];
+    for (let i = 1; i < map.length; i++) {
+      if (map[i] < min) min = map[i];
+      if (map[i] > max) max = map[i];
+    }
+    expect(max - min).toBeGreaterThan(5);
   });
 
   it('has a peak somewhere near the top-left blob (rule-of-thirds position)', () => {
