@@ -123,4 +123,4 @@ Full licence text for Foveacast itself is in [LICENSE](LICENSE) (MIT, Ken Hawkin
 
 [CONTRIBUTING.md](CONTRIBUTING.md) covers the practical side — how to set up, the tiers of testing, what goes into a PR, and the files that need updating alongside code. Read it before opening a PR.
 
-A running log of technical decisions, dead ends, and notes for future work lives in [LEARNINGS.md](LEARNINGS.md). Release history is in [CHANGELOG.md](CHANGELOG.md). The PRD at [docs/PRD.md](docs/PRD.md) is the source of truth for scope, non-goals, and the model roadmap — read it before proposing anything larger than a bug fix.
+A running log of technical decisions, dead ends, and notes for future work lives in [LEARNINGS.md](LEARNINGS.md). [TODO.md](TODO.md) is the prioritised list of known follow-ups — the cheap ones, the ones that matter for resilience, and the ones we explicitly declined. Release history is in [CHANGELOG.md](CHANGELOG.md). The PRD at [docs/PRD.md](docs/PRD.md) is the source of truth for scope, non-goals, and the model roadmap — read it before proposing anything larger than a bug fix.
