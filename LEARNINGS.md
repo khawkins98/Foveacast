@@ -193,6 +193,22 @@ No community ONNX export exists. Searches across GitHub and HuggingFace turn up 
 
 Recommendation going forward: proceed to a hands-on export spike on a one-day time box. Do *not* schedule a V2 integration until that spike validates the export and until a separate qualitative comparison confirms UNISAL actually outperforms MSI-Net on Foveacast's target content types. "UNISAL was trained on more diverse data" is a reason to look, not a reason to ship; accuracy on the actual screenshots is the metric that matters.
 
+## 2026-04-16 — UNISAL ONNX hands-on export
+
+Ran the export. Everything worked on the first pass end-to-end, which is not something I often get to write about this kind of integration. Full write-up in [`docs/spikes/unisal-onnx-research.md`](docs/spikes/unisal-onnx-research.md) §Option B; short form here.
+
+Set up a Python 3.12 venv via `uv`, installed torch 2.11, onnx, onnxruntime, onnxscript, plus the UNISAL runtime dependencies its `__init__.py` drags in (opencv-python, tensorboardX, fire, scipy) even when you only want the model class. Cloned `rdroste/unisal` into `/tmp`. Wrote `scripts/unisal-onnx-export.py`, which loads the SALICON checkpoint, wraps the model in a thin `nn.Module` adapter that accepts `[1, 3, 288, 384]` and squeezes out UNISAL's native time and channel dims, and calls `torch.onnx.export` with `source="SALICON"` and `static=True` baked in.
+
+Three things from the desk spike that turned out right: every op traced cleanly, the image path skipped the convolutional GRU entirely, no `torch.jit` or custom autograd to fight. One thing the desk spike missed: UNISAL's forward() returns **log-probabilities**, not a sigmoid'd 0–1 saliency map. Raw output on the surfer test image lives in `[-23.537, -7.732]`. You can see this either by reading the training loss (KLD + NSS + CC; KLD implies log-softmax output) or just by printing the tensor after a forward pass. A browser port will need an `exp()` step before the heatmap rendering path.
+
+The exported artefact is 12.5 MB as a single self-contained `.onnx` file after forcing `onnx.save_model(save_as_external_data=False)`. The first export pass wrote weights to a sidecar `.onnx.data`, which the modern torch exporter does by default. For the browser we want one file; the script handles the rewrite in-place.
+
+Parity is essentially perfect: max |Δ| between ORT CPU and stock PyTorch across three synthetic fixtures and one real photo is 5.3e-05. For context, "good enough" is 1e-3 and "something went wrong" is 1e-2. ORT CPU inference time on macOS ARM64 is ~27 ms per frame, which is more than fast enough for a one-at-a-time drop-and-render interaction in the browser.
+
+Net: the technical story for V2 is no longer "can we get UNISAL into the browser". It is "do we want to pay 8–20 MB of extra ORT Web wasm for a 12.5 MB weight file and potentially better content generalisation". That is a product judgement and should be informed by an actual qualitative comparison between MSI-Net and UNISAL output on representative Foveacast screenshots. The "Model-quality benchmarking" roadmap item is the gate, not another engineering spike.
+
+The ONNX artefact itself is committed to `docs/models/unisal/model.onnx` on the spike branch. If V2 ships, this is already the production artefact; if the spike branch gets archived, nothing is lost because the recipe in `scripts/unisal-onnx-export.py` is reproducible.
+
 ## 2026-04-16 — V3 SUM investigation (no code)
 
 V3 in the PRD is SUM (Saliency Unification through Mamba, WACV 2025 Oral), which matters because it is the only model in the field explicitly trained with a "user interface screenshot" condition. The blocker is well known: SUM's `requirements.txt` pulls in `mamba-ssm` and `causal-conv1d`, both of which ship as compiled CUDA C++ extensions with no ONNX operator equivalents. `torch.onnx.export` cannot trace what it cannot reach; WebAssembly cannot execute compiled CUDA. That is a hard wall, not a config tweak.

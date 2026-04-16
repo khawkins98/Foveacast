@@ -168,10 +168,114 @@ Explicitly out of scope for option B: running the exported model in a browser. T
 
 ## Open questions deferred to option B
 
+Answered below under *Option B — hands-on export results*. Left in place as a record of what the desk spike could not settle on its own.
+
 - Exact UNISAL input resolution for stock SALICON inference (hinted at in `run.py` but not confirmed from this desk research).
 - Pre-processing normalisation (ImageNet mean/std? 0–1? BGR?).
 - Post-processing — the model output has a sigmoid applied; does it need further smoothing before overlay rendering, or does `docs/src/pipeline/postprocess.js` cover it?
 - Whether the KDSalBox distilled UNISAL variant is worth exporting as a second candidate.
+
+---
+
+## Option B — hands-on export results (2026-04-16)
+
+Executed the suggested spike. Script: [`scripts/unisal-onnx-export.py`](../../scripts/unisal-onnx-export.py). Real-image check: [`scripts/unisal-onnx-realimage-check.py`](../../scripts/unisal-onnx-realimage-check.py). Both are one-off tools, kept out of `docs/src/` and out of the shipped app.
+
+### Setup that worked
+
+- `uv python install 3.12` → `uv venv --python 3.12 .venv`
+- `uv pip install torch torchvision onnx onnxruntime onnxscript opencv-python scipy tensorboardX fire Pillow numpy`
+- Clone `rdroste/unisal` into `/tmp/unisal-source`. Weights download with the repo as regular files (not Git LFS); `weights_best.pth` is 15 MB.
+
+UNISAL's `unisal/__init__.py` eagerly imports `train`, `data`, `model`, `models`, `utils`. That chain pulls in `cv2`, `tensorboardX`, `fire`, `scipy` even though the export script only needs the model class. Rather than neuter the package's `__init__.py` we install the runtime dependencies alongside torch. One-off cost; no ongoing implication for the shipped app.
+
+### Ops and export behaviour
+
+- PyTorch 2.11's `torch.onnx.export` takes the new (`torch.export.export`) path by default. It picks opset 18 even when asked for 17 and warns — fine for `onnxruntime-web ≥1.17`. Export completes in a few seconds on CPU.
+- Every op in the model traced cleanly. No `ATen::xyz is not supported` errors, no custom-op falls-through, no TorchDynamo fallbacks. The `torch.meshgrid` used in UNISAL's manual Gaussian-prior initialisation emits a deprecation warning in modern torch but does not block export.
+- The decomposition pass applies 127 general pattern-rewrite rules. The final graph inlines every weight tensor after a second pass with `onnx.save_model(save_as_external_data=False)` — the first pass wrote a sidecar `.onnx.data` file, which we do not want to ship.
+
+**Final artefact: `docs/models/unisal/model.onnx`, 12.5 MB, single self-contained file.**
+
+### Parameter count
+
+3,714,872 parameters in the loaded model (MobileNetV2 backbone + domain-adaptation blocks + decoder). That is ~6.7× smaller than MSI-Net's ~25M, landing at the low end of the PRD's "5–20× smaller" range.
+
+### Parity: ONNX vs stock PyTorch
+
+Synthetic fixtures (flat grey, white noise, single bright spot):
+
+| Fixture | PT CPU time | ORT CPU time | max \|Δ\| |
+|---|---|---|---|
+| flat_grey    | 402 ms | 27 ms | 4.77e-05 |
+| white_noise  | 157 ms | 27 ms | 2.67e-05 |
+| bright_spot  | 148 ms | 26 ms | 5.34e-05 |
+
+Real image (`docs/assets/example-screenshot.jpg` — the committed surfer photo):
+
+- max \|Δ\| = 3.05e-05
+- mean \|Δ\| = 1.98e-06
+
+Near-perfect parity. Well below the 1e-3 "good enough" threshold and the 1e-2 "something went wrong" threshold. The ONNX artefact is a faithful serialisation of the PyTorch model on both synthetic and real inputs.
+
+### ORT CPU inference speed
+
+~27 ms per frame on macOS ARM64 under `onnxruntime@1.24.4` with the `CPUExecutionProvider`. That is a Python-side measurement, not a browser-side measurement — browser numbers will differ. But the lower bound is fast enough that the browser should not be inference-bound for a single drop.
+
+### Output is log-probabilities, not 0–1 saliency
+
+Important detail the desk spike missed: UNISAL's forward() returns **log-probabilities**, not a sigmoid'd 0–1 map. Raw output on the surfer image is in `[-23.537, -7.732]` — consistent with log-softmax over 288×384 = 110,592 pixels.
+
+For a browser port this means `docs/src/pipeline/postprocess.js` needs an `exp()` step before the heatmap-rendering path, or the downstream code needs to be aware the input is in log space. Applying `exp(y - y.max())` to the real-image output gave a visually coherent, well-localised saliency peak on the surfer — see `/tmp/unisal-check-onnx-exp.png` during a local run. Before that renormalisation the map looks diffuse; after it, it looks like a proper saliency map.
+
+This is also different from MSI-Net's `0–255` range output. A V2 integration has to port both the pre-processing (ImageNet mean/std, RGB not BGR, 0–1 range) and the post-processing (`exp`, then normalise to 0–255 for heatmap.js compatibility).
+
+### Implications for the V2 trade-off matrix
+
+Updating the table from earlier in this doc with measured numbers:
+
+| Dimension | MSI-Net (V1, today) | UNISAL (V2 candidate, **measured**) |
+|---|---|---|
+| Runtime bytes (JS + WASM) | 1.4 MB | 8–20 MB (unchanged) |
+| Weights per preset | ~24 MB | **12.5 MB** (was "est. 5–15 MB") |
+| Preset count | 5 | 1 (the exported SALICON graph; a MIT1003 second export would be another 12.5 MB if wanted) |
+| Weight hosting | GCS dep, mirrored at deploy | **Direct commit** to `docs/models/unisal/model.onnx` — this branch proves it |
+| CPU inference | not benchmarked here | ~27 ms on macOS ARM64 (Python-side, not browser) |
+| PyTorch↔ONNX parity | not applicable | max \|Δ\| = 5e-05 across synthetic + real inputs |
+
+The weight-file savings are real: 12.5 MB against 24 MB per MSI-Net preset. The runtime-cost gap is unchanged — ORT Web wasm still dominates the first-load budget — but for a user who has already downloaded the runtime once and cached it, subsequent sessions pay only the 12.5 MB weight fetch plus negligible JS. The repo-direct hosting means no GCS dependency at any point, which is a governance win independent of inference quality.
+
+### Two export concerns worth naming
+
+1. **The exporter warns about `torch.meshgrid`.** Harmless in torch 2.11; possibly an error in some future torch. A V2 merge should re-run the export under whatever torch is current at the time and see if the warning has escalated. The export script commits the reproduction recipe so this check is cheap.
+
+2. **Opset 18 vs 17.** I requested 17, the exporter gave 18. Both work under `onnxruntime-web ≥1.17`. Pinning opset 17 would have required manual graph rewrites that are not worth the effort for a spike.
+
+### Verdict
+
+Every technical question the desk spike could not answer has now been answered affirmatively:
+
+- Export is clean. ✓
+- Output is numerically faithful. ✓
+- The artefact is small (12.5 MB) and committable. ✓
+- Inference is fast enough to not be a concern. ✓
+- Post-processing port is well-defined (add `exp`, renormalise). ✓
+
+The remaining blockers for V2 are not *export feasibility* — that's settled. They are:
+
+- **Qualitative accuracy**. Does UNISAL's output on Foveacast's target content actually beat MSI-Net's? Nothing in this spike answers that. Run the "Model-quality benchmarking" roadmap item before committing.
+- **Runtime cost appetite**. Are we willing to pay 8 MB+ of extra wasm for a smaller weight file and possibly better quality? That's a product judgement, not a technical one.
+- **Preset collapse UX**. Today's five presets become one. The preset picker becomes either "remove" (simplest) or "re-purpose as an input-resize control" (preserves the speed/quality trade-off). Neither is hard, but both are V2 integration work.
+
+### Artefacts produced on this branch
+
+- [`docs/models/unisal/model.onnx`](../models/unisal/model.onnx) — the 12.5 MB single-file UNISAL ONNX graph, committed. If V2 never happens, drop the branch; if V2 ships, this is already the production artefact.
+- [`scripts/unisal-onnx-export.py`](../../scripts/unisal-onnx-export.py) — reproduces the export from a fresh clone.
+- [`scripts/unisal-onnx-realimage-check.py`](../../scripts/unisal-onnx-realimage-check.py) — the qualitative check used to generate the logits-vs-exp visualisation above.
+
+### Option C — not doing it
+
+The third-order follow-up would be actually integrating this ONNX artefact into `docs/src/model/` and making Foveacast run UNISAL end-to-end in the browser. That is explicitly not in this spike's scope. Proposing it as its own work item: one feature branch, 2–3 days, gated on the qualitative benchmark.
 
 ## Sources
 
