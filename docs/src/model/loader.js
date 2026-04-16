@@ -15,19 +15,71 @@
 import { PRESETS } from '../pipeline/preprocess.js';
 
 /**
- * Preset → `model.json` URL. The bucket layout is fixed by the MSI-Net
- * author; see `LEARNINGS.md` (once written) for the forensics on where
- * these files actually live.
+ * Preset → `model.json` URL at the MSI-Net author's Google Cloud
+ * Storage bucket. Used as a fallback when the mirrored `./models/`
+ * folder is not available (e.g. the buildless filesystem distribution,
+ * where no one has run `scripts/fetch-weights.sh`).
  *
  * @type {Record<keyof typeof PRESETS, string>}
  */
-export const MODEL_URLS = Object.freeze({
+export const GCS_MODEL_URLS = Object.freeze({
   very_low: 'https://storage.googleapis.com/msi-net/model/very_low/model.json',
   low: 'https://storage.googleapis.com/msi-net/model/low/model.json',
   medium: 'https://storage.googleapis.com/msi-net/model/medium/model.json',
   high: 'https://storage.googleapis.com/msi-net/model/high/model.json',
   very_high: 'https://storage.googleapis.com/msi-net/model/very_high/model.json',
 });
+
+/**
+ * Preset → relative path to the mirrored weights. The GitHub Actions
+ * deploy workflow runs `scripts/fetch-weights.sh` before uploading
+ * the Pages artefact, so the hosted build serves weights from the
+ * same origin as the app.
+ *
+ * @type {Record<keyof typeof PRESETS, string>}
+ */
+export const LOCAL_MODEL_URLS = Object.freeze({
+  very_low: './models/very_low/model.json',
+  low: './models/low/model.json',
+  medium: './models/medium/model.json',
+  high: './models/high/model.json',
+  very_high: './models/very_high/model.json',
+});
+
+/**
+ * Canonical name kept for backwards compatibility. Existing callers
+ * used `MODEL_URLS`; new callers should prefer `resolveModelUrl` which
+ * picks between the local mirror and the GCS fallback.
+ *
+ * @type {Record<keyof typeof PRESETS, string>}
+ */
+export const MODEL_URLS = GCS_MODEL_URLS;
+
+/**
+ * Resolve the URL to load a preset's weights from. Tries the local
+ * mirror first (HEAD request); falls back to the GCS bucket if the
+ * mirror is missing or unreachable.
+ *
+ * WHY two probes: the buildless filesystem distribution has no
+ * `models/` folder, so a local fetch would fail there. The hosted
+ * GitHub Pages build has a populated mirror, so we should prefer
+ * same-origin weights to reduce the CDN surface and to keep the user
+ * from depending on a bucket we do not control.
+ *
+ * @param {keyof typeof PRESETS} preset
+ * @returns {Promise<string>}
+ */
+export async function resolveModelUrl(preset) {
+  const localUrl = LOCAL_MODEL_URLS[preset];
+  try {
+    const resp = await fetch(localUrl, { method: 'HEAD' });
+    if (resp.ok) return localUrl;
+  } catch {
+    // Filesystem fetches throw rather than returning 404; treat the
+    // same as "not available, fall back to GCS".
+  }
+  return GCS_MODEL_URLS[preset];
+}
 
 /**
  * @typedef {Object} LoadProgress
@@ -72,7 +124,10 @@ export async function loadModel(preset, onProgress) {
     );
   }
 
-  const url = MODEL_URLS[preset];
+  // Prefer the same-origin mirror (populated by the Pages deploy
+  // workflow); fall back to GCS for filesystem / dev-server usage
+  // where no mirror has been fetched.
+  const url = await resolveModelUrl(preset);
 
   // tf.js's `onProgress` callback signature is `(fraction: number) => void`.
   // We wrap it so callers receive a richer shape, with `loaded`/`total`

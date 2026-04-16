@@ -30,3 +30,5 @@ tests/e2e/.cache/
 *.pb
 *.onnx
 *.bin
+# Mirrored model weights — populated by scripts/fetch-weights.sh
+docs/models/
