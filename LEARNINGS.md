@@ -57,6 +57,92 @@ Playwright is deliberately kept out of the GitHub Actions CI for now. The browse
 
 A secondary lesson: macOS Vite binds IPv6-only by default. The first Playwright webServer configuration polled `http://127.0.0.1:5173` and timed out because the server only answered on `[::1]:5173`. The config now uses `localhost` and `--strictPort`; both choices are commented in `playwright.config.js` so the next person who hits this doesn't have to rediscover it.
 
+## 2026-04-16 — Four parallel reviewers, one afternoon
+
+After the core V1 landed and before shipping, I spawned four sub-agents as reviewers in parallel — UX consultant, frontend developer / developer advocate, technical writer, and code maintainer — each with their own lens, their own prompt, and strict instructions not to change code. Each wrote a structured review to `/tmp/foveacast-review-{role}.md` and returned a short summary ranking their findings P0/P1/P2. I consolidated the summaries into a single list for the user, we agreed on which batches to execute, and then I handed each batch to another sub-agent for the actual work.
+
+This was the single highest-leverage move in the build. A few observations worth retaining:
+
+- **The lenses compounded.** The UX reviewer flagged "drop anywhere on the page" and "watermark the demo output" as P0. The maintainer flagged the same ship as a "render-layer bug can ship again because Playwright is opt-in". The tech writer found a `<owner>` placeholder in the README. None of those would have been caught by the same reviewer — the diversity of lenses is what caught the diversity of bugs.
+- **"Read-only, write findings to /tmp/" is the right contract.** Reviews that try to fix on the way surface fewer problems, because the reviewer mentally optimises for "can I fix this quickly" rather than "what's actually wrong here." Separating reviewing from fixing made the reviews blunter and more useful.
+- **Structured summaries outrank prose reports.** Asking each agent to return the top 5 findings ranked P0→P2 plus one sentence per finding made the consolidation trivial. A 3,000-word review document is useful for depth; a 400-word ranked summary is what a decision gets made against.
+- **The "three things the project does well" section in each review is load-bearing.** Reviews that only list problems leave the maintainer guessing what to preserve. Asking each reviewer to name positive choices gave me a check against over-correction.
+
+The whole loop — from "review the project" to "here are 15 prioritised findings" to "acted on 8 of them in 3 commits" — took roughly two hours of wall time. For a V1 ship it was cheap insurance against the class of mistake that comes from reviewing your own work.
+
+## 2026-04-16 — UX iteration after the reviews
+
+Three findings from the UX review compounded into a single interaction design rethink that made the product meaningfully better.
+
+**Drop anywhere on the page.** The drop zone was a rectangle. A file dropped one pixel outside that rectangle caused the browser to navigate away from Foveacast and open the file in the tab — the worst possible failure mode for a one-purpose tool. The fix is six lines: document-level `dragover`/`drop` handlers in capture phase, always `preventDefault()`. But it took the UX reviewer to point out that "drop zone" as a UI metaphor has to match "drop zone" as a DOM contract, and the body is a better drop zone than any rectangle inside it.
+
+**Progressive disclosure.** The pre-drop UI showed the opacity slider, view toggle, preset picker, and Download button — all disabled, all competing with the drop zone for the user's first glance. Once the drop zone was clearly the next step, everything else was noise. Hiding those controls until the first heatmap renders turned the pre-drop page into "drop zone + one-line promise + attribution footer" — clearer about what to do next without removing any capability.
+
+**Watermark the demo output.** The synthetic-saliency demo mode was visually indistinguishable from a real MSI-Net prediction once you cropped the banner away. A tiled diagonal `FOVEACAST DEMO — SYNTHETIC` watermark baked into the canvas means a social-media crop of a demo screenshot still reads as a demo. The banner still matters for screen-reader users and for honesty on first view; the watermark is defence in depth.
+
+Shared thread: all three are tiny in code (a handler, a `setVisible`, a `drawText` grid) and large in felt quality. The lesson for a V2-sized effort is to not under-budget UX iteration after feature-complete. The ratio of "time spent" to "product quality gained" on those three commits was easily the best of the whole build.
+
+## 2026-04-16 — Resilience trilogy: vendoring, weight mirroring, SRI
+
+The maintainer review called out three single points of failure that were all invisible while the code worked. Fixing them turned Foveacast from "depends on three external services" into "depends only on GitHub Pages."
+
+1. **Vendoring** `@tensorflow/tfjs` and `heatmap.js` under `docs/vendor/`. Previously both loaded from jsDelivr; a CDN outage or a silent compromise would take every user down. The minified bytes are ~1.4 MB for TF.js and ~12 KB for heatmap.js, committed verbatim. The "unzip and open `index.html`" promise now actually holds offline.
+
+2. **Weight mirroring** via `scripts/fetch-weights.sh` and the `docs/models/` folder. The MSI-Net author's Google Cloud Storage bucket is now a fallback, not a runtime dependency. The deploy workflow runs the fetch script before uploading the Pages artefact; the hosted build serves all five presets from its own origin. `docs/models/` is gitignored locally — the mirror is either populated on demand (`pnpm weights`) or reconstructed at deploy time — so the repo stays small.
+
+3. **Subresource integrity** hashes on the vendored scripts. An attacker who somehow got a commit through could silently replace `docs/vendor/tf.min.js`; the sha384 `integrity=` attribute in `index.html` means the browser refuses to execute bytes that don't match. Reviewers can diff the hash table in `docs/vendor/README.md` against the files on disk without running a tool.
+
+Each of these is small on its own. Together they shifted the trust surface from "three external parties have to stay trustworthy" to "this repo has to stay trustworthy." For a product whose positioning is "nothing leaves your machine," that shift matters — the user's trust in Foveacast's privacy stance is only as strong as the weakest link in the chain of things that have to cooperate for the tool to run.
+
+## 2026-04-16 — Vite's dev server was a persistent small tax
+
+Three unrelated-looking bugs had the same root cause: Vite's dev middleware assumed everything under the root directory was source code, and kept tripping on files that were not.
+
+- **Extensionless binary files (weight shards) 500'd.** Vite's import-analysis plugin saw `group1-shard1of6` and tried to parse it as JavaScript. Every shard fetch became a 500.
+- **Missing files returned HTML.** When `docs/models/` wasn't populated, the loader's HEAD-probe to `./models/medium/model.json` hit Vite's SPA-fallback and got the index page with status 200 back. `resolveModelUrl` thought the mirror existed, tf.js fetched the HTML as JSON, and parsing failed with a confusing error.
+- **Vendored files were mutated in transit.** Vite injected a source-map stub into `heatmap.min.js` (9 KB on disk became 50 KB served) which broke the SRI hash check.
+
+Same fix for all three: a small custom Vite plugin (`servePassthroughStatic` in `vite.config.js`) that short-circuits specific path prefixes and serves the raw bytes with a correct Content-Type. The plugin handles `/vendor/*` and `/models/*`; adding a new passthrough is one line in the `prefixes` array.
+
+A secondary lesson: Vite's dev-server behaviour is not the same as the Pages production behaviour. GitHub Pages is a dumb static file server; Vite's dev is an opinionated middleware stack. That mismatch is why "works locally" and "works on Pages" diverged. The fix isn't to make Vite behave like Pages — it's to have CI exercise the dev server directly so the mismatch surfaces before a user hits it.
+
+## 2026-04-16 — Shipping day: the last-mile GitHub Pages flow
+
+Merging V1 to `main` should have triggered the deploy workflow and put the site up. It didn't, for two reasons I hadn't anticipated.
+
+**Pages has to be enabled on the repo before the first deploy.** `actions/deploy-pages@v4` returned 404 with a helpful message pointing at Settings → Pages, but the message only helps if you can get to that screen. For a fresh repo, enabling via `gh api -X POST /repos/{owner}/{repo}/pages -f "build_type=workflow"` is one command. Then the next push to `main` deploys. This is now documented in CLAUDE.md so a future repo modelled on this one doesn't rediscover it.
+
+**`gh run rerun --failed` on a deploy job has an artefact-collision trap.** The failed run uploaded a `github-pages` artefact (before the deploy step failed); the re-run uploaded a second one. `actions/deploy-pages@v4` looks up artefacts by name and refuses to choose when it finds more than one. The fix is to dispatch a fresh workflow via `gh workflow run deploy.yml --ref main` rather than re-running the failed one. Different run number, single artefact, clean deploy.
+
+Both of these are one-time papercuts that don't recur once the project is past the first ship. I'm keeping the notes anyway because the shape of them — "a thing you only do once, which means you only hit the edge case once" — is exactly the shape a future-me (or a future Claude session) will Google for and not find.
+
+## 2026-04-16 — The four testing tiers that emerged
+
+I didn't set out to design a testing taxonomy. It arrived one bug at a time, each tier filling a hole the previous one didn't cover.
+
+- **Vitest unit** (`tests/*.test.js`) — 106 cases, runs in ~700 ms, gate on every PR and push. Covers pure logic in `pipeline/`, the loader's error classification, file validation, demo helpers. This is the feedback loop; it has to stay fast and green.
+- **Smoke** (`scripts/smoke-test.sh`, invoked via `pnpm smoke`) — a curl-based liveness check. Boots the dev server, confirms HTTP 200 and the expected mount-point markers. It exists to catch "I broke the dev server" failures before they take up a Playwright slot. Explicitly labelled a liveness check in its header, to prevent a repeat of the "the smoke passed, therefore E2E is covered" mistake that shipped the detached-container bug.
+- **Playwright chromium against demo mode** (`tests/e2e/*.spec.js`, `pnpm test:e2e`) — 6 cases, runs in ~10 s, gate on every PR and push. Exercises the real render pipeline against the real heatmap.js library. This is the tier that catches the class of bug that vitest mocks hide.
+- **Playwright against a simulated CI environment** (`pnpm test:e2e:no-mirror`) — moves `docs/models/` aside and runs the Playwright suite. This is the only command that reliably predicts whether CI's Playwright job will pass, because CI's runtime state (no mirror populated) differs from a local dev's (mirror populated by a previous `pnpm weights`).
+
+The tiers answer four different questions: "is my pure logic correct?", "does the dev server start?", "does the real library behave as I think?", "will CI pass?" Running only the first would have shipped the detached-container bug. Running all four takes under 30 seconds of wall time and is cheap insurance.
+
+Worth restating because it was the most expensive lesson of the build: a test that mocks the library you're testing against is worse than no test. A green suite communicates "covered"; if the coverage is illusory, the green is a lie.
+
+## 2026-04-16 — Structured errors beat string-sniffing
+
+`main.js` used to classify model-load failures by calling `.includes('fetch')` on the TF.js error message. That was a tripwire for every TF.js minor bump — the library's error wording has changed before and will change again. The maintainer review flagged this as High severity; the fix was to classify at the source (inside `loader.js`) and attach a structured `code` property to the thrown error.
+
+Classifier heuristics, in order of reliability:
+
+1. A `TypeError` in the error or anywhere in its `cause` chain. Browsers throw `TypeError` on network-unreachable `fetch` failures, across vendors and across versions. This is the most stable signal.
+2. "Request failed with status" substring — the shape TF.js uses for non-2xx responses. Still a string match, but a much narrower surface than the old code.
+3. Everything else → `MODEL_LOAD_FAILED` (parse error, incompatible format, etc.).
+
+The returned error carries `cause` (original error) and `url` (what we were loading from). main.js reads `.code` directly — no wording-dependent logic.
+
+The general lesson for future code: when you need to branch on the cause of a failure, assign the failure a code at the seam where the classification is cheapest, not at the point where the UI needs the answer. String-sniffing in the UI layer is a sign you skipped a refactor two layers deep.
+
 ## 2026-04-16 — heatmap.js is old and quirky
 
 heatmap.js does its job but its job description is from 2013. It stores its backing canvas on a private `_renderer.canvas` field; there's no documented way to reach into the buffer it draws into, and what looks like the official accessor isn't stable across versions. It has no OffscreenCanvas mode. At the top two presets, the output saliency map has more points than the library can render quickly, so Foveacast strides over the map and feeds in a downsampled point set rather than every pixel.
