@@ -36,6 +36,27 @@ Foveacast does not probe for a backend. It calls into TF.js and trusts TF.js to 
 
 The lesson: the PRD was right to insist the fallback be automatic and silent. Anything like "your browser doesn't support WebGPU, please enable…" would be a user-facing bug for a tool that has to work on whatever hardware lands on it.
 
+## 2026-04-16 — The detached-container bug and what it taught us about testing
+
+V1 shipped with a rendering bug: the first time anyone dropped a real screenshot onto the drop zone, heatmap.js threw `IndexSizeError: Failed to execute 'getImageData' on 'CanvasRenderingContext2D': The source height is 0`. Nothing in the vitest suite, the smoke script, or the headless browser check during Phase D caught it. A user caught it on the first drop.
+
+The root cause was that the render wrapper created a `<div>` off-screen, never attached it to the document, and then called `h337.create({ container })`. heatmap.js sizes its internal canvas from `container.offsetWidth` / `offsetHeight`, and both are zero on a detached element. The canvas came out at 0×0, and the library's own `getImageData` call blew up downstream. The fix — attach the container hidden to `document.body` for the duration of the `create` call, then detach — is a couple of lines. The interesting part is how the bug travelled through three layers of "testing" without hitting anything.
+
+**Vitest mocked at exactly the wrong layer.** The unit test replaced `globalThis.h337` with a stub that reflected `container.style.width` back as the canvas size. That passes because it never observes the real `offsetWidth` behaviour. The mock hid the interaction with the DOM that the bug depended on. Mocks should stay as close to the library boundary as possible and should, wherever feasible, be exercised against the real library at least once.
+
+**The "browser" check during Phase D wasn't really a browser check.** Playwright-through-gstack timed out during model download and never reached the drop path. The agent reporting honestly logged this but the PR still read as "gstack verified". That's a framing problem as much as a tooling problem — a partial check should not pattern-match as full coverage.
+
+**The smoke script only verified the server was serving HTML.** Its header now says so loudly. It's still useful as a fast pre-flight, but it should not carry the "E2E" label.
+
+The response to all of this is on-branch and landed in two commits:
+
+- `?demo=1` **as a user feature that doubles as a test surface.** Demo mode loads the committed example screenshot, synthesises a two-blob Gaussian saliency map, and runs it through the real postprocess → fixation → render → composite pipeline. It marks the output section ready via `data-foveacast-ready="true"` so automated tests can wait on a single attribute without racing. It skips the 40–60 s GCS model download, so a reviewer or a hiring manager can see output in under a second. The banner above the output keeps nobody from confusing synthetic preview for real inference.
+- **Playwright against demo mode.** A small chromium suite that exercises the actual render pipeline against the actual heatmap.js library. Three assertions: the output canvas has non-zero dimensions, `getImageData` on it round-trips without throwing (the exact failure we shipped), and a pixel-grid sample finds non-trivial colour spread (a liveness probe that heatmap.js actually drew something). The suite runs in under four seconds and fails loudly if the render layer regresses in the same way again.
+
+Playwright is deliberately kept out of the GitHub Actions CI for now. The browser image adds weight to every build, and the render layer changes rarely enough that running the suite before a render or demo-path change is adequate coverage. That tradeoff is worth revisiting once there are external contributors who won't have Playwright installed locally.
+
+A secondary lesson: macOS Vite binds IPv6-only by default. The first Playwright webServer configuration polled `http://127.0.0.1:5173` and timed out because the server only answered on `[::1]:5173`. The config now uses `localhost` and `--strictPort`; both choices are commented in `playwright.config.js` so the next person who hits this doesn't have to rediscover it.
+
 ## 2026-04-16 — heatmap.js is old and quirky
 
 heatmap.js does its job but its job description is from 2013. It stores its backing canvas on a private `_renderer.canvas` field; there's no documented way to reach into the buffer it draws into, and what looks like the official accessor isn't stable across versions. It has no OffscreenCanvas mode. At the top two presets, the output saliency map has more points than the library can render quickly, so Foveacast strides over the map and feeds in a downsampled point set rather than every pixel.

@@ -2,6 +2,22 @@
 
 All notable changes to Foveacast are recorded here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Demo mode (`?demo=1`)** — renders a synthetic saliency map over the committed example screenshot without touching the model or the network. Useful for evaluators who want to see output in under a second, and for automated tests that need a fast, deterministic end-to-end surface. A yellow banner keeps the preview from being mistaken for a real prediction.
+- **Playwright end-to-end suite** under `tests/e2e/` driven by `pnpm test:e2e`. Three chromium tests against `?demo=1` assert the output canvas has non-zero dimensions, `getImageData` does not throw (the detached-container regression), and a pixel-grid sample finds non-trivial colour spread from the heatmap layer.
+- **`CONTRIBUTING.md`** covering setup, testing tiers, documentation expectations (including when and how to update `LEARNINGS.md`), commit style, and review checklist.
+
+### Fixed
+
+- **Render layer no longer creates a detached heatmap container.** heatmap.js sizes its canvas from `container.offsetWidth` / `offsetHeight`, and both are zero on a detached element — which surfaced as `IndexSizeError: source height is 0` the first time anyone dropped a real screenshot. The container is now attached to `document.body` hidden for the duration of `h337.create`, then detached. Three regression tests added.
+
+### Changed
+
+- `scripts/smoke-test.sh` header clarified: it is a liveness check for the dev server, not an end-to-end test. End-to-end coverage now lives in the Playwright suite.
+
 ## [0.1.0] — 2026-04-16
 
 First public cut of Foveacast. V1 per the PRD: a buildless static web app that predicts visual-attention heatmaps entirely in the browser.

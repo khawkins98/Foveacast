@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
-# Foveacast end-to-end smoke test.
+# Foveacast liveness smoke test (NOT an end-to-end test).
 #
-# Option B (shell script, per Phase E plan). Option A — a Vitest suite
-# that spawns the dev server and drives gstack — was rejected because
-# gstack is not available as a repeatable CLI here, so a vitest test
-# that relied on it would be green on the author's machine and mystery-red
-# anywhere else. A curl-based liveness check is less coverage but it
-# works the same way on every machine and in CI, which matters more for
-# a smoke test whose job is to catch "I broke the dev server" not
-# "inference output shifted by 0.3 pixels".
+# Scope: confirms the dev server boots, serves HTTP 200, and the
+# shipped index.html contains the mount points and CDN script tags the
+# app needs to come up. It does NOT execute any JavaScript, does NOT
+# render anything, and would not catch a rendering regression like the
+# detached-container bug fixed in 96c81d8. That class of failure is
+# what the Playwright suite under `tests/e2e/` covers — run it with
+# `pnpm test:e2e`.
+#
+# Keep this script in the workflow because it's fast (sub-second),
+# dependency-free (curl + bash), and catches the cheapest class of
+# "I broke the dev server" failure before the heavier Playwright suite
+# has to spin up a browser. Think of it as the fire-alarm test; the
+# Playwright suite is the fire drill.
 #
 # What it does, in order:
 #   1. Starts `pnpm dev` in the background on a chosen port.

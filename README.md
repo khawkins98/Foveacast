@@ -18,6 +18,8 @@ A hosted build is served from GitHub Pages:
 
 (The repo owner will fill in the real URL once the project has a permanent home.)
 
+Want to see the output without waiting on the ~60 MB first-run model download? Append `?demo=1` to the URL. Demo mode renders a synthetic saliency map over a committed example screenshot using the real render pipeline, so you can see what the tool looks like in under a second. The banner above the output makes clear that demo output is a preview, not a real prediction — drop your own screenshot (or remove `?demo=1`) to run real inference.
+
 ## Run locally
 
 Three ways, in order of how quickly you want to be looking at a heatmap.
@@ -46,11 +48,23 @@ pnpm dev
 
 ## Run the tests
 
+Three tiers, fastest first.
+
 ```sh
-pnpm test
+pnpm test       # vitest — pipeline, render, UI modules under jsdom
+pnpm smoke      # dev-server liveness check (boots Vite, curls index.html)
+pnpm test:e2e   # playwright against ?demo=1 in a real chromium browser
 ```
 
-Vitest runs the pipeline, render, and UI module tests under jsdom. The end-to-end smoke test (commit 17) is kept out of the default run because it needs a live network and a dev server; invoke it with `pnpm smoke` when you want it.
+Vitest is the tight feedback loop and runs on every push via GitHub Actions. The smoke script is a sub-second "is the dev server even up" check — useful locally, not in CI. Playwright is the end-to-end surface: it navigates to demo mode in a real browser, waits for the render-ready attribute, and asserts the composited canvas is non-zero and its `getImageData` does not throw. That last check is the regression test for the detached-container bug we shipped and then caught through user testing; the mocked vitest suite could not have caught it, because the bug lived in the gap between our mock and the real library.
+
+Playwright needs chromium installed once:
+
+```sh
+pnpm exec playwright install chromium
+```
+
+The E2E suite is opt-in rather than part of CI because the browser image adds weight to every build and the suite is already exercised whenever a contributor touches the render or demo path.
 
 ## Architecture
 
@@ -98,5 +112,7 @@ Full licence text for Foveacast itself is in [LICENSE](LICENSE) (MIT, Ken Hawkin
 - Recommended machine is 8 GB RAM with a reasonably modern CPU; the High preset is slow on anything smaller. Pick Fast or Standard on older hardware.
 
 ## Contributing and maintenance
+
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the practical side — how to set up, the tiers of testing, what goes into a PR, and the files that need updating alongside code. Read it before opening a PR.
 
 A running log of technical decisions, dead ends, and notes for future work lives in [LEARNINGS.md](LEARNINGS.md). Release history is in [CHANGELOG.md](CHANGELOG.md). The PRD at [docs/PRD.md](docs/PRD.md) is the source of truth for scope, non-goals, and the model roadmap — read it before proposing anything larger than a bug fix.
