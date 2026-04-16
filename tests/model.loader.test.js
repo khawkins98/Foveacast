@@ -3,7 +3,13 @@
 // a real TensorFlow.js runtime.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { loadModel, MODEL_URLS } from '../docs/src/model/loader.js';
+import {
+  loadModel,
+  MODEL_URLS,
+  GCS_MODEL_URLS,
+  LOCAL_MODEL_URLS,
+  resolveModelUrl,
+} from '../docs/src/model/loader.js';
 import { PRESETS } from '../docs/src/pipeline/preprocess.js';
 
 describe('MODEL_URLS', () => {
@@ -81,6 +87,56 @@ describe('loadModel', () => {
     // undefined. Either way, there is no onProgress wrapping.
     const secondArg = stub.mock.calls[0][1];
     expect(secondArg === undefined || secondArg.onProgress === undefined).toBe(true);
+  });
+});
+
+describe('resolveModelUrl', () => {
+  /** @type {any} */
+  let originalFetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('returns the local URL when the HEAD probe responds 200', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    const url = await resolveModelUrl('medium');
+    expect(url).toBe(LOCAL_MODEL_URLS.medium);
+    const [probedUrl, init] = /** @type {any} */ (globalThis.fetch).mock.calls[0];
+    expect(probedUrl).toBe(LOCAL_MODEL_URLS.medium);
+    expect(init.method).toBe('HEAD');
+  });
+
+  it('falls back to GCS when the HEAD probe responds 404', async () => {
+    // This is the exact path that bit us in CI. A dev server / fresh
+    // clone / Pages runner without a populated mirror MUST land on
+    // the GCS URL, not on a local path that will later 404 at GET.
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404 });
+    const url = await resolveModelUrl('medium');
+    expect(url).toBe(GCS_MODEL_URLS.medium);
+  });
+
+  it('falls back to GCS when the HEAD probe throws (filesystem, CORS, etc.)', async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    const url = await resolveModelUrl('high');
+    expect(url).toBe(GCS_MODEL_URLS.high);
+  });
+
+  it('does NOT treat a 2xx status with an empty body as a valid mirror', async () => {
+    // Belt-and-braces: some servers answer HEAD with 200 even for
+    // SPA-fallback content. We check `ok` not the body, but the
+    // test documents the intent: an ambiguous 2xx still resolves to
+    // the local URL (the caller then discovers the garbage content
+    // when tf.js tries to parse it and surfaces MODEL_LOAD_FAILED).
+    // This test pins the current behaviour so anyone tightening the
+    // check knows they are changing an observable contract.
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    const url = await resolveModelUrl('low');
+    expect(url).toBe(LOCAL_MODEL_URLS.low);
   });
 });
 

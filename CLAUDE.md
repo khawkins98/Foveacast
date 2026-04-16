@@ -146,6 +146,9 @@ These have burned us before. Learn from the scars.
 - **The MSI-Net TF.js weights are on Google Cloud Storage, not HuggingFace.** HuggingFace only hosts the Keras SavedModel. The deploy workflow mirrors weights into `docs/models/` to eliminate the GCS dependency at runtime.
 - **Vite's import-analysis plugin 500s on extensionless binary files** (weight shards). The fix is the custom middleware in `vite.config.js` — don't remove it.
 - **jsdom does not implement `HTMLCanvasElement.prototype.getContext`.** Tests that rely on this must mock it or be routed via Playwright.
+- **`docs/models/` is gitignored; tests must not assume it's present.** The mirror is populated locally when a developer runs `pnpm weights`, and by the deploy workflow before uploading the Pages artefact. In CI Playwright and in a fresh clone, it is absent. Any code path you add that reads from `./models/` must behave correctly under both states, and the E2E suite has to pass without the mirror. Use `pnpm test:e2e:no-mirror` to verify before pushing.
+- **Chromium console-error captures miss URLs.** Playwright's `ConsoleMessage.text()` does not include the URL for network-layer errors (e.g. 404s); the URL is in `msg.location().url`. Tests that whitelist expected errors must inspect both fields.
+- **Before pushing a change that touches env-dependent code paths, run the test that most resembles CI's environment.** "Works on my machine" failures on this project have mostly come from local state (populated `docs/models/`, cached browser state, ambient `pnpm dev` server on :5173) that the CI does not have. When in doubt, teardown and re-run.
 
 ---
 

@@ -30,6 +30,14 @@ Playwright needs its browser bundle once:
 pnpm exec playwright install chromium
 ```
 
+If you have populated the local weight mirror with `pnpm weights`, the `pnpm test:e2e` command runs against that mirror. CI Playwright does not — it runs against a fresh clone with no mirror. To verify a change will pass CI before pushing, run the suite in the same state CI uses:
+
+```sh
+pnpm test:e2e:no-mirror
+```
+
+This moves `docs/models/` aside, runs the Playwright suite, and restores the folder afterwards (even on failure or Ctrl-C). If your change depends on the mirror being present, this will surface it here instead of on the PR.
+
 Foveacast is buildless on purpose — the `docs/` folder you edit is the folder GitHub Pages publishes, which is the folder a user unzips and opens. There is no bundler step between edit and publish. Vite is a dev-time convenience, not a dependency of the shipped artefact. If your change introduces a build step, please flag that in the PR description; the bar for reintroducing tooling is high.
 
 ## Architecture, briefly
