@@ -14,16 +14,6 @@ Full review documents are at `/tmp/foveacast-review-{ux,frontend,writing,maintai
 
 ## Deferred from the UX batch (already landed: drop-anywhere, demo watermark, enable-on-demo-render, progressive disclosure)
 
-### P1 — First-run loading banner contradicts itself
-
-**Source:** UX review P0 #5.
-
-Today we default to `status.showCacheLoad()` and only swap to the first-run banner after 800 ms of unresolved progress. A true first-time visitor is told they are returning before being told they are downloading — small, but it erodes trust the first time it happens and is the worst possible moment for that.
-
-**Fix:** on first load, check `localStorage.getItem('fc-has-run')` (or any one-bit sentinel). If absent, show the first-run banner immediately and set the sentinel after `reloadModel` resolves. Subsequent visits read the sentinel, show the cache-load banner, and go quiet.
-
-**Size:** 15 minutes. Touches `main.js` and `status.js`. Covered by an E2E test that clears storage and asserts banner text.
-
 ### P1 — Controls panel copy does not match the moment
 
 Progressive disclosure fixed the over-visibility problem, but the opacity slider, view radios, preset picker, and download button still carry generic labels (`Opacity`, `View`, `Preset`). Once they appear they should carry verbs that match the current state — e.g. "Adjust overlay opacity", "Switch view: heatmap / original / side-by-side", "Model preset: Standard (change?)".
@@ -121,24 +111,6 @@ GitHub branch protection requires "CI must pass before merge to main". Nobody el
 **Fix:** adopt a tool like `probot-settings` or maintain a `docs/BRANCH_PROTECTION.md` that names the required checks (ci.yml / deploy.yml test gate / linear history / dismiss stale reviews etc.). Second-best: a comment at the top of CONTRIBUTING.md.
 
 **Size:** 1 hour to document, up to half a day to adopt a configuration-as-code tool.
-
-### High — Playwright is not in CI
-
-**Source:** maintainer risk #4, frontend review.
-
-The detached-container bug would have been caught by Playwright. The Playwright suite is green in ~4 seconds but runs only on demand. A render-layer refactor from a first-time contributor could ship the same shape of bug if they see green CI and assume coverage.
-
-**Fix:** add a `pages-e2e.yml` workflow that runs Playwright on PR and push. Browser install ~30 s; suite ~4 s. Cache the Playwright browser binary to keep the total under a minute.
-
-**Size:** 2 hours (the workflow, a cache strategy, one retry policy).
-
-### High — TF.js error-message string-sniff is a tripwire
-
-**Source:** maintainer risk #5. `surfaceModelError` in `main.js` branches on `.includes('fetch')` etc. against the TF.js error string. A TF.js minor bump that changes the wording silently routes every failure to `MODEL_LOAD_FAILED`.
-
-**Fix:** catch `TypeError` from `fetch` directly in the loader, attach a structured `code: 'MODEL_DOWNLOAD_FAILED'` to the thrown error, and read that in `surfaceModelError`. Move the string-sniff to a comment describing what the previous heuristic used to do.
-
-**Size:** 45 minutes.
 
 ### Medium — No subresource-integrity (SRI) hashes on any vendored script
 

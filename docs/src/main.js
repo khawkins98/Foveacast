@@ -26,6 +26,7 @@ import {
 import { downloadCompositeAsPng } from './render/download.js';
 import { isDemoModeRequested, runDemoMode } from './demo.js';
 import { installPageDrop } from './ui/page-drop.js';
+import { readHasRunSentinel, writeHasRunSentinel } from './ui/has-run-sentinel.js';
 
 /**
  * Human-readable preset codenames for the model-version footer line.
@@ -42,13 +43,12 @@ const PRESET_CODE_NAMES = Object.freeze({
 /**
  * Threshold (ms) above which we treat the first onProgress tick as a
  * genuine network download rather than a cache hit. WHY a time-based
- * heuristic: tf.js's `loadGraphModel` surfaces only a fraction in
- * `onProgress`, not a byte count or a "from cache" flag. Cached loads
- * finish in under ~300ms on a laptop; a real first-run download streams
- * for several seconds, so the first progress tick arrives well past the
- * first few hundred milliseconds. We default to showing the cache-load
- * banner and upgrade to the first-run banner on slow progress. Simple,
- * and robust against the library never telling us what mode we are in.
+ * heuristic is still here alongside the localStorage sentinel below:
+ * the sentinel is authoritative when it is present, but it can be
+ * absent for a returning user who cleared site data or who came in
+ * via incognito. The time heuristic is the safety net for those
+ * cases — it starts with the cache-load banner and upgrades to the
+ * first-run banner once a slow progress tick arrives.
  */
 const FIRST_RUN_THRESHOLD_MS = 800;
 
@@ -251,11 +251,21 @@ function boot() {
     const startedAt = performance.now();
     let firstRunShown = false;
 
+    // The sentinel is the authoritative signal. If it's absent, this
+    // browser has never completed a model load before, so show the
+    // first-run banner immediately — no 800ms wait contradicting the
+    // user's experience. If it's present we still default to the
+    // cache-load banner and upgrade via the time heuristic, which
+    // covers users who cleared site data since their last visit.
+    const hasRunBefore = readHasRunSentinel();
+
     if (!silent) {
-      // Default to the cache-load banner. If progress stretches past
-      // the threshold we switch to the first-run banner with the
-      // ~60MB copy.
-      status.showCacheLoad();
+      if (!hasRunBefore) {
+        status.showFirstRun({ fraction: 0, loaded: undefined, total: undefined });
+        firstRunShown = true;
+      } else {
+        status.showCacheLoad();
+      }
     }
 
     try {
@@ -270,6 +280,7 @@ function boot() {
         }
       });
       state.loadedModel = loaded;
+      writeHasRunSentinel(); // Flip the bit after a successful load.
       dropzone.setEnabled(true);
       controls.setDisabled(false);
       if (!silent) status.showReady();
@@ -700,6 +711,7 @@ function mustGet(id) {
   }
   return el;
 }
+
 
 // Boot on DOMContentLoaded — or immediately if the DOM is already
 // parsed (happens when this script is injected after load, e.g. via
