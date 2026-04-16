@@ -1,0 +1,104 @@
+# End-to-end Playwright suite for Foveacast.
+#
+# Runs the same `pnpm test:e2e` suite that contributors run locally,
+# in a chromium-only configuration against `?demo=1`. The suite
+# exercises the real render pipeline — the layer where the
+# detached-container bug shipped undetected and was only caught by a
+# user dropping a real file. Keeping this in CI means that class of
+# bug fails a PR check instead of a user report.
+#
+# Cost vs. coverage tradeoff:
+#   - Chromium binary is ~100 MB; cached between runs by the
+#     actions/cache step so the first run is slow and subsequent runs
+#     are fast.
+#   - Tests themselves run in ~10 s. Full job time (install + cached
+#     browser + tests) is typically under 60 s.
+#   - Demo mode is deliberately the only path covered. The real-model
+#     path depends on Google Cloud Storage and adds 40–60 s of weight
+#     download per run; keeping it out of CI keeps the loop fast and
+#     keeps the suite from going red when an upstream bucket hiccups.
+#
+# When the suite is red, a render-layer change is probably the cause.
+# Open the Playwright trace from the job artefacts for the failing
+# test — it shows DOM, console, network, and video of the failure.
+
+name: E2E (Playwright)
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  e2e:
+    name: playwright (chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Version intentionally omitted — package.json's packageManager
+      # field is the source of truth. Passing `version:` here as well
+      # fails with ERR_PNPM_BAD_PM_VERSION.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Cache the Playwright browser binary between runs. Keyed on the
+      # `@playwright/test` version recorded in the lockfile so a
+      # package bump busts the cache and pulls a matching browser.
+      # Parsing package.json is simpler than `pnpm ls --json` and has
+      # no external tool dependency.
+      - name: Get Playwright version
+        id: playwright-version
+        run: |
+          version=$(node -p "require('./package.json').devDependencies['@playwright/test']")
+          # Strip leading ^ / ~ if present; the installed version is
+          # what matters for the cache key.
+          clean=${version#[\^~]}
+          echo "version=${clean}" >> $GITHUB_OUTPUT
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
+      # Install chromium if the cache missed. --with-deps brings in the
+      # system libraries Ubuntu needs for headless chromium; skipping
+      # those is the single most common cause of a red Playwright CI.
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install chromium --with-deps
+
+      # Even on a cache hit we still need the system deps to be
+      # resolved; this is a no-op if they are already present.
+      - name: Install Playwright system deps
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
+
+      - name: Run E2E tests
+        run: pnpm test:e2e
+
+      # On failure, upload the test-results folder so traces are
+      # reachable from the Actions UI. `if: failure()` keeps the
+      # artefact step from slowing down a green run.
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
