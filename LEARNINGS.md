@@ -257,6 +257,27 @@ The V3 plan drafted earlier (desk research → hands-on export → browser integ
 
 One meta-note worth naming: the survey almost didn't happen. The overnight V1 build deferred "wider model survey" as out of scope, the V2 work went with UNISAL because the PRD had already chosen it, and it took an unflattering benchmark against real eye-tracking data to make the case for going back and re-surveying the field. If a PRD's model choice is older than a year or two, it is worth re-asking the question before spending engineering effort on it — the lag between "model published" and "model known-good in practice" is short enough that a one-hour survey can reshape a multi-day spike.
 
+## 2026-04-16 — Correction: UMSI++ is not in MSI-Net's family, and the V3 target shifts again
+
+A few hours after posting the "pivot to UMSI++" decision above, a direct look at the UEyes repo corrected two claims the background survey agent had made:
+
+**First, UMSI++ is not the MSI-Net lineage the survey described.** Reading `saliency_models/UMSI++/src/` in the repo, the model is built on DCN-ResNet + Xception + attentive ConvLSTM, implemented in Keras 2 / TensorFlow. MSI-Net is a VGG-16 encoder with a multi-scale contextual decoder, implemented in PyTorch. The two share "saliency over images" as a problem description and not much else architecturally. The "same family as MSI-Net, so the V2 pipeline drops in" argument I wrote above does not hold — a Keras + ConvLSTM model has a different export story than the PyTorch → ONNX path V2 proved out.
+
+**Second, the UMSI++ weights are not where the README implies.** `saliency_models/UMSI++/README.md` says "remember to put umsi++.hdf5 to the folder weights", meaning the weights file is referenced but is not committed to the repo and is not included in the Zenodo deposit (which is 12.9 GB of *dataset*, not model artefacts). The weights' hosting location is undocumented. Without an author-contact resolution, they are not publicly retrievable.
+
+**What IS cleanly usable.** The UEyes **dataset** — 1,980 UI screenshots with real eye-tracking data — is on Zenodo under CC BY 4.0, attribution to Jiang et al. 2023 (CHI '23). That is a genuinely useful asset: we can use it to fine-tune any already-permissively-licensed saliency model on Foveacast's target content class, without waiting on an email from the UEyes authors and without inheriting any of UMSI++'s unclear licence state.
+
+**Revised plan.** V3 target is now "fine-tune MSI-Net on the UEyes dataset" rather than "ship UMSI++." Specifically:
+
+- MSI-Net is MIT-licensed; the code is Alexander Kroner's and the TF.js conversion path is proven from V1.
+- UEyes dataset is CC BY 4.0; attribution to the CHI 2023 paper.
+- The fine-tuned output belongs to Foveacast, under clean licences end-to-end.
+- The only new moving parts are a training script and a modest amount of GPU compute.
+
+SUM stays in the backup slot. If the fine-tune path turns out to have a blocker we haven't foreseen, we go back to the Mamba CPU-fallback spike.
+
+**The meta-lesson.** Agent summaries are useful for narrowing a search space; they are not sources of truth about what a repo actually contains. The "same family as MSI-Net" claim was almost certainly the agent pattern-matching on a name (UMSI-NET-family) rather than reading the architecture code. For any decision that flows from an agent-produced research summary, a 10-minute pass through the real code — file listing, README, any `src/` folder — is cheap insurance against building a plan on a false premise. Adding this to the "how I'd do this again" file.
+
 ## 2026-04-16 — V2 shipped: UNISAL + ORT Web end-to-end
 
 Turned the export artefact into a shipped release. `0.2.0` is live; MSI-Net through TF.js is out of the repo; the landing page runs UNISAL through `onnxruntime-web`. The release went smoother than any of us had a right to expect, for one specific reason, and one specific concern is carried forward.
