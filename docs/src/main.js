@@ -55,6 +55,16 @@ const FIRST_RUN_THRESHOLD_MS = 800;
  *   opacity: number,
  *   view: 'overlay' | 'original' | 'sidebyside',
  *   queuedFile: File | null,
+ *   lastDiagnostics: {
+ *     sourceWidth: number,
+ *     sourceHeight: number,
+ *     modelInputDims: [number, number],
+ *     saliencyLength: number,
+ *     saliencyMin: string,
+ *     saliencyMax: string,
+ *     saliencyMean: string,
+ *     peakLocation: string,
+ *   } | null,
  * }}
  */
 const state = {
@@ -67,6 +77,7 @@ const state = {
   view: 'overlay',
   /** File dropped before the model finished loading (demo-mode race). */
   queuedFile: /** @type {File | null} */ (null),
+  lastDiagnostics: null,
 };
 
 /**
