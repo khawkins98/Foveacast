@@ -7,10 +7,8 @@
 // shape — the pixels themselves are out of scope for unit tests.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import {
-  renderHeatmapCanvas,
-  compositeImageAndHeatmap,
-} from '../docs/src/render/heatmap.js';
+import { renderHeatmapCanvas } from '../docs/src/render/heatmap.js';
+import { compositeImageAndHeatmap } from '../docs/src/render/saliency-canvas.js';
 
 /**
  * Build a fresh heatmap.js stub for a test. Returns both the stub and
