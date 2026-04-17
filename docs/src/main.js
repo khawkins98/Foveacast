@@ -21,6 +21,7 @@ import { downsampleIfLarge } from './ui/image-resize.js';
 import { postprocess } from './pipeline/postprocess.js';
 import { firstFixationCentroid } from './pipeline/fixation.js';
 import { renderSaliencyCanvas, compositeImageAndHeatmap } from './render/saliency-canvas.js';
+import { drawPlainImageCanvas } from './render/plain-canvas.js';
 import { downloadCompositeAsPng } from './render/download.js';
 import { isDemoModeRequested, runDemoMode } from './demo.js';
 import { installPageDrop } from './ui/page-drop.js';
@@ -714,22 +715,6 @@ function boot() {
     span.appendChild(a);
     span.appendChild(document.createTextNode(trail));
     return span;
-  }
-
-  /** Build a canvas that just contains the image, at the image's own pixel size. */
-  function drawPlainImageCanvas(imageSource) {
-    const width =
-      /** @type {any} */ (imageSource).naturalWidth ||
-      /** @type {any} */ (imageSource).width;
-    const height =
-      /** @type {any} */ (imageSource).naturalHeight ||
-      /** @type {any} */ (imageSource).height;
-    const c = document.createElement('canvas');
-    c.width = width;
-    c.height = height;
-    const ctx = c.getContext('2d');
-    if (ctx) ctx.drawImage(imageSource, 0, 0, width, height);
-    return c;
   }
 }
 
