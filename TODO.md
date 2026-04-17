@@ -41,15 +41,6 @@ When a file is being dragged over the page (`body.fc-page-dragover`), a tiny thu
 
 **Source:** frontend review P1 #4. `inference.js`, `demo.js`, and the `main.js surfaceModelError` classifier now have coverage — only `download.js` is left. A fake canvas `toBlob` mock with assertions on URL created / revoked / anchor click order would take ~30 minutes.
 
-### P2 — Reliance on `heatmapInstance._renderer.canvas` private API
-
-**Source:** frontend P2 #5 and LEARNINGS. Noted as known fragility. Mitigation options, cheapest first:
-
-1. Snapshot-test the internal shape by importing heatmap.js into a unit test and asserting `_renderer.canvas` is an HTMLCanvasElement after `.create`. Fails loudly if a heatmap.js minor bumps rename the field.
-2. Replace heatmap.js with a ~100-line custom Canvas 2D renderer. heatmap.js does very little of value for this use case (colour ramping from a normalised float field) and the glue code to work around its quirks is comparable to the replacement.
-
-Option 1 is 20 minutes; option 2 is a half-day.
-
 ### P2 — `package.json` has no `engines` field
 
 pnpm action in CI pins Node 20, but the repo does not declare its Node floor. A contributor on Node 18 would hit runtime differences in `createImageBitmap` error shapes and not know why. Add `"engines": { "node": ">=20" }`.

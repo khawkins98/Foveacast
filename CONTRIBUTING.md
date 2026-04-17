@@ -117,7 +117,7 @@ Minimum bar:
 - Every exported function has a JSDoc block: one-line purpose, `@param` types with short descriptions, `@returns`.
 - Every non-obvious branch has an inline comment explaining the decision. "Non-obvious" means: a reader who understands JavaScript but not this codebase would ask why.
 - Every module header explains what lives there and why — particularly the load-bearing invariants (e.g. "nothing outside `model/` imports `onnxruntime-web`").
-- Workarounds for external library quirks (heatmap.js private fields, TF.js backend selection, jsdom gaps) get a comment naming the library and the problem, so a future maintainer can tell whether the workaround is still needed.
+- Workarounds for external library quirks (TF.js backend selection, jsdom gaps) get a comment naming the library and the problem, so a future maintainer can tell whether the workaround is still needed. Legacy V1/V2 code had similar workarounds for heatmap.js private fields — those were removed in 0.3.0, but the pattern still applies to any new library that needs similar treatment.
 
 What comments are NOT for:
 
