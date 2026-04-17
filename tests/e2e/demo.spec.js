@@ -89,7 +89,7 @@ test.describe('Foveacast — demo mode end-to-end', () => {
     //     GitHub Pages and in the Playwright dev-server, and ORT
     //     falls back to single-threaded automatically.
     //   - The silent background model load in demo mode will try to
-    //     fetch `./models/unisal/model.onnx`. Playwright serves this
+    //     fetch `./models/v3/model.onnx`. Playwright serves this
     //     file correctly when present, but Chromium still logs any
     //     transient fetch noise the wasm loader surfaces during
     //     initialisation.
@@ -109,7 +109,7 @@ test.describe('Foveacast — demo mode end-to-end', () => {
     const banner = page.locator('.fc-status--demo');
     await expect(banner).toBeVisible({ timeout: 5_000 });
     await expect(banner).toContainText(/synthetic preview/i);
-    await expect(banner).toContainText(/real UNISAL/i);
+    await expect(banner).toContainText(/real model prediction/i);
   });
 
   test('progressive disclosure: controls are hidden on a fresh load and revealed after the first render', async ({
