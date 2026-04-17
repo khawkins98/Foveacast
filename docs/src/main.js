@@ -16,13 +16,13 @@ import { createStatus } from './ui/status.js';
 import { createDropzone } from './ui/dropzone.js';
 import { createControls } from './ui/controls.js';
 import { mountFooter } from './ui/footer.js';
+import { renderOutput as renderOutputView } from './ui/output-view.js';
 import { loadModel } from './model/loader.js';
 import { runInference } from './model/inference.js';
 import { downsampleIfLarge } from './ui/image-resize.js';
 import { postprocess } from './pipeline/postprocess.js';
 import { firstFixationCentroid } from './pipeline/fixation.js';
-import { renderSaliencyCanvas, compositeImageAndHeatmap } from './render/saliency-canvas.js';
-import { drawPlainImageCanvas } from './render/plain-canvas.js';
+import { renderSaliencyCanvas } from './render/saliency-canvas.js';
 import { downloadCompositeAsPng } from './render/download.js';
 import { isDemoModeRequested, runDemoMode } from './demo.js';
 import { installPageDrop } from './ui/page-drop.js';
@@ -477,106 +477,23 @@ function boot() {
   /** Draw the composited canvas (or plain image / side-by-side) into the output wrap. */
   function renderOutput() {
     if (!state.lastImage || !state.lastHeatmapCanvas) return;
-    // Reveal the output section — it's hidden on first load so the
-    // pre-drop page isn't cluttered by a reserved empty box (same
-    // progressive-disclosure principle as the controls panel).
-    outputSection.hidden = false;
-    outputCanvasWrap.hidden = false;
-    outputCanvasWrap.textContent = '';
-    outputCanvasWrap.classList.toggle(
-      'fc-output__canvas-wrap--sidebyside',
-      state.view === 'sidebyside',
-    );
-
-    // Sighted redundancy for the first-fixation crosshair: show the
-    // coordinates as plain text below the canvas. Screen readers
-    // already get this via `aria-label`, but a visible caption helps
-    // everyone compare runs without squinting at pixel positions.
-    outputCaption.textContent = describeHeatmap(state.lastFixation, state.lastOrigDims);
-    outputCaption.hidden = false;
-
-    // Diagnostic panel — collapsible details below the caption showing
-    // what the pipeline actually did. Helps debug "is it using the right
-    // model / right image / right preprocessing" ambiguity.
-    let diagEl = document.getElementById('fc-diagnostics');
-    if (!diagEl) {
-      diagEl = document.createElement('details');
-      diagEl.id = 'fc-diagnostics';
-      diagEl.style.cssText = 'margin:0.5rem 0; font-size:0.75rem; color:#666; max-width:600px;';
-      const summary = document.createElement('summary');
-      summary.textContent = 'Diagnostics';
-      summary.style.cursor = 'pointer';
-      diagEl.appendChild(summary);
-      outputCaption.parentNode.insertBefore(diagEl, outputCaption.nextSibling);
-    }
-    if (state.lastDiagnostics) {
-      const d = state.lastDiagnostics;
-      const lines = [
-        `Source image: ${d.sourceWidth} × ${d.sourceHeight} px`,
-        `Model input: ${d.modelInputDims[0]} × ${d.modelInputDims[1]} (NCHW, RGB, 0–255)`,
-        `Model: MSI-Net fine-tuned on UEyes (v0.1.0, FP16)`,
-        `Saliency output: ${d.saliencyLength} values, range [${d.saliencyMin}, ${d.saliencyMax}], mean ${d.saliencyMean}`,
-        `Peak attention at: ${d.peakLocation} in model space`,
-        `Preprocessing: aspect-preserving bilinear resize + pad 126`,
-        `Postprocess: upsample to source dims → σ=5 Gaussian blur → normalise`,
-      ];
-      // Keep the <summary>, replace everything after it.
-      while (diagEl.childNodes.length > 1) diagEl.removeChild(diagEl.lastChild);
-      const pre = document.createElement('pre');
-      pre.style.cssText = 'margin:0.3rem 0; white-space:pre-wrap; font-family:monospace; font-size:0.7rem; line-height:1.5;';
-      pre.textContent = lines.join('\n');
-      diagEl.appendChild(pre);
-    }
-
-    if (state.view === 'original') {
-      state.lastCompositeCanvas = null;
-      const plain = drawPlainImageCanvas(state.lastImage);
-      plain.setAttribute(
-        'aria-label',
-        'Original screenshot, without heatmap overlay.',
-      );
-      outputCanvasWrap.appendChild(plain);
-      return;
-    }
-
-    if (state.view === 'sidebyside') {
-      const plain = drawPlainImageCanvas(state.lastImage);
-      plain.setAttribute('aria-label', 'Original screenshot.');
-      const composite = compositeImageAndHeatmap(
-        state.lastImage,
-        state.lastHeatmapCanvas,
-        {
-          opacity: state.opacity,
-          showFixation: true,
-          fixation: state.lastFixation,
-        },
-      );
-      composite.setAttribute(
-        'aria-label',
-        describeHeatmap(state.lastFixation, state.lastOrigDims),
-      );
-      state.lastCompositeCanvas = composite;
-      outputCanvasWrap.appendChild(plain);
-      outputCanvasWrap.appendChild(composite);
-      return;
-    }
-
-    // Default overlay view.
-    const composite = compositeImageAndHeatmap(
-      state.lastImage,
-      state.lastHeatmapCanvas,
+    // Delegate rendering to the output-view module. The return value is
+    // the composite canvas (null for the 'original' view) which we store
+    // so the download handler always has a direct reference — avoiding
+    // the side-by-side bug where querySelector('canvas') returns the
+    // plain image canvas (appended first) instead of the composite.
+    state.lastCompositeCanvas = renderOutputView(
       {
+        image: state.lastImage,
+        heatmapCanvas: state.lastHeatmapCanvas,
+        view: state.view,
         opacity: state.opacity,
-        showFixation: true,
         fixation: state.lastFixation,
+        origDims: state.lastOrigDims,
+        diagnostics: state.lastDiagnostics,
       },
+      { outputSection, outputCanvasWrap, outputCaption },
     );
-    composite.setAttribute(
-      'aria-label',
-      describeHeatmap(state.lastFixation, state.lastOrigDims),
-    );
-    state.lastCompositeCanvas = composite;
-    outputCanvasWrap.appendChild(composite);
   }
 
   /**
@@ -623,25 +540,6 @@ function loadFileAsImage(file) {
     };
     img.src = url;
   });
-}
-
-/**
- * Sentence describing the heatmap for screen reader users. The
- * fixation coordinates are included as integers so the announcement is
- * concrete and not just "a heatmap".
- * @param {{ x: number, y: number } | null} fixation
- * @param {[number, number] | null} origDims - `[h, w]`.
- */
-function describeHeatmap(fixation, origDims) {
-  if (!fixation || !origDims) {
-    return 'Predicted attention heatmap for uploaded screenshot.';
-  }
-  const [h, w] = origDims;
-  return (
-    `Predicted attention heatmap for uploaded screenshot. ` +
-    `First-fixation estimate is at ${fixation.x} pixels across and ${fixation.y} pixels down ` +
-    `on a ${w} by ${h} pixel image.`
-  );
 }
 
 /** @param {string} id */
