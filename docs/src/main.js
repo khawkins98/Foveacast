@@ -519,7 +519,7 @@ function boot() {
 
     const modelLine = document.createElement('p');
     modelLine.className = 'fc-footer__line fc-footer__model';
-    modelLine.textContent = 'Model: UNISAL · SALICON (288×384)';
+    modelLine.textContent = 'Model: MSI-Net · fine-tuned on UEyes (240×320)';
     footer.appendChild(modelLine);
 
     // Attribution lines are built as individual nodes rather than one
@@ -530,10 +530,26 @@ function boot() {
     credits.className = 'fc-footer__line';
     credits.appendChild(
       textAndLink(
-        'Attention prediction powered by ',
-        'UNISAL',
-        'https://github.com/rdroste/unisal',
-        ' by Richard Droste et al. (Apache 2.0). ',
+        'Architecture: ',
+        'MSI-Net',
+        'https://doi.org/10.1016/j.neunet.2020.05.004',
+        ' (Kroner et al. 2020, MIT). ',
+      ),
+    );
+    credits.appendChild(
+      textAndLink(
+        'Fine-tuned on ',
+        'UEyes',
+        'https://doi.org/10.1145/3544548.3581096',
+        ' (Jiang et al. 2023, CC BY 4.0). ',
+      ),
+    );
+    credits.appendChild(
+      textAndLink(
+        'Training pipeline: ',
+        'foveacast-training',
+        'https://github.com/khawkins98/foveacast-training',
+        '. ',
       ),
     );
     credits.appendChild(

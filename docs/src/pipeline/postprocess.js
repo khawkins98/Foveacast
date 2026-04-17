@@ -213,23 +213,26 @@ export function logProbsToProbabilities(data) {
 }
 
 /**
- * Full post-processing pipeline: exp → upsample → blur → normalise.
+ * Full post-processing pipeline: upsample → blur → normalise.
+ *
+ * V3 MSI-Net outputs saliency already in [0, 1] (min-max normalised
+ * inside the ONNX graph), so there is no log-probability exp step.
+ * The pipeline is: upsample to the user's screenshot resolution →
+ * Gaussian blur for smooth contours → normalise to [0, 1].
  *
  * Default `sigmaPx = 28` sits in the middle of the PRD's specified
  * 20–40 px range. 28 gives a visibly smooth contour without washing
- * out the location of the attention peak; in practice the right
- * number depends on screenshot resolution, and a future version can
- * expose this as a slider or scale it with image size.
+ * out the location of the attention peak.
  *
- * @param {Float32Array} raw - UNISAL log-probability output, length `srcH * srcW`.
+ * @param {Float32Array} raw - Model output, length `srcH * srcW`, values in [0, 1].
  * @param {[number, number]} srcDims - Model output dims `[srcH, srcW]`.
  * @param {[number, number]} targetDims - Final dims `[h, w]` to upsample to.
  * @param {number} [sigmaPx=28] - Gaussian sigma in target-space pixels.
  * @returns {Float32Array} Length `targetH * targetW`, values in `[0, 1]`.
  */
 export function postprocess(raw, srcDims, targetDims, sigmaPx = 28) {
-  const probs = logProbsToProbabilities(raw);
-  const upsampled = upsampleBilinear(probs, srcDims, targetDims);
+  // V3: raw is already [0, 1], no logProbsToProbabilities needed.
+  const upsampled = upsampleBilinear(raw, srcDims, targetDims);
   const blurred = gaussianBlur(upsampled, targetDims, sigmaPx);
   return normaliseToUnit(blurred);
 }

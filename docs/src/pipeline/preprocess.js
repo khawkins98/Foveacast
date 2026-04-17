@@ -1,23 +1,21 @@
-// Image preprocessing for UNISAL input tensors.
+// Image preprocessing for the V3 MSI-Net saliency model.
 //
-// UNISAL (Droste, Jiao & Noble, ECCV 2020) is an ImageNet-pretrained
-// MobileNetV2-backbone model. Its preprocessing contract differs from
-// the V1 MSI-Net pipeline in three ways we have to get right for the
-// exported ONNX graph to produce correct output:
+// V3 is MSI-Net (Kroner et al. 2020) fine-tuned on UEyes (Jiang et al.
+// 2023) and exported as an ONNX graph from foveacast-training
+// (https://github.com/khawkins98/foveacast-training). Its preprocessing
+// contract:
 //
-//   1. Channel order is **RGB**, not BGR. The VGG-era channel-reverse
-//      step is gone — modern backbones keep RGB throughout.
+//   1. Channel order is **RGB**. The VGG-era BGR convention from V1 is
+//      gone — the PyTorch port and the ONNX export both use RGB.
 //
-//   2. Pixels are scaled to **0–1** and then **normalised by ImageNet
-//      per-channel mean/std** before inference. The normalisation is
-//      NOT baked into the model graph — it has to happen here.
-//      Mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225].
-//      Values from docs/spikes/unisal-onnx-research.md (taken in turn
-//      from rdroste/unisal's SALICONDataset.json).
+//   2. Pixels are fed in **0–255 float range**. No ImageNet mean/std
+//      normalisation here — the per-channel mean subtraction is baked
+//      into the ONNX graph at export time (see msinet.py in
+//      foveacast-training). Normalising here would double-apply it.
 //
-//   3. Layout is **NCHW** (`[1, 3, H, W]`), not NHWC. The ONNX graph
-//      was exported with a fixed `[1, 3, 288, 384]` input — this
-//      module produces the flat float array in NCHW order; the
+//   3. Layout is **NCHW** (`[1, 3, H, W]`). The ONNX graph was
+//      exported with a fixed `[1, 3, 240, 320]` input — this module
+//      produces the flat float array in NCHW order; the
 //      `model/inference.js` layer wraps it as an ort.Tensor.
 //
 // This file is deliberately framework-agnostic: `toInputTensorData`
@@ -26,32 +24,26 @@
 // unit-testable under jsdom without a GPU or browser WASM context.
 
 /**
- * UNISAL's native SALICON input size as `[H, W]`. 288 high, 384 wide —
- * the resolution the model was exported against, matching the values
- * in rdroste/unisal's SALICONDataset.json.
- *
- * Exported as a frozen tuple so callers can reference it without
- * guessing. Loader.js imports this rather than redefining it.
+ * V3 MSI-Net input size as `[H, W]`. 240 high, 320 wide — the
+ * SALICON-native resolution the model was fine-tuned and exported at.
+ * See ARCHITECTURE.md in foveacast-training for the contract.
  *
  * @type {readonly [number, number]}
  */
-export const UNISAL_INPUT_DIMS = /** @type {const} */ ([288, 384]);
-
-/**
- * ImageNet mean / std used by UNISAL's preprocessing. Per-channel,
- * indexed [R, G, B]. Source: rdroste/unisal SALICONDataset.json.
- */
-const IMAGENET_MEAN = /** @type {const} */ ([0.485, 0.456, 0.406]);
-const IMAGENET_STD = /** @type {const} */ ([0.229, 0.224, 0.225]);
+export const MODEL_INPUT_DIMS = /** @type {const} */ ([240, 320]);
 
 /**
  * Bilinear-resize an `ImageData` to the given target dimensions and
- * return an NCHW-flattened `Float32Array` in RGB order, values
- * ImageNet-normalised.
+ * return an NCHW-flattened `Float32Array` in RGB order, values in
+ * [0, 255].
  *
  * Output layout: channel-plane-major. The red channel fills the first
  * `H * W` slots, green the next `H * W`, blue the last `H * W`.
  * Caller wraps as `[1, 3, H, W]` (NCHW) on the ORT side.
+ *
+ * No normalisation is applied — the V3 ONNX graph handles mean
+ * subtraction internally. Feeding 0–1 or ImageNet-normalised values
+ * would double-apply the preprocessing and silently degrade output.
  *
  * Why implement bilinear resize by hand instead of leaning on canvas
  * resampling? Two reasons carry over unchanged from V1:
@@ -63,12 +55,11 @@ const IMAGENET_STD = /** @type {const} */ ([0.229, 0.224, 0.225]);
  *
  * "align corners = false" convention (sample centres map to
  * `(x + 0.5) * srcW / dstW - 0.5`), matching PyTorch's default
- * `F.interpolate(mode='bilinear', align_corners=False)` — which is
- * what UNISAL was trained against.
+ * `F.interpolate(mode='bilinear', align_corners=False)`.
  *
  * @param {ImageData} imageData - Pixels from `ctx.getImageData(...)`.
  * @param {[number, number]} inputDims - Target `[H, W]`.
- * @returns {Float32Array} Length `3 * H * W`, NCHW, RGB, ImageNet-normalised.
+ * @returns {Float32Array} Length `3 * H * W`, NCHW, RGB, 0–255.
  */
 export function toInputTensorData(imageData, inputDims) {
   const [dstH, dstW] = inputDims;
@@ -79,21 +70,11 @@ export function toInputTensorData(imageData, inputDims) {
   const plane = dstH * dstW;
   const out = new Float32Array(plane * 3);
 
-  const rMean = IMAGENET_MEAN[0];
-  const gMean = IMAGENET_MEAN[1];
-  const bMean = IMAGENET_MEAN[2];
-  const rStd = IMAGENET_STD[0];
-  const gStd = IMAGENET_STD[1];
-  const bStd = IMAGENET_STD[2];
-
-  // Degenerate 1×1 source — fill every output pixel with the same
-  // normalised value. Guards against srcW-1=0 divide-by-zero paths in
-  // some bilinear formulations; we use align-corners=false which
-  // doesn't have that problem, but the shortcut is cheaper and clearer.
+  // Degenerate 1×1 source — fill every output pixel with the same value.
   if (srcW === 1 && srcH === 1) {
-    const r = (src[0] / 255 - rMean) / rStd;
-    const g = (src[1] / 255 - gMean) / gStd;
-    const b = (src[2] / 255 - bMean) / bStd;
+    const r = src[0];
+    const g = src[1];
+    const b = src[2];
     for (let i = 0; i < plane; i++) {
       out[i] = r;
       out[plane + i] = g;
@@ -134,10 +115,11 @@ export function toInputTensorData(imageData, inputDims) {
       const b = lerp2(src[i00 + 2], src[i01 + 2], src[i10 + 2], src[i11 + 2], wx, wy);
 
       const off = y * dstW + x;
-      // Normalise: 0-255 → 0-1 → subtract per-channel mean → divide by std.
-      out[off] = (r / 255 - rMean) / rStd;
-      out[plane + off] = (g / 255 - gMean) / gStd;
-      out[2 * plane + off] = (b / 255 - bMean) / bStd;
+      // Raw 0–255 float values — no normalisation. The ONNX graph
+      // handles mean subtraction internally.
+      out[off] = clamp255(r);
+      out[plane + off] = clamp255(g);
+      out[2 * plane + off] = clamp255(b);
     }
   }
 

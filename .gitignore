@@ -50,3 +50,4 @@ docs/models/*
 # re-ignore it).
 !docs/models/unisal/
 !docs/models/unisal/*.onnx
+docs/models/v3/
