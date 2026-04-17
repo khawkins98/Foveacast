@@ -27,27 +27,19 @@ tests/e2e/.cache/
 # OS cruft
 .DS_Store
 
-# Model weights never live in the repo — they are fetched from the model
-# CDN on first run and cached by the browser. The patterns below are a
-# defence-in-depth against an accidental `git add .` after a local
-# experiment. Reviewers should still reject any large binary that sneaks
-# past these patterns; size-based thresholds cannot be expressed in a
-# .gitignore file and must be enforced out of band.
+# Model weights never live in the repo — they are fetched from a GitHub
+# Release at deploy time (scripts/fetch-v3-model.sh) and cached locally.
+# The patterns below are a defence-in-depth against an accidental
+# `git add .` after a local experiment. Reviewers should still reject any
+# large binary that sneaks past these patterns; size-based thresholds
+# cannot be expressed in a .gitignore file and must be enforced out of band.
 *.pb
 *.onnx
 *.bin
-# Mirrored MSI-Net weights are populated by scripts/fetch-weights.sh
-# at dev-time and by the Pages deploy workflow at build-time. Using
-# `docs/models/*` rather than `docs/models/` so git still traverses
-# the directory and the negation rule below can re-include specific
+# Using `docs/models/*` rather than `docs/models/` so git still traverses
+# the directory and negation rules below can re-include specific
 # subdirectories. (Git refuses to look inside a fully-ignored dir.)
 docs/models/*
-# Exception: the UNISAL ONNX artefact IS committed to the repo because
-# GitHub Pages serves it directly and there is no CDN alternative for a
-# hand-exported spike artefact. If V2 ships, this is the production home.
-# Two negations are needed — one for the directory (so git traverses
-# into it) and one for the specific file (so *.onnx above doesn't
-# re-ignore it).
-!docs/models/unisal/
-!docs/models/unisal/*.onnx
+# V3 MSI-Net model is NOT committed (57 MB). Use scripts/fetch-v3-model.sh
+# locally; the deploy workflow fetches it before the Pages upload.
 docs/models/v3/

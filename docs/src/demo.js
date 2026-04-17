@@ -20,7 +20,7 @@
 import { postprocess } from './pipeline/postprocess.js';
 import { firstFixationCentroid } from './pipeline/fixation.js';
 import { renderSaliencyCanvas, compositeImageAndHeatmap } from './render/saliency-canvas.js';
-import { downsampleIfLarge } from './pipeline/preprocess.js';
+import { downsampleIfLarge } from './ui/image-resize.js';
 
 /**
  * Native resolution of the synthetic saliency map, in `[H, W]`. Matches

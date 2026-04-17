@@ -62,7 +62,7 @@ pnpm smoke      # dev-server liveness check (boots Vite, curls index.html)
 pnpm test:e2e   # playwright against ?demo=1 in a real chromium browser
 ```
 
-Vitest is the tight feedback loop and runs on every push via GitHub Actions. The smoke script is a sub-second "is the dev server even up" check — useful locally, not in CI. Playwright is the end-to-end surface: it navigates to demo mode in a real browser, waits for the render-ready attribute, and asserts the composited canvas is non-zero and its `getImageData` does not throw. That last check is the regression test for the detached-container bug we shipped and then caught through user testing; the mocked vitest suite could not have caught it, because the bug lived in the gap between our mock and the real library.
+Vitest is the tight feedback loop and runs on every push via GitHub Actions. The smoke script is a sub-second "is the dev server even up" check — useful locally, not in CI. Playwright is the end-to-end surface: it navigates to demo mode in a real browser, waits for the render-ready attribute, and asserts the composited canvas is non-zero and its `getImageData` does not throw. That last check is the regression test for a detached-container bug we shipped in V1 (heatmap.js sized its internal canvas from `offsetWidth`, which is zero on a detached element); the mocked vitest suite could not have caught it, because the bug lived in the gap between our mock and the real library. In V3 we dropped heatmap.js entirely, but the E2E check still serves as the broadest liveness probe for the render pipeline.
 
 Playwright needs chromium installed once:
 
@@ -78,17 +78,17 @@ Four layers, laid out so the model backend can be swapped without touching anyth
 
 | Layer | Location | What it does |
 |---|---|---|
-| `model/` | `docs/src/model/` | Loads the UNISAL ONNX graph and runs inference. The only place ONNX Runtime Web is imported. |
-| `pipeline/` | `docs/src/pipeline/` | Pure functions: preprocess an image to the model's input tensor, exp → upsample → blur → normalise the saliency map, compute the first-fixation centroid. |
-| `render/` | `docs/src/render/` | Wraps heatmap.js, composites the overlay onto the original image, exports a PNG. |
+| `model/` | `docs/src/model/` | Loads the MSI-Net ONNX graph and runs inference. The only place ONNX Runtime Web is imported. |
+| `pipeline/` | `docs/src/pipeline/` | Pure functions: preprocess an image to the model's input tensor, upsample → blur → normalise the saliency map, compute the first-fixation centroid. |
+| `render/` | `docs/src/render/` | Direct canvas inferno colormap renderer, composites the overlay onto the original image, exports a PNG. |
 | `ui/` | `docs/src/ui/` | DOM interaction: drop zone, controls, status banner, mobile-browser guard. |
 
 ```
 +-----------+     +------------+     +----------+     +----+
 |   model   | --> |  pipeline  | --> |  render  | --> | ui |
 +-----------+     +------------+     +----------+     +----+
-  ORT Web         pure functions   heatmap.js +        DOM
-                                   Canvas 2D
+  ORT Web         pure functions   Canvas 2D           DOM
+                                   (inferno colormap)
 ```
 
 The full architecture notes — including the exported contracts each layer must honour — are in [docs/PRD.md](docs/PRD.md) under "Code architecture". The rule that matters in practice: nothing outside `model/` imports `onnxruntime-web`. That is what let V2 swap the model backend without touching anything below — see the 0.2.0 diff in [CHANGELOG.md](CHANGELOG.md) and the long-form account in [LEARNINGS.md](LEARNINGS.md).
@@ -103,11 +103,12 @@ V3, per the PRD, is SUM. That one is blocked upstream on Mamba's CUDA-kernel dep
 
 ## Attribution
 
-Foveacast stands on three pieces of open-source work:
+Foveacast stands on two pieces of open-source work:
 
-- **UNISAL** by Richard Droste, Jianbo Jiao and J. Alison Noble — the saliency model. Apache 2.0. [github.com/rdroste/unisal](https://github.com/rdroste/unisal)
+- **MSI-Net** (Kroner et al. 2020), fine-tuned on UEyes (Jiang et al. 2023) — the saliency model. [github.com/alexanderkroner/saliency](https://github.com/alexanderkroner/saliency)
 - **ONNX Runtime Web** — the inference runtime. MIT. [onnxruntime.ai/docs/tutorials/web/](https://onnxruntime.ai/docs/tutorials/web/)
-- **heatmap.js** by Patrick Wied — the overlay renderer. MIT licence. [patrick-wied.at/static/heatmapjs](https://www.patrick-wied.at/static/heatmapjs/)
+
+Prior to V3, UNISAL (Droste et al., Apache 2.0) was the inference model, and heatmap.js by Patrick Wied (MIT) handled the overlay renderer. Both were removed in 0.3.0.
 
 Full licence text for Foveacast itself is in [LICENSE](LICENSE) (MIT, Ken Hawkins).
 

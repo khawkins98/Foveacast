@@ -40,10 +40,10 @@ Four layers. The boundary between them is load-bearing; changes that blur it wil
 
 | Layer | Location | What lives there |
 |---|---|---|
-| `model/` | `docs/src/model/` | Loads the UNISAL ONNX graph, runs inference. **The only place `onnxruntime-web` is imported.** |
-| `pipeline/` | `docs/src/pipeline/` | Pure functions: preprocess, postprocess, fixation centroid. No framework imports. |
-| `render/` | `docs/src/render/` | heatmap.js wrapper + Canvas compositor + PNG download. |
-| `ui/` | `docs/src/ui/` | DOM: drop zone, controls, status banner, mobile guard. |
+| `model/` | `docs/src/model/` | Loads the ONNX graph, runs inference, and contains `image-source.js` — the DOM-touching input adapter that bridges image pixels into the pure pipeline. **The only place `onnxruntime-web` is imported.** |
+| `pipeline/` | `docs/src/pipeline/` | Pure functions: preprocess, postprocess, fixation centroid. No DOM, no browser APIs, no library imports. |
+| `render/` | `docs/src/render/` | Canvas compositor (saliency colormap, crosshair, watermark) + PNG download. |
+| `ui/` | `docs/src/ui/` | DOM: drop zone, controls, status banner, mobile guard, and `image-resize.js` — the pre-inference downsampler called from `main.js`/`demo.js`. |
 
 If you need ORT (or `ort.Tensor`) in the `ui/` or `render/` layer, you almost certainly don't — reach through `model/inference.js` instead.
 
@@ -117,7 +117,7 @@ Minimum bar:
 - Every exported function has a JSDoc block: one-line purpose, `@param` types with short descriptions, `@returns`.
 - Every non-obvious branch has an inline comment explaining the decision. "Non-obvious" means: a reader who understands JavaScript but not this codebase would ask why.
 - Every module header explains what lives there and why — particularly the load-bearing invariants (e.g. "nothing outside `model/` imports `onnxruntime-web`").
-- Workarounds for external library quirks (heatmap.js private fields, TF.js backend selection, jsdom gaps) get a comment naming the library and the problem, so a future maintainer can tell whether the workaround is still needed.
+- Workarounds for external library quirks (TF.js backend selection, jsdom gaps) get a comment naming the library and the problem, so a future maintainer can tell whether the workaround is still needed. Legacy V1/V2 code had similar workarounds for heatmap.js private fields — those were removed in 0.3.0, but the pattern still applies to any new library that needs similar treatment.
 
 What comments are NOT for:
 

@@ -13,14 +13,14 @@
     <!--
       Buildless by design. Plain <script> tags rather than ES module imports so
       this file works when double-clicked off the filesystem with no dev server.
-      ONNX Runtime Web attaches to `globalThis.ort`; heatmap.js to `globalThis.h337`.
+      ONNX Runtime Web attaches to `globalThis.ort`.
 
       Dependencies are vendored under `./vendor/` rather than loaded from
       jsDelivr. The CDN path was a single point of failure: a jsDelivr outage
       (or a supply-chain compromise) would silently take every user down.
       Vendoring means the "unzip and open index.html" promise actually holds
       offline, and the script bytes are pinned to what was reviewed at
-      commit time. ORT Web wasm is ~12 MB, heatmap.js is ~12 KB.
+      commit time. ORT Web wasm is ~12 MB.
     -->
     <!--
       Subresource integrity hashes are sha384 of the exact bytes
@@ -37,12 +37,6 @@
       integrity="sha384-1SBQgvQsxJRGAOAJ6K2nPaLO1SKelZwoF+biXgv2/D9fPspYLhvG4WIMDb/BUoJC"
       crossorigin="anonymous"
     ></script>
-    <script
-      src="./vendor/heatmap.min.js"
-      integrity="sha384-BlRWQS67hrnZlggSB+aRUTIWyxdjmsWxRnta6UvociBjKrx7/QuODVy7TJ0ov3Pi"
-      crossorigin="anonymous"
-    ></script>
-
     <link rel="stylesheet" href="./styles.css" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
 

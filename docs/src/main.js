@@ -15,12 +15,14 @@ import { mountMobileGuard } from './ui/mobile-guard.js';
 import { createStatus } from './ui/status.js';
 import { createDropzone } from './ui/dropzone.js';
 import { createControls } from './ui/controls.js';
+import { mountFooter } from './ui/footer.js';
+import { renderOutput as renderOutputView } from './ui/output-view.js';
 import { loadModel } from './model/loader.js';
 import { runInference } from './model/inference.js';
-import { downsampleIfLarge } from './pipeline/preprocess.js';
+import { downsampleIfLarge } from './ui/image-resize.js';
 import { postprocess } from './pipeline/postprocess.js';
 import { firstFixationCentroid } from './pipeline/fixation.js';
-import { renderSaliencyCanvas, compositeImageAndHeatmap } from './render/saliency-canvas.js';
+import { renderSaliencyCanvas } from './render/saliency-canvas.js';
 import { downloadCompositeAsPng } from './render/download.js';
 import { isDemoModeRequested, runDemoMode } from './demo.js';
 import { installPageDrop } from './ui/page-drop.js';
@@ -55,6 +57,17 @@ const FIRST_RUN_THRESHOLD_MS = 800;
  *   opacity: number,
  *   view: 'overlay' | 'original' | 'sidebyside',
  *   queuedFile: File | null,
+ *   lastDiagnostics: {
+ *     sourceWidth: number,
+ *     sourceHeight: number,
+ *     modelInputDims: [number, number],
+ *     saliencyLength: number,
+ *     saliencyMin: string,
+ *     saliencyMax: string,
+ *     saliencyMean: string,
+ *     peakLocation: string,
+ *   } | null,
+ *   lastCompositeCanvas: HTMLCanvasElement | null,
  * }}
  */
 const state = {
@@ -67,6 +80,10 @@ const state = {
   view: 'overlay',
   /** File dropped before the model finished loading (demo-mode race). */
   queuedFile: /** @type {File | null} */ (null),
+  lastDiagnostics: null,
+  /** The most recently rendered composite canvas — used by the download handler.
+   *  Null when the current view is 'original' (no composite is produced). */
+  lastCompositeCanvas: null,
 };
 
 /**
@@ -156,7 +173,10 @@ function boot() {
       renderOutput();
     },
     onDownload: () => {
-      const compositeCanvas = outputCanvasWrap.querySelector('canvas');
+      // why: state.lastCompositeCanvas is always the most recent composite,
+      // even in side-by-side view where querySelector('canvas') would return
+      // the plain image canvas (appended first) rather than the heatmap composite.
+      const compositeCanvas = state.lastCompositeCanvas;
       if (!compositeCanvas) return;
       downloadCompositeAsPng(/** @type {HTMLCanvasElement} */ (compositeCanvas)).catch((err) => {
         console.error('Foveacast: download failed.', err);
@@ -172,9 +192,10 @@ function boot() {
   controlsMount.appendChild(controls.element);
 
   // --- Footer (attribution) --------------------------------------------
-  // Populated here so the model-version indicator can be refreshed when
-  // the preset changes. Commit 13 fleshes out the content.
-  renderFooter();
+  mountFooter(
+    document.querySelector('.fc-footer'),
+    /** @type {HTMLDialogElement | null} */ (document.getElementById('fc-alternatives-modal')),
+  );
 
   // --- Demo mode short-circuit ------------------------------------------
   // When `?demo=1` is present, skip the model download entirely and run
@@ -283,7 +304,7 @@ function boot() {
     dropzone.setEnabled(true);
     controls.setDisabled(false);
     if (!silent) status.showReady();
-    renderFooter();
+    // why: footer is static — no re-mount needed after model reload.
 
     // Drain any file the user dropped while we were still loading.
     // This is the second half of the demo-mode queued-drop flow.
@@ -456,260 +477,25 @@ function boot() {
   /** Draw the composited canvas (or plain image / side-by-side) into the output wrap. */
   function renderOutput() {
     if (!state.lastImage || !state.lastHeatmapCanvas) return;
-    // Reveal the output section — it's hidden on first load so the
-    // pre-drop page isn't cluttered by a reserved empty box (same
-    // progressive-disclosure principle as the controls panel).
-    outputSection.hidden = false;
-    outputCanvasWrap.hidden = false;
-    outputCanvasWrap.textContent = '';
-    outputCanvasWrap.classList.toggle(
-      'fc-output__canvas-wrap--sidebyside',
-      state.view === 'sidebyside',
-    );
-
-    // Sighted redundancy for the first-fixation crosshair: show the
-    // coordinates as plain text below the canvas. Screen readers
-    // already get this via `aria-label`, but a visible caption helps
-    // everyone compare runs without squinting at pixel positions.
-    outputCaption.textContent = describeHeatmap(state.lastFixation, state.lastOrigDims);
-    outputCaption.hidden = false;
-
-    // Diagnostic panel — collapsible details below the caption showing
-    // what the pipeline actually did. Helps debug "is it using the right
-    // model / right image / right preprocessing" ambiguity.
-    let diagEl = document.getElementById('fc-diagnostics');
-    if (!diagEl) {
-      diagEl = document.createElement('details');
-      diagEl.id = 'fc-diagnostics';
-      diagEl.style.cssText = 'margin:0.5rem 0; font-size:0.75rem; color:#666; max-width:600px;';
-      const summary = document.createElement('summary');
-      summary.textContent = 'Diagnostics';
-      summary.style.cursor = 'pointer';
-      diagEl.appendChild(summary);
-      outputCaption.parentNode.insertBefore(diagEl, outputCaption.nextSibling);
-    }
-    if (state.lastDiagnostics) {
-      const d = state.lastDiagnostics;
-      const lines = [
-        `Source image: ${d.sourceWidth} × ${d.sourceHeight} px`,
-        `Model input: ${d.modelInputDims[0]} × ${d.modelInputDims[1]} (NCHW, RGB, 0–255)`,
-        `Model: MSI-Net fine-tuned on UEyes (v0.1.0, FP16)`,
-        `Saliency output: ${d.saliencyLength} values, range [${d.saliencyMin}, ${d.saliencyMax}], mean ${d.saliencyMean}`,
-        `Peak attention at: ${d.peakLocation} in model space`,
-        `Preprocessing: aspect-preserving bilinear resize + pad 126`,
-        `Postprocess: upsample to source dims → σ=5 Gaussian blur → normalise`,
-      ];
-      // Keep the <summary>, replace everything after it.
-      while (diagEl.childNodes.length > 1) diagEl.removeChild(diagEl.lastChild);
-      const pre = document.createElement('pre');
-      pre.style.cssText = 'margin:0.3rem 0; white-space:pre-wrap; font-family:monospace; font-size:0.7rem; line-height:1.5;';
-      pre.textContent = lines.join('\n');
-      diagEl.appendChild(pre);
-    }
-
-    if (state.view === 'original') {
-      const plain = drawPlainImageCanvas(state.lastImage);
-      plain.setAttribute(
-        'aria-label',
-        'Original screenshot, without heatmap overlay.',
-      );
-      outputCanvasWrap.appendChild(plain);
-      return;
-    }
-
-    if (state.view === 'sidebyside') {
-      const plain = drawPlainImageCanvas(state.lastImage);
-      plain.setAttribute('aria-label', 'Original screenshot.');
-      const composite = compositeImageAndHeatmap(
-        state.lastImage,
-        state.lastHeatmapCanvas,
-        {
-          opacity: state.opacity,
-          showFixation: true,
-          fixation: state.lastFixation,
-        },
-      );
-      composite.setAttribute(
-        'aria-label',
-        describeHeatmap(state.lastFixation, state.lastOrigDims),
-      );
-      outputCanvasWrap.appendChild(plain);
-      outputCanvasWrap.appendChild(composite);
-      return;
-    }
-
-    // Default overlay view.
-    const composite = compositeImageAndHeatmap(
-      state.lastImage,
-      state.lastHeatmapCanvas,
+    // Delegate rendering to the output-view module. The return value is
+    // the composite canvas (null for the 'original' view) which we store
+    // so the download handler always has a direct reference — avoiding
+    // the side-by-side bug where querySelector('canvas') returns the
+    // plain image canvas (appended first) instead of the composite.
+    state.lastCompositeCanvas = renderOutputView(
       {
+        image: state.lastImage,
+        heatmapCanvas: state.lastHeatmapCanvas,
+        view: state.view,
         opacity: state.opacity,
-        showFixation: true,
         fixation: state.lastFixation,
+        origDims: state.lastOrigDims,
+        diagnostics: state.lastDiagnostics,
       },
+      { outputSection, outputCanvasWrap, outputCaption },
     );
-    composite.setAttribute(
-      'aria-label',
-      describeHeatmap(state.lastFixation, state.lastOrigDims),
-    );
-    outputCanvasWrap.appendChild(composite);
   }
 
-  /**
-   * Render (or refresh) the attribution footer. The footer carries:
-   *   - Model version indicator.
-   *   - Credits for MSI-Net, UEyes, ONNX Runtime Web, and foveacast-training.
-   *   - Non-dismissible bias disclosure (PRD §Attribution).
-   *   - A "Need more?" button that opens the commercial-alternatives
-   *     modal, per PRD §Positioning and Alternatives.
-   */
-  function renderFooter() {
-    const footer = document.querySelector('.fc-footer');
-    if (!footer) return;
-    footer.textContent = '';
-
-    const modelLine = document.createElement('p');
-    modelLine.className = 'fc-footer__line fc-footer__model';
-    modelLine.textContent = 'Model: MSI-Net · fine-tuned on UEyes (240×320)';
-    footer.appendChild(modelLine);
-
-    // Attribution lines are built as individual nodes rather than one
-    // innerHTML blob so the anchors carry real DOM event hooks (and so
-    // a future reviewer spotting innerHTML doesn't need to worry about
-    // XSS exposure in a static page).
-    const credits = document.createElement('p');
-    credits.className = 'fc-footer__line';
-    credits.appendChild(
-      textAndLink(
-        'Architecture: ',
-        'MSI-Net',
-        'https://doi.org/10.1016/j.neunet.2020.05.004',
-        ' (Kroner et al. 2020, MIT). ',
-      ),
-    );
-    credits.appendChild(
-      textAndLink(
-        'Fine-tuned on ',
-        'UEyes',
-        'https://doi.org/10.1145/3544548.3581096',
-        ' (Jiang et al. 2023, CC BY 4.0). ',
-      ),
-    );
-    credits.appendChild(
-      textAndLink(
-        'Training pipeline: ',
-        'foveacast-training',
-        'https://github.com/khawkins98/foveacast-training',
-        '. ',
-      ),
-    );
-    credits.appendChild(
-      textAndLink(
-        'Inference via ',
-        'ONNX Runtime Web',
-        'https://onnxruntime.ai/docs/tutorials/web/',
-        ' (MIT). ',
-      ),
-    );
-    credits.appendChild(
-      textAndLink(
-        'Heatmap rendering by ',
-        'heatmap.js',
-        'https://www.patrick-wied.at/static/heatmapjs/',
-        ' by Patrick Wied (MIT).',
-      ),
-    );
-    footer.appendChild(credits);
-
-    const bias = document.createElement('p');
-    bias.className = 'fc-footer__line fc-footer__bias';
-    bias.textContent =
-      "Heatmap outputs reflect population-average gaze patterns from the model's training data. They are estimates, not measurements of any specific person's attention.";
-    footer.appendChild(bias);
-
-    const moreLine = document.createElement('p');
-    moreLine.className = 'fc-footer__line';
-    const moreLabel = document.createTextNode('Need more than Foveacast can offer? ');
-    const moreBtn = document.createElement('button');
-    moreBtn.type = 'button';
-    moreBtn.className = 'fc-footer__more';
-    moreBtn.textContent = 'See commercial alternatives.';
-    moreBtn.addEventListener('click', openAlternativesModal);
-    moreLine.appendChild(moreLabel);
-    moreLine.appendChild(moreBtn);
-    footer.appendChild(moreLine);
-  }
-
-  /**
-   * Open the commercial-alternatives modal and remember what had
-   * focus so we can restore it on close.
-   *
-   * WHY we use <dialog>.showModal(): it gives us focus-trap and
-   * Escape-to-close without hand-rolling either. showModal also
-   * elevates the dialog to the top-layer so no z-index games are
-   * needed.
-   */
-  function openAlternativesModal() {
-    const modal = /** @type {HTMLDialogElement | null} */ (
-      document.getElementById('fc-alternatives-modal')
-    );
-    if (!modal) return;
-    const previouslyFocused = /** @type {HTMLElement | null} */ (document.activeElement);
-
-    const onClose = () => {
-      modal.removeEventListener('close', onClose);
-      if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
-        previouslyFocused.focus();
-      }
-    };
-    modal.addEventListener('close', onClose);
-
-    if (typeof modal.showModal === 'function') {
-      modal.showModal();
-    } else {
-      // Extremely old engine fallback — just show it. Focus and
-      // dismissal gestures won't be trapped, but the content is still
-      // readable. <dialog> is supported everywhere in our target set.
-      modal.setAttribute('open', '');
-    }
-  }
-
-  /**
-   * Helper that builds a lead-text + anchor + trailing-text run in a
-   * single span, which keeps the footer prose readable in the DOM
-   * without resorting to innerHTML.
-   * @param {string} lead
-   * @param {string} linkText
-   * @param {string} href
-   * @param {string} trail
-   */
-  function textAndLink(lead, linkText, href, trail) {
-    const span = document.createElement('span');
-    span.appendChild(document.createTextNode(lead));
-    const a = document.createElement('a');
-    a.href = href;
-    a.textContent = linkText;
-    a.rel = 'noopener noreferrer';
-    span.appendChild(a);
-    span.appendChild(document.createTextNode(trail));
-    return span;
-  }
-
-  /** Build a canvas that just contains the image, at the image's own pixel size. */
-  function drawPlainImageCanvas(imageSource) {
-    const width =
-      /** @type {any} */ (imageSource).naturalWidth ||
-      /** @type {any} */ (imageSource).width;
-    const height =
-      /** @type {any} */ (imageSource).naturalHeight ||
-      /** @type {any} */ (imageSource).height;
-    const c = document.createElement('canvas');
-    c.width = width;
-    c.height = height;
-    const ctx = c.getContext('2d');
-    if (ctx) ctx.drawImage(imageSource, 0, 0, width, height);
-    return c;
-  }
 }
 
 /**
@@ -734,25 +520,6 @@ function loadFileAsImage(file) {
     };
     img.src = url;
   });
-}
-
-/**
- * Sentence describing the heatmap for screen reader users. The
- * fixation coordinates are included as integers so the announcement is
- * concrete and not just "a heatmap".
- * @param {{ x: number, y: number } | null} fixation
- * @param {[number, number] | null} origDims - `[h, w]`.
- */
-function describeHeatmap(fixation, origDims) {
-  if (!fixation || !origDims) {
-    return 'Predicted attention heatmap for uploaded screenshot.';
-  }
-  const [h, w] = origDims;
-  return (
-    `Predicted attention heatmap for uploaded screenshot. ` +
-    `First-fixation estimate is at ${fixation.x} pixels across and ${fixation.y} pixels down ` +
-    `on a ${w} by ${h} pixel image.`
-  );
 }
 
 /** @param {string} id */

@@ -165,6 +165,8 @@ heatmap.js does its job but its job description is from 2013. It stores its back
 
 It works. The tests pass, the overlays look correct, and performance is fine once the model has run. But the private-field access and the manual stride are the kind of thing that rots quietly when the library updates, so I am flagging it here as technical debt to revisit for V2. If we're rewriting the model layer for ONNX anyway, that's a natural moment to look at alternatives — a small custom Canvas 2D renderer would probably be less code than the heatmap.js glue plus its workarounds.
 
+**Resolved in V3 (2026-04-17).** The V3 cleanup removed heatmap.js entirely. `render/saliency-canvas.js` now uses a direct Canvas 2D inferno colormap — no private-field access, no stride workaround, no external library. The vendor directory and `<script>` tag are gone. The TODO item tracking this debt was also removed. See CHANGELOG 0.3.0 and PR #7 for the full diff.
+
 ## 2026-04-16 — V2 UNISAL investigation (no code)
 
 The PRD's V2 path is UNISAL (Apache 2.0, ECCV 2020) through ONNX Runtime Web. The reason UNISAL rather than a direct accuracy-per-pixel contender is partly licence clarity, partly ecosystem fit: it's pure PyTorch with standard ops, no custom CUDA kernels, which is exactly the profile that `torch.onnx.export` handles cleanly. No code was written for this investigation; what follows is the plan and the open questions.

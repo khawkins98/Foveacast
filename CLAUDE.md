@@ -50,11 +50,10 @@ Never disable a failing test as part of unrelated work. If you think a test is w
 
 The `model / pipeline / render / ui` boundary is load-bearing. In particular:
 
-- Nothing outside `docs/src/model/` imports the inference runtime. For V2 that is `onnxruntime-web` (the `ort` global). Grep test: `grep -rn "\\bort\\b\\|onnxruntime-web" docs/src/ | grep -v "docs/src/model/"` should return nothing meaningful.
-- Nothing outside `docs/src/render/` imports `heatmap.js`.
+- Nothing outside `docs/src/model/` imports the inference runtime. For V3 that is `onnxruntime-web` (the `ort` global). Grep test: `grep -rn "\\bort\\b\\|onnxruntime-web" docs/src/ | grep -v "docs/src/model/"` should return nothing meaningful.
 - `docs/src/pipeline/` is pure JS — no DOM, no browser APIs, no library imports.
 
-If you are about to reach for `ort` (or `h337`) from a file outside its owning layer, stop. The fix is a new function in the owning layer. This rule paid for itself on the V1→V2 swap: every change lived inside `model/`, `pipeline/`, or the boot wiring, and `render/` + `ui/` came through untouched.
+If you are about to reach for `ort` from a file outside `model/`, stop. The fix is a new function in the owning layer. This rule paid for itself on the V1→V2 swap: every change lived inside `model/`, `pipeline/`, or the boot wiring, and `render/` + `ui/` came through untouched. (V1/V2 also had the rule that nothing outside `render/` imports `heatmap.js` — that's no longer needed since V3 removed heatmap.js.)
 
 ### Accessibility is non-negotiable
 
@@ -140,18 +139,21 @@ If the user asks for a "review", "audit", or "critique" of the project, they usu
 
 These have burned us before. Learn from the scars.
 
-- **The render layer uses heatmap.js, which sizes its canvas from `container.offsetWidth` — zero on a detached element.** A vitest mock of `h337.create` will not catch this. See `LEARNINGS.md` entry dated 2026-04-16.
 - **macOS Vite binds IPv6-only by default.** Playwright `webServer.url` must use `localhost`, not `127.0.0.1`.
-- **UNISAL's raw output is log-probabilities, not 0–1 saliency.** The postprocess layer applies `exp(y - max(y))` before the upsample/blur/normalise path. If you add a new code path that consumes the raw saliency Float32Array from `runInference`, remember to run it through `logProbsToProbabilities` first — or stack ranks will look washed-out.
 - **ORT Web runs single-threaded on GitHub Pages.** Pages cannot set `Cross-Origin-Embedder-Policy: require-corp`, which WASM threading requires. ORT Web detects the missing `crossOriginIsolated` and falls back automatically, but performance is the permanent floor. Do not "optimise" by shipping the `.jsep.wasm` WebGPU build — its WebGPU EP also needs COEP, and the WASM file is larger.
 - **`ort.env.wasm.wasmPaths` must be set before `InferenceSession.create`.** If you leave it default, ORT resolves wasm relative to the document base, which breaks when the site is served from a subpath (GitHub Pages does this). `loader.js` pins it to `./vendor/`.
-- **Vite's import-analysis plugin 500s on extensionless binary files** (UNISAL ONNX is named `model.onnx`, which works, but any shard-style layout would trip this). The fix is the custom middleware in `vite.config.js` — don't remove it. It also serves `/vendor/*` raw so SRI hashes on the ORT Web scripts survive dev.
+- **Vite's import-analysis plugin 500s on extensionless binary files** (the MSI-Net ONNX is named `model.onnx`, which works, but any shard-style layout would trip this). The fix is the custom middleware in `vite.config.js` — don't remove it. It also serves `/vendor/*` raw so SRI hashes on the ORT Web scripts survive dev.
 - **jsdom does not implement `HTMLCanvasElement.prototype.getContext`.** Tests that rely on this must mock it or be routed via Playwright.
-- **The UNISAL ONNX artefact is committed to the repo** under `docs/models/unisal/`. Unlike V1's MSI-Net weights, there is no gitignore exception needed at dev-time and no fetch-at-deploy step — the Pages upload picks up the artefact from the repo. Do not re-introduce a fetch script for this path; that was a V1-era pattern.
+- **The V3 MSI-Net ONNX model is NOT committed to the repo.** It lives at `docs/models/v3/model.onnx` (gitignored, 57 MB). For local dev, run `scripts/fetch-v3-model.sh`. The deploy workflow fetches it before the Pages upload. Do not commit it — it would bloat the clone.
 - **Chromium console-error captures miss URLs.** Playwright's `ConsoleMessage.text()` does not include the URL for network-layer errors (e.g. 404s); the URL is in `msg.location().url`. Tests that whitelist expected errors must inspect both fields.
 - **Before pushing a change that touches env-dependent code paths, run the test that most resembles CI's environment.** "Works on my machine" failures on this project have mostly come from local state (cached browser state, ambient `pnpm dev` server on :5173) that the CI does not have. When in doubt, teardown and re-run.
 - **GitHub Pages has to be enabled before the first `deploy.yml` run.** Until it's enabled, the workflow fails with `Failed to create deployment (status: 404)` pointing at Settings → Pages. Enable via `gh api -X POST /repos/{owner}/{repo}/pages -f "build_type=workflow"` (one-time, needs the `repo` scope) or through the UI at Settings → Pages → Source → "GitHub Actions".
 - **Do not `gh run rerun --failed` on a `deploy.yml` job.** The re-run leaves the previous run's `github-pages` artefact in place, and `actions/deploy-pages@v4` finds two artefacts of that name in the run and errors with "Multiple artifacts named 'github-pages' were unexpectedly found". Instead, trigger a fresh workflow with `gh workflow run deploy.yml --ref main` — a new run number, a single artefact, clean deploy.
+
+### Historical V1/V2 pitfalls (kept for context)
+
+- **heatmap.js sized its canvas from `container.offsetWidth` — zero on a detached element.** This was the V1 rendering bug caught in production. A vitest mock of `h337.create` will not catch it because the mock never observes real `offsetWidth` behaviour. The lesson: mocks should stay close to the library boundary and ideally be exercised against the real library once. heatmap.js was removed in V3; this is only relevant if you are reading a pre-V3 commit. See `LEARNINGS.md` entries dated 2026-04-06 and 2026-04-16.
+- **UNISAL's raw output was log-probabilities, not 0–1 saliency.** The V2 postprocess applied `exp(y - max(y))` before upsample/blur/normalise. The V3 model (MSI-Net fine-tuned on UEyes) outputs [0,1] directly; the `logProbsToProbabilities` step was removed. If a future model swap brings back log-prob output, that conversion will need to be reinstated in `pipeline/postprocess.js`.
 
 ---
 

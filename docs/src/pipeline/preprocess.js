@@ -18,10 +18,13 @@
 //      produces the flat float array in NCHW order; the
 //      `model/inference.js` layer wraps it as an ort.Tensor.
 //
-// This file is deliberately framework-agnostic: `toInputTensorData`
-// takes a plain `ImageData` and returns a `Float32Array`. No
-// `onnxruntime-web` dependency, so the bilinear resize is
-// unit-testable under jsdom without a GPU or browser WASM context.
+// This file is pure JS — no DOM, no browser APIs, no library imports.
+// `toInputTensorData` takes a plain `ImageData` and returns a
+// `Float32Array`, so it is unit-testable under jsdom without a GPU or
+// browser WASM context. DOM-touching entry points live in their correct
+// layers: `imageSourceToInputData` in `model/image-source.js` (model
+// input adapter) and `downsampleIfLarge` in `ui/image-resize.js` (ui
+// helper called from main.js/demo.js).
 
 /**
  * V3 MSI-Net input size as `[H, W]`. 240 high, 320 wide — the
@@ -168,109 +171,4 @@ function lerp2(v00, v01, v10, v11, wx, wy) {
   const top = v00 + (v01 - v00) * wx;
   const bot = v10 + (v11 - v10) * wx;
   return top + (bot - top) * wy;
-}
-
-/**
- * Higher-level convenience: take any `CanvasImageSource` (e.g. `<img>`,
- * `<canvas>`, `ImageBitmap`) and produce the preprocessed input data
- * plus the source's natural dimensions (which the post-processing
- * stage needs in order to upsample the saliency map back to the
- * original screenshot's resolution).
- *
- * This *does* depend on a canvas being available, so it is kept
- * separate from `toInputTensorData` to keep that function pure and
- * trivially testable without a DOM.
- *
- * @param {CanvasImageSource & { naturalWidth?: number, width?: number, naturalHeight?: number, height?: number }} source
- * @param {[number, number]} inputDims
- * @returns {{ data: Float32Array, sourceWidth: number, sourceHeight: number }}
- */
-export function imageSourceToInputData(source, inputDims) {
-  const sourceWidth =
-    /** @type {any} */ (source).naturalWidth ||
-    /** @type {any} */ (source).width ||
-    0;
-  const sourceHeight =
-    /** @type {any} */ (source).naturalHeight ||
-    /** @type {any} */ (source).height ||
-    0;
-
-  if (!sourceWidth || !sourceHeight) {
-    throw new Error('imageSourceToInputData: source has zero width or height');
-  }
-
-  // Draw the source to an offscreen canvas at its *natural* size so we
-  // can read pixels. Do NOT let the canvas do the input-dim resize —
-  // the deterministic JS bilinear path in `toInputTensorData` owns that.
-  const canvas = document.createElement('canvas');
-  canvas.width = sourceWidth;
-  canvas.height = sourceHeight;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    throw new Error('imageSourceToInputData: could not get 2D context');
-  }
-  ctx.drawImage(source, 0, 0, sourceWidth, sourceHeight);
-  const imageData = ctx.getImageData(0, 0, sourceWidth, sourceHeight);
-
-  const data = toInputTensorData(imageData, inputDims);
-  return { data, sourceWidth, sourceHeight };
-}
-
-/**
- * Downsample a source to at most `maxWidth` pixels wide, preserving
- * aspect ratio. Always returns an `HTMLCanvasElement` — even if no
- * downsampling is needed — so callers have a uniform type to pass on
- * to the preprocessing pipeline.
- *
- * Why this exists: the PRD §Memory and System Requirements rules that
- * images wider than 2560px get downsampled to 2560px *before*
- * preprocessing, regardless of which model version is in use, to
- * avoid OOM on large retina screenshots. Canvas `imageSmoothingEnabled
- * = true` gives us a "good enough" bilinear resample; quality at this
- * stage is not load-bearing because the input tensor is a tiny 288
- * rows tall anyway.
- *
- * @param {CanvasImageSource & { naturalWidth?: number, width?: number, naturalHeight?: number, height?: number }} source
- * @param {number} [maxWidth=2560]
- * @returns {HTMLCanvasElement}
- */
-export function downsampleIfLarge(source, maxWidth = 2560) {
-  const srcW =
-    /** @type {any} */ (source).naturalWidth ||
-    /** @type {any} */ (source).width ||
-    0;
-  const srcH =
-    /** @type {any} */ (source).naturalHeight ||
-    /** @type {any} */ (source).height ||
-    0;
-
-  if (!srcW || !srcH) {
-    throw new Error('downsampleIfLarge: source has zero width or height');
-  }
-
-  if (srcW <= maxWidth) {
-    const canvas = document.createElement('canvas');
-    canvas.width = srcW;
-    canvas.height = srcH;
-    const ctx = canvas.getContext('2d');
-    if (ctx) ctx.drawImage(source, 0, 0, srcW, srcH);
-    return canvas;
-  }
-
-  const scale = maxWidth / srcW;
-  const dstW = maxWidth;
-  const dstH = Math.round(srcH * scale);
-
-  const canvas = document.createElement('canvas');
-  canvas.width = dstW;
-  canvas.height = dstH;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.imageSmoothingEnabled = true;
-    if ('imageSmoothingQuality' in ctx) {
-      /** @type {any} */ (ctx).imageSmoothingQuality = 'high';
-    }
-    ctx.drawImage(source, 0, 0, dstW, dstH);
-  }
-  return canvas;
 }
