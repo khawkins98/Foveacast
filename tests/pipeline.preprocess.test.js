@@ -101,10 +101,16 @@ describe('toInputTensorData', () => {
     const [h, w] = dims;
     const out = toInputTensorData(img, dims);
     const plane = h * w;
-    // Inner pixels have all four bilinear neighbours inside the
-    // constant fill, so they should be exactly the normalised values.
-    for (let y = 1; y < h - 1; y++) {
-      for (let x = 1; x < w - 1; x++) {
+    // With aspect-ratio-preserving resize, a 32×32 source into a 24×32
+    // target scales to 24×24 (preserving aspect) and pads left/right
+    // with 126. Check the centre of the non-padded region.
+    const scale = Math.min(h / 32, w / 32);
+    const scaledH = Math.round(32 * scale);
+    const scaledW = Math.round(32 * scale);
+    const padTop = Math.floor((h - scaledH) / 2);
+    const padLeft = Math.floor((w - scaledW) / 2);
+    for (let y = padTop + 1; y < padTop + scaledH - 1; y++) {
+      for (let x = padLeft + 1; x < padLeft + scaledW - 1; x++) {
         const off = y * w + x;
         expect(out[off]).toBeCloseTo(50, 5);
         expect(out[plane + off]).toBeCloseTo(60, 5);

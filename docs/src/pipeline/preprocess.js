@@ -70,25 +70,53 @@ export function toInputTensorData(imageData, inputDims) {
   const plane = dstH * dstW;
   const out = new Float32Array(plane * 3);
 
-  // Degenerate 1×1 source — fill every output pixel with the same value.
+  // why: V3 MSI-Net was fine-tuned with aspect-ratio-preserving resize +
+  // constant-126 padding (Kroner's convention, matching UEyesDataset in
+  // foveacast-training). Stretching the image to fill 240×320 without
+  // padding distorts the input away from the training distribution and
+  // produces noticeably worse saliency predictions. The padding value
+  // 126 is mid-grey — the same value Kroner used and UEyesDataset uses.
+  const PAD_VALUE = 126;
+
+  // Compute the scaled dimensions that fit within the target while
+  // preserving aspect ratio.
+  const scale = Math.min(dstH / srcH, dstW / srcW);
+  const scaledH = Math.max(1, Math.round(srcH * scale));
+  const scaledW = Math.max(1, Math.round(srcW * scale));
+
+  // Padding offsets (centred). Extra pixel goes bottom/right.
+  const padTop = Math.floor((dstH - scaledH) / 2);
+  const padLeft = Math.floor((dstW - scaledW) / 2);
+
+  // Fill entire output with the pad value first (all three planes).
+  for (let i = 0; i < plane * 3; i++) {
+    out[i] = PAD_VALUE;
+  }
+
+  // Degenerate 1×1 source — fill the scaled region with the single pixel.
   if (srcW === 1 && srcH === 1) {
     const r = src[0];
     const g = src[1];
     const b = src[2];
-    for (let i = 0; i < plane; i++) {
-      out[i] = r;
-      out[plane + i] = g;
-      out[2 * plane + i] = b;
+    for (let y = 0; y < scaledH; y++) {
+      for (let x = 0; x < scaledW; x++) {
+        const off = (padTop + y) * dstW + (padLeft + x);
+        out[off] = r;
+        out[plane + off] = g;
+        out[2 * plane + off] = b;
+      }
     }
     return out;
   }
 
-  // Pre-compute scale factors. "align corners = false" maps destination
-  // pixel centres to source pixel centres via (dst + 0.5) * (src/dst) - 0.5.
-  const scaleY = srcH / dstH;
-  const scaleX = srcW / dstW;
+  // Pre-compute scale factors for the bilinear resize into the scaled
+  // (non-padded) region. "align corners = false": (dst + 0.5) * (src/dst) - 0.5.
+  const scaleY = srcH / scaledH;
+  const scaleX = srcW / scaledW;
 
-  for (let y = 0; y < dstH; y++) {
+  // Bilinear-resize the source into the scaled region (not the full
+  // dstH × dstW frame — the padding stays at PAD_VALUE).
+  for (let y = 0; y < scaledH; y++) {
     const srcY = (y + 0.5) * scaleY - 0.5;
     const y0 = Math.floor(srcY);
     const y1 = y0 + 1;
@@ -96,7 +124,7 @@ export function toInputTensorData(imageData, inputDims) {
     const y0c = y0 < 0 ? 0 : y0 >= srcH ? srcH - 1 : y0;
     const y1c = y1 < 0 ? 0 : y1 >= srcH ? srcH - 1 : y1;
 
-    for (let x = 0; x < dstW; x++) {
+    for (let x = 0; x < scaledW; x++) {
       const srcX = (x + 0.5) * scaleX - 0.5;
       const x0 = Math.floor(srcX);
       const x1 = x0 + 1;
@@ -114,9 +142,8 @@ export function toInputTensorData(imageData, inputDims) {
       const g = lerp2(src[i00 + 1], src[i01 + 1], src[i10 + 1], src[i11 + 1], wx, wy);
       const b = lerp2(src[i00 + 2], src[i01 + 2], src[i10 + 2], src[i11 + 2], wx, wy);
 
-      const off = y * dstW + x;
-      // Raw 0–255 float values — no normalisation. The ONNX graph
-      // handles mean subtraction internally.
+      // Write into the padded position within the full dstH × dstW frame.
+      const off = (padTop + y) * dstW + (padLeft + x);
       out[off] = clamp255(r);
       out[plane + off] = clamp255(g);
       out[2 * plane + off] = clamp255(b);

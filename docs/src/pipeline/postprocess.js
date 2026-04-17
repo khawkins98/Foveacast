@@ -220,9 +220,11 @@ export function logProbsToProbabilities(data) {
  * The pipeline is: upsample to the user's screenshot resolution →
  * Gaussian blur for smooth contours → normalise to [0, 1].
  *
- * Default `sigmaPx = 28` sits in the middle of the PRD's specified
- * 20–40 px range. 28 gives a visibly smooth contour without washing
- * out the location of the attention peak.
+ * V3's model output is already smooth (VGG16 decoder with bilinear
+ * upsamples + min-max normalisation inside the ONNX graph). A light
+ * sigma suffices to remove any resize staircasing without washing
+ * out the attention peaks. V2's UNISAL needed sigma=28 because its
+ * log-probability → exp() output was very peaky; V3 does not.
  *
  * @param {Float32Array} raw - Model output, length `srcH * srcW`, values in [0, 1].
  * @param {[number, number]} srcDims - Model output dims `[srcH, srcW]`.
@@ -230,7 +232,7 @@ export function logProbsToProbabilities(data) {
  * @param {number} [sigmaPx=28] - Gaussian sigma in target-space pixels.
  * @returns {Float32Array} Length `targetH * targetW`, values in `[0, 1]`.
  */
-export function postprocess(raw, srcDims, targetDims, sigmaPx = 28) {
+export function postprocess(raw, srcDims, targetDims, sigmaPx = 5) {
   // V3: raw is already [0, 1], no logProbsToProbabilities needed.
   const upsampled = upsampleBilinear(raw, srcDims, targetDims);
   const blurred = gaussianBlur(upsampled, targetDims, sigmaPx);
