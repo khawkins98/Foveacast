@@ -126,6 +126,13 @@ export function toInputTensorData(imageData, inputDims) {
   return out;
 }
 
+/** Clamp a float to the 0–255 pixel range. @private */
+function clamp255(v) {
+  if (v < 0) return 0;
+  if (v > 255) return 255;
+  return v;
+}
+
 /**
  * Two-axis linear interpolation: blends 4 neighbours by weights `wx`, `wy`.
  * @private

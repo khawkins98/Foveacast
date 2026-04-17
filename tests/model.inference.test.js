@@ -41,7 +41,7 @@ function makeOrtStub(outputFlat) {
     this.dims = shape;
   });
   const run = vi.fn(async () => ({
-    saliency: { data: outputFlat, dims: [1, mockSourceHeight, mockSourceWidth] },
+    output: { data: outputFlat, dims: [1, mockSourceHeight, mockSourceWidth] },
   }));
   const session = { run };
   const ort = {
@@ -94,8 +94,8 @@ describe('runInference', () => {
     expect(data.length).toBe(3 * h * w);
   });
 
-  it('runs session.run exactly once with an `image` input key', async () => {
-    const [h, w] = [288, 384];
+  it('runs session.run exactly once with an `input` tensor key', async () => {
+    const [h, w] = [240, 320];
     const stub = makeOrtStub(new Float32Array(h * w));
     /** @type {any} */ (globalThis).ort = stub.ort;
 
@@ -106,8 +106,8 @@ describe('runInference', () => {
 
     expect(stub.run).toHaveBeenCalledTimes(1);
     const feeds = stub.run.mock.calls[0][0];
-    expect(feeds).toHaveProperty('image');
-    expect(feeds.image).toBeInstanceOf(stub.ort.Tensor);
+    expect(feeds).toHaveProperty('input');
+    expect(feeds.input).toBeInstanceOf(stub.ort.Tensor);
   });
 
   it('returns a Float32Array copy detached from ORT internal storage', async () => {
@@ -146,7 +146,7 @@ describe('runInference', () => {
     expect(sourceDims).toEqual([300, 400]);
   });
 
-  it('falls back to the first output key when the graph does not name "saliency"', async () => {
+  it('falls back to the first output key when the graph does not name "output"', async () => {
     const buf = new Float32Array(4);
     const ort = {
       Tensor: function (dtype, data, dims) {

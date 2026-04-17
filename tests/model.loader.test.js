@@ -6,8 +6,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   loadModel,
-  UNISAL_MODEL_URL,
-  UNISAL_INPUT_DIMS,
+  MODEL_URL,
+  MODEL_INPUT_DIMS,
 } from '../docs/src/model/loader.js';
 
 /**
@@ -52,13 +52,13 @@ function makeStreamingFetch(bytes, { contentLength = bytes.byteLength, ok = true
   });
 }
 
-describe('UNISAL_MODEL_URL + UNISAL_INPUT_DIMS', () => {
+describe('MODEL_URL + MODEL_INPUT_DIMS', () => {
   it('points the app at the committed same-origin artefact', () => {
-    expect(UNISAL_MODEL_URL).toBe('./models/unisal/model.onnx');
+    expect(MODEL_URL).toBe('./models/v3/model.onnx');
   });
 
-  it('matches the SALICON export shape [288, 384]', () => {
-    expect(Array.from(UNISAL_INPUT_DIMS)).toEqual([288, 384]);
+  it('matches the SALICON export shape [240, 320]', () => {
+    expect(Array.from(MODEL_INPUT_DIMS)).toEqual([240, 320]);
   });
 });
 
@@ -114,7 +114,7 @@ describe('loadModel', () => {
 
     const result = await loadModel();
 
-    expect(globalThis.fetch).toHaveBeenCalledWith(UNISAL_MODEL_URL);
+    expect(globalThis.fetch).toHaveBeenCalledWith(MODEL_URL);
     expect(create).toHaveBeenCalledTimes(1);
     const [passedBytes, opts] = create.mock.calls[0];
     // Bytes are handed off as ArrayBuffer (or Uint8Array) — accept both
@@ -122,7 +122,7 @@ describe('loadModel', () => {
     // too-specific assertion.
     expect(passedBytes).toBeTruthy();
     expect(opts.executionProviders).toContain('wasm');
-    expect(result).toEqual({ session: { fake: 'session' }, inputDims: UNISAL_INPUT_DIMS });
+    expect(result).toEqual({ session: { fake: 'session' }, inputDims: MODEL_INPUT_DIMS });
   });
 
   it('forces single-threaded WASM (no COEP on Pages)', async () => {
@@ -197,7 +197,7 @@ describe('loadModel — structured error classification', () => {
       throw new Error('expected loadModel to reject');
     } catch (err) {
       expect(/** @type {any} */ (err).code).toBe('MODEL_DOWNLOAD_FAILED');
-      expect(/** @type {any} */ (err).url).toBe(UNISAL_MODEL_URL);
+      expect(/** @type {any} */ (err).url).toBe(MODEL_URL);
     }
   });
 
