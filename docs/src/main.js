@@ -496,26 +496,6 @@ function boot() {
     );
   }
 
-  /**
-   * Helper that builds a lead-text + anchor + trailing-text run in a
-   * single span, which keeps the footer prose readable in the DOM
-   * without resorting to innerHTML.
-   * @param {string} lead
-   * @param {string} linkText
-   * @param {string} href
-   * @param {string} trail
-   */
-  function textAndLink(lead, linkText, href, trail) {
-    const span = document.createElement('span');
-    span.appendChild(document.createTextNode(lead));
-    const a = document.createElement('a');
-    a.href = href;
-    a.textContent = linkText;
-    a.rel = 'noopener noreferrer';
-    span.appendChild(a);
-    span.appendChild(document.createTextNode(trail));
-    return span;
-  }
 }
 
 /**

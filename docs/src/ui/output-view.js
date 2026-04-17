@@ -71,21 +71,21 @@ export function renderOutput(viewModel, { outputSection, outputCanvasWrap, outpu
   outputCaption.hidden = false;
 
   // Diagnostic panel — collapsible details below the caption showing
-  // what the pipeline actually did. Helps debug "is it using the right
-  // model / right image / right preprocessing" ambiguity.
-  let diagEl = document.getElementById('fc-diagnostics');
-  if (!diagEl) {
-    diagEl = document.createElement('details');
-    diagEl.id = 'fc-diagnostics';
-    diagEl.style.cssText = 'margin:0.5rem 0; font-size:0.75rem; color:#666; max-width:600px;';
-    const summary = document.createElement('summary');
-    summary.textContent = 'Diagnostics';
-    summary.style.cursor = 'pointer';
-    diagEl.appendChild(summary);
-    outputCaption.parentNode.insertBefore(diagEl, outputCaption.nextSibling);
-  }
+  // what the pipeline actually did. Only rendered when diagnostics are
+  // available; no empty container is left in the DOM otherwise.
   if (diagnostics) {
     const d = diagnostics;
+    let diagEl = document.getElementById('fc-diagnostics');
+    if (!diagEl) {
+      diagEl = document.createElement('details');
+      diagEl.id = 'fc-diagnostics';
+      diagEl.style.cssText = 'margin:0.5rem 0; font-size:0.75rem; color:#666; max-width:600px;';
+      const summary = document.createElement('summary');
+      summary.textContent = 'Diagnostics';
+      summary.style.cursor = 'pointer';
+      diagEl.appendChild(summary);
+      outputCaption.parentNode.insertBefore(diagEl, outputCaption.nextSibling);
+    }
     const lines = [
       `Source image: ${d.sourceWidth} × ${d.sourceHeight} px`,
       `Model input: ${d.modelInputDims[0]} × ${d.modelInputDims[1]} (NCHW, RGB, 0–255)`,
