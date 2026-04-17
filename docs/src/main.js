@@ -65,6 +65,7 @@ const FIRST_RUN_THRESHOLD_MS = 800;
  *     saliencyMean: string,
  *     peakLocation: string,
  *   } | null,
+ *   lastCompositeCanvas: HTMLCanvasElement | null,
  * }}
  */
 const state = {
@@ -78,6 +79,9 @@ const state = {
   /** File dropped before the model finished loading (demo-mode race). */
   queuedFile: /** @type {File | null} */ (null),
   lastDiagnostics: null,
+  /** The most recently rendered composite canvas — used by the download handler.
+   *  Null when the current view is 'original' (no composite is produced). */
+  lastCompositeCanvas: null,
 };
 
 /**
@@ -167,7 +171,10 @@ function boot() {
       renderOutput();
     },
     onDownload: () => {
-      const compositeCanvas = outputCanvasWrap.querySelector('canvas');
+      // why: state.lastCompositeCanvas is always the most recent composite,
+      // even in side-by-side view where querySelector('canvas') would return
+      // the plain image canvas (appended first) rather than the heatmap composite.
+      const compositeCanvas = state.lastCompositeCanvas;
       if (!compositeCanvas) return;
       downloadCompositeAsPng(/** @type {HTMLCanvasElement} */ (compositeCanvas)).catch((err) => {
         console.error('Foveacast: download failed.', err);
@@ -519,6 +526,7 @@ function boot() {
     }
 
     if (state.view === 'original') {
+      state.lastCompositeCanvas = null;
       const plain = drawPlainImageCanvas(state.lastImage);
       plain.setAttribute(
         'aria-label',
@@ -544,6 +552,7 @@ function boot() {
         'aria-label',
         describeHeatmap(state.lastFixation, state.lastOrigDims),
       );
+      state.lastCompositeCanvas = composite;
       outputCanvasWrap.appendChild(plain);
       outputCanvasWrap.appendChild(composite);
       return;
@@ -563,6 +572,7 @@ function boot() {
       'aria-label',
       describeHeatmap(state.lastFixation, state.lastOrigDims),
     );
+    state.lastCompositeCanvas = composite;
     outputCanvasWrap.appendChild(composite);
   }
 
