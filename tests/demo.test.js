@@ -5,11 +5,9 @@
 // or the real-model path. A bug here is a user-visible bug.
 //
 // `makeSyntheticSaliency` generates the map the demo pipeline
-// renders. The shape / value-range contract matters: under V2 the
-// postprocess pipeline applies `exp(y - max(y))` first, so the demo
-// has to produce values in a log-probability-like range rather than
-// the 0–255 MSI-Net outputs were in. Row-major order is what the
-// rest of the pipeline assumes.
+// renders. V3's postprocess expects [0, 1] values (no log-prob
+// conversion). Row-major order is what the rest of the pipeline
+// assumes.
 //
 // `runDemoMode` is covered by Playwright (end-to-end) — it needs
 // the DOM, an image fetch, and the real render stack, and mocking
@@ -100,21 +98,17 @@ describe('makeSyntheticSaliency', () => {
     expect(map.length).toBe(24 * 32);
   });
 
-  it('produces values in the log-probability range UNISAL emits', () => {
-    // UNISAL output in practice sits between roughly -25 and -7. The
-    // demo should land in the same band so the postprocess `exp` step
-    // behaves the same on demo output as on real model output.
+  it('produces values in the [0, 1] range V3 MSI-Net outputs', () => {
     const map = makeSyntheticSaliency([60, 80]);
     for (let i = 0; i < map.length; i++) {
-      expect(map[i]).toBeGreaterThanOrEqual(-30);
-      expect(map[i]).toBeLessThanOrEqual(0);
+      expect(map[i]).toBeGreaterThanOrEqual(0);
+      expect(map[i]).toBeLessThanOrEqual(1);
     }
   });
 
   it('has a peak meaningfully above its background', () => {
     // Every-pixel-identical would render a flat heatmap. The
-    // synthetic blobs should create at least a few nats of spread
-    // between the background and the peak.
+    // synthetic blobs should create visible contrast.
     const map = makeSyntheticSaliency([120, 160]);
     let min = map[0];
     let max = map[0];
@@ -122,7 +116,7 @@ describe('makeSyntheticSaliency', () => {
       if (map[i] < min) min = map[i];
       if (map[i] > max) max = map[i];
     }
-    expect(max - min).toBeGreaterThan(5);
+    expect(max - min).toBeGreaterThan(0.3);
   });
 
   it('has a peak somewhere near the top-left blob (rule-of-thirds position)', () => {

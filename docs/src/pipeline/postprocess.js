@@ -1,25 +1,16 @@
 // Saliency-map post-processing.
 //
-// The raw output of UNISAL is a `[inputH × inputW]` Float32 tensor of
-// **log-probabilities**: one log-softmax value per input-resolution
-// pixel. Before this map is useful for an overlay, we apply four steps:
+// V3 MSI-Net outputs a [240 × 320] Float32 tensor already normalised to
+// [0, 1] inside the ONNX graph. Three steps make it overlay-ready:
 //
-//   1. Convert log-probabilities to probabilities via `exp`. The raw
-//      output range of about `[-23, -8]` is consistent with log-softmax
-//      over the 288×384 grid; applying `exp(y - y.max())` recovers the
-//      proper probability-like saliency map without numerical overflow.
-//      (V1's MSI-Net emitted 0–255 intensity directly and did not need
-//      this step — that is the only pipeline-math difference between
-//      V1 and V2.)
-//   2. Bilinearly upsample to the original screenshot's dimensions so
+//   1. Bilinearly upsample to the original screenshot's dimensions so
 //      each saliency value aligns with a real-world pixel on the user's
 //      canvas.
-//   3. Apply a Gaussian blur with σ ≈ 20–40 px at 1× resolution, which
-//      smooths out the staircase edges introduced by the upsample and
-//      produces visually-pleasant contour lines after the heatmap.js
-//      colour ramp is applied.
-//   4. Rescale to [0, 1] so the heatmap library's default colour ramp
-//      has consistent dynamic range regardless of the absolute values.
+//   2. Apply a light Gaussian blur (σ=5 at 1× resolution) to smooth
+//      out staircase edges from the upsample without washing out the
+//      attention peaks.
+//   3. Rescale to [0, 1] so the inferno colour ramp has consistent
+//      dynamic range regardless of the absolute values.
 //
 // All functions here are pure — they take and return typed arrays,
 // never touch a canvas — so they unit-test cleanly under jsdom or node.
@@ -213,23 +204,28 @@ export function logProbsToProbabilities(data) {
 }
 
 /**
- * Full post-processing pipeline: exp → upsample → blur → normalise.
+ * Full post-processing pipeline: upsample → blur → normalise.
  *
- * Default `sigmaPx = 28` sits in the middle of the PRD's specified
- * 20–40 px range. 28 gives a visibly smooth contour without washing
- * out the location of the attention peak; in practice the right
- * number depends on screenshot resolution, and a future version can
- * expose this as a slider or scale it with image size.
+ * V3 MSI-Net outputs saliency already in [0, 1] (min-max normalised
+ * inside the ONNX graph), so there is no log-probability exp step.
+ * The pipeline is: upsample to the user's screenshot resolution →
+ * Gaussian blur for smooth contours → normalise to [0, 1].
  *
- * @param {Float32Array} raw - UNISAL log-probability output, length `srcH * srcW`.
+ * V3's model output is already smooth (VGG16 decoder with bilinear
+ * upsamples + min-max normalisation inside the ONNX graph). A light
+ * sigma suffices to remove any resize staircasing without washing
+ * out the attention peaks. V2's UNISAL needed sigma=28 because its
+ * log-probability → exp() output was very peaky; V3 does not.
+ *
+ * @param {Float32Array} raw - Model output, length `srcH * srcW`, values in [0, 1].
  * @param {[number, number]} srcDims - Model output dims `[srcH, srcW]`.
  * @param {[number, number]} targetDims - Final dims `[h, w]` to upsample to.
  * @param {number} [sigmaPx=28] - Gaussian sigma in target-space pixels.
  * @returns {Float32Array} Length `targetH * targetW`, values in `[0, 1]`.
  */
-export function postprocess(raw, srcDims, targetDims, sigmaPx = 28) {
-  const probs = logProbsToProbabilities(raw);
-  const upsampled = upsampleBilinear(probs, srcDims, targetDims);
+export function postprocess(raw, srcDims, targetDims, sigmaPx = 5) {
+  // V3: raw is already [0, 1], no logProbsToProbabilities needed.
+  const upsampled = upsampleBilinear(raw, srcDims, targetDims);
   const blurred = gaussianBlur(upsampled, targetDims, sigmaPx);
   return normaliseToUnit(blurred);
 }

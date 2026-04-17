@@ -4,6 +4,33 @@ All notable changes to Foveacast are recorded here. Format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-04-17
+
+V3: the saliency model is now fine-tuned on real UI eye-tracking data. The stock SALICON-pretrained models from V1 and V2 were trained on natural photographs and missed UI-specific attention targets (buttons, CTAs, navigation). V3 fine-tunes [MSI-Net](https://doi.org/10.1016/j.neunet.2020.05.004) (Kroner et al. 2020) on the [UEyes dataset](https://doi.org/10.1145/3544548.3581096) (Jiang et al. 2023) — 1,980 UI screenshots with real eye-tracking from 62 participants. On a held-out test split: CC +43%, KLD −44%, NSS +45% vs the stock model.
+
+The heatmap renderer is also replaced. heatmap.js added visual distortion (radius spreading, stride sampling, internal blur) that made the overlay look more diffuse than the model's actual predictions. The new renderer maps saliency values directly to pixels via the inferno colormap — what you see now matches what the model actually predicts.
+
+### Added
+
+- **V3 saliency model** — MSI-Net fine-tuned on UEyes, exported as a 57 MB FP16 ONNX artefact from [foveacast-training v0.1.0](https://github.com/khawkins98/foveacast-training/releases/tag/v0.1.0). Input: 240×320 RGB. Output: [0, 1] saliency map with mean subtraction baked into the graph.
+- **Direct inferno colormap renderer** (`docs/src/render/saliency-canvas.js`) — pixel-accurate, no external library, perceptually uniform and colour-blind safe. Replaces heatmap.js for the saliency overlay.
+- **Deploy-time model fetch** (`scripts/fetch-v3-model.sh`) — the 57 MB artefact is downloaded from the foveacast-training GitHub Release at deploy time rather than committed to the repo. SHA256-verified after download. For local dev: `bash scripts/fetch-v3-model.sh`.
+- **Diagnostics panel** — collapsible section below the heatmap output showing source dimensions, model identity, saliency stats, peak location, and preprocessing/postprocess details. Click "Diagnostics" to expand.
+- **Attribution footer** credits [MSI-Net](https://doi.org/10.1016/j.neunet.2020.05.004) (Kroner et al. 2020, MIT), [UEyes](https://doi.org/10.1145/3544548.3581096) (Jiang et al. 2023, CC BY 4.0), and [foveacast-training](https://github.com/khawkins98/foveacast-training).
+
+### Changed
+
+- **Inference model: UNISAL (3.7M params, 288×384) → MSI-Net fine-tuned on UEyes (25M params, 240×320).** Larger model but substantially better on UI content. FP16 quantisation keeps the download at 57 MB (vs UNISAL's 12.5 MB).
+- **Preprocessing: ImageNet normalisation removed.** V3's ONNX graph handles mean subtraction internally — the preprocessing pipeline now passes raw 0–255 RGB pixels. Aspect-ratio-preserving resize with constant-126 padding replaces the previous stretch-to-fill.
+- **Postprocessing: log-probability `exp()` step removed.** V3 outputs direct [0, 1] saliency (min-max normalised inside the graph). Gaussian blur reduced from σ=28 to σ=5 — V3's output is already smooth from the VGG16 decoder's bilinear upsamples.
+- **Model delivery: committed artefact → deploy-time fetch.** The `.onnx` file is no longer in the git repo. `deploy.yml` runs `scripts/fetch-v3-model.sh` before the Pages upload step. Eliminates repo bloat for a 57 MB binary.
+- **Heatmap rendering: heatmap.js → direct canvas colormap.** The old renderer added radius spreading (40px per point), stride sampling, and internal blur that distorted the spatial precision of the model's predictions. The new renderer maps each pixel directly to the inferno colormap — no spreading, no sampling, no external dependency.
+
+### Removed
+
+- **heatmap.js dependency** — no longer imported by main.js or demo.js. The library file is retained in the repo for reference but unused at runtime.
+- **UNISAL model** at `docs/models/unisal/model.onnx` — replaced by the V3 model fetched at deploy time to `docs/models/v3/model.onnx`.
+
 ## [0.2.0] — 2026-04-16
 
 V2 per the PRD: the inference model and runtime both change. MSI-Net through TensorFlow.js is replaced by UNISAL through ONNX Runtime Web. The user-visible feature set is unchanged — drop a screenshot, get back a heatmap — but the bytes under the hood are different, and the preset picker is gone because UNISAL is a single fixed-shape model.

@@ -1,11 +1,11 @@
-// ONNX Runtime Web loader for the UNISAL saliency model.
+// ONNX Runtime Web loader for the V3 MSI-Net saliency model.
 //
-// V2 swapped MSI-Net through TensorFlow.js for UNISAL through
-// onnxruntime-web. The export pipeline that produced the `.onnx`
-// artefact is documented in scripts/unisal-onnx-export.py and
-// docs/spikes/unisal-onnx-research.md. The artefact itself lives at
-// docs/models/unisal/model.onnx — committed directly to the repo so
-// there is no CDN dependency for the user at runtime.
+// V3 uses MSI-Net fine-tuned on UEyes, exported from foveacast-training
+// (https://github.com/khawkins98/foveacast-training). The .onnx artefact
+// is fetched from a GitHub Release at deploy time (not committed to the
+// repo — at 57 MB it would bloat the clone). The deploy workflow in
+// .github/workflows/deploy.yml downloads it to docs/models/v3/model.onnx
+// before the Pages upload step.
 //
 // `onnxruntime-web` is loaded from a vendored <script> tag in
 // index.html and attaches itself to `globalThis.ort`. Keeping it off
@@ -13,20 +13,20 @@
 // opening `docs/index.html` directly off the filesystem works with
 // no bundler in sight.
 
-import { UNISAL_INPUT_DIMS } from '../pipeline/preprocess.js';
+import { MODEL_INPUT_DIMS } from '../pipeline/preprocess.js';
 
 // Re-export so callers who reach for loader.js don't have to know the
 // pipeline is the source of truth. The constant itself lives with
 // preprocess because preprocess produces the tensor shape.
-export { UNISAL_INPUT_DIMS };
+export { MODEL_INPUT_DIMS };
 
 /**
- * Same-origin path to the vendored UNISAL ONNX artefact. Committed at
- * docs/models/unisal/model.onnx (~12.5 MB). The app serves the file
- * itself — there is no CDN fallback and no fetch-at-deploy step, so
- * the buildless "unzip and open index.html" story keeps working.
+ * Same-origin path to the V3 ONNX artefact. Downloaded at deploy time
+ * from the foveacast-training GitHub Release (not committed to the repo).
+ * For local dev, run the fetch script first:
+ *   scripts/fetch-v3-model.sh
  */
-export const UNISAL_MODEL_URL = './models/unisal/model.onnx';
+export const MODEL_URL = './models/v3/model.onnx';
 
 /**
  * @typedef {Object} LoadProgress
@@ -34,7 +34,7 @@ export const UNISAL_MODEL_URL = './models/unisal/model.onnx';
  * @property {number|undefined} loaded - Bytes loaded if known.
  * @property {number|undefined} total - Total bytes if known.
  *
- * UNISAL is a single artefact, so progress is a real percentage of
+ * The model is a single artefact, so progress is a real percentage of
  * bytes fetched rather than the fraction-of-shards TF.js exposed for
  * MSI-Net. Both `loaded` and `total` are populated for a served
  * response; either may be undefined if the server omits Content-Length.
@@ -43,7 +43,7 @@ export const UNISAL_MODEL_URL = './models/unisal/model.onnx';
 /**
  * @typedef {Object} LoadedModel
  * @property {any} session - The `ort.InferenceSession` instance.
- * @property {[number, number]} inputDims - `[H, W]` for UNISAL's SALICON graph.
+ * @property {[number, number]} inputDims - `[H, W]` for the model graph.
  */
 
 /**
@@ -115,7 +115,7 @@ async function fetchModelBytes(url, onProgress) {
 }
 
 /**
- * Load the UNISAL ONNX graph into an onnxruntime-web InferenceSession.
+ * Load the V3 MSI-Net ONNX graph into an onnxruntime-web InferenceSession.
  *
  * Expects `ort` to be on `globalThis` (loaded via the vendored
  * `<script src="./vendor/ort.wasm.min.js">` in index.html). Throws a
@@ -163,9 +163,9 @@ export async function loadModel(onProgress) {
 
   let bytes;
   try {
-    bytes = await fetchModelBytes(UNISAL_MODEL_URL, onProgress);
+    bytes = await fetchModelBytes(MODEL_URL, onProgress);
   } catch (err) {
-    throw decorateLoadError(err, UNISAL_MODEL_URL);
+    throw decorateLoadError(err, MODEL_URL);
   }
 
   let session;
@@ -175,18 +175,18 @@ export async function loadModel(onProgress) {
       graphOptimizationLevel: 'all',
     });
   } catch (err) {
-    const decorated = decorateLoadError(err, UNISAL_MODEL_URL);
+    const decorated = decorateLoadError(err, MODEL_URL);
     // An InferenceSession.create failure is usually not a network
     // problem by the time we get here (we already have the bytes);
     // override the code accordingly.
     decorated.code = 'MODEL_LOAD_FAILED';
-    decorated.message = `Model load failed after download (${UNISAL_MODEL_URL}): ${String((err && /** @type {Error} */ (err).message) || err)}`;
+    decorated.message = `Model load failed after download (${MODEL_URL}): ${String((err && /** @type {Error} */ (err).message) || err)}`;
     throw decorated;
   }
 
   return {
     session,
-    inputDims: UNISAL_INPUT_DIMS,
+    inputDims: MODEL_INPUT_DIMS,
   };
 }
 

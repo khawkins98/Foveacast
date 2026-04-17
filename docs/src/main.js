@@ -5,11 +5,11 @@
 // drives the end-to-end inference → render → composite pipeline.
 //
 // Architecture note: the UI layer never imports `onnxruntime-web` or
-// `heatmap.js` directly. Both are loaded from vendored <script> tags
-// in `index.html` and reached through the `model/` and `render/`
-// modules. V2 proved the value of that boundary — swapping MSI-Net
-// through TensorFlow.js for UNISAL through ORT Web happened inside
-// `model/` and the surrounding layers never noticed.
+// runtime directly. ORT Web is loaded from a vendored <script> tag in
+// `index.html` and reached through the `model/` module. The `render/`
+// layer handles saliency visualisation via a direct inferno colormap
+// renderer. The boundary between model, pipeline, and render layers
+// is what let V3 swap the model without touching the UI code.
 
 import { mountMobileGuard } from './ui/mobile-guard.js';
 import { createStatus } from './ui/status.js';
@@ -20,10 +20,7 @@ import { runInference } from './model/inference.js';
 import { downsampleIfLarge } from './pipeline/preprocess.js';
 import { postprocess } from './pipeline/postprocess.js';
 import { firstFixationCentroid } from './pipeline/fixation.js';
-import {
-  renderHeatmapCanvas,
-  compositeImageAndHeatmap,
-} from './render/heatmap.js';
+import { renderSaliencyCanvas, compositeImageAndHeatmap } from './render/saliency-canvas.js';
 import { downloadCompositeAsPng } from './render/download.js';
 import { isDemoModeRequested, runDemoMode } from './demo.js';
 import { installPageDrop } from './ui/page-drop.js';
@@ -46,8 +43,8 @@ const FIRST_RUN_THRESHOLD_MS = 800;
  * keep this file boring — there is only one of it and it lives for
  * the page's entire lifetime.
  *
- * V2 removed the `preset` field because UNISAL ships as a single
- * fixed-shape ONNX graph.
+ * The V1 `preset` field was removed — V3 MSI-Net is a single
+ * fixed-shape model (240×320).
  *
  * @type {{
  *   loadedModel: { session: any, inputDims: [number, number] } | null,
@@ -235,7 +232,7 @@ function boot() {
   // --- Exposed helpers (closures over `state`) --------------------------
 
   /**
-   * Load the UNISAL model with a first-run-vs-cache banner heuristic
+   * Load the saliency model with a first-run-vs-cache banner heuristic
    * (see `FIRST_RUN_THRESHOLD_MS`).
    *
    * `silent` suppresses the cache-load / first-run / ready banners so
@@ -388,7 +385,7 @@ function boot() {
       // Run inference. `runInference` internally calls the preprocessing
       // pipeline and returns the raw model output plus the model's
       // native input dims (which post-processing needs).
-      const { saliency, inputDims } = await runInference(workCanvas, state.loadedModel);
+      const { saliency, inputDims, sourceDims } = await runInference(workCanvas, state.loadedModel);
 
       // Upsample + blur + normalise to the work canvas's dims so the
       // heatmap aligns pixel-for-pixel with the image we're going to
@@ -397,12 +394,33 @@ function boot() {
 
       const fixation = firstFixationCentroid(processed, origW, origH);
 
-      const heatmapCanvas = renderHeatmapCanvas(processed, origW, origH);
+      const heatmapCanvas = renderSaliencyCanvas(processed, origW, origH);
+
+      // Diagnostic: compute saliency stats for the debug panel.
+      let salMin = Infinity, salMax = -Infinity, salSum = 0;
+      for (let i = 0; i < saliency.length; i++) {
+        if (saliency[i] < salMin) salMin = saliency[i];
+        if (saliency[i] > salMax) salMax = saliency[i];
+        salSum += saliency[i];
+      }
+      const peakIdx = saliency.indexOf(salMax);
+      const peakY = Math.floor(peakIdx / inputDims[1]);
+      const peakX = peakIdx % inputDims[1];
 
       state.lastImage = workCanvas;
       state.lastHeatmapCanvas = heatmapCanvas;
       state.lastFixation = fixation;
       state.lastOrigDims = [origH, origW];
+      state.lastDiagnostics = {
+        sourceWidth: origW,
+        sourceHeight: origH,
+        modelInputDims: inputDims,
+        saliencyLength: saliency.length,
+        saliencyMin: salMin.toFixed(4),
+        saliencyMax: salMax.toFixed(4),
+        saliencyMean: (salSum / saliency.length).toFixed(4),
+        peakLocation: `(${peakX}, ${peakY})`,
+      };
 
       renderOutput();
       // Reveal controls now that there is a real result to operate on
@@ -456,6 +474,39 @@ function boot() {
     outputCaption.textContent = describeHeatmap(state.lastFixation, state.lastOrigDims);
     outputCaption.hidden = false;
 
+    // Diagnostic panel — collapsible details below the caption showing
+    // what the pipeline actually did. Helps debug "is it using the right
+    // model / right image / right preprocessing" ambiguity.
+    let diagEl = document.getElementById('fc-diagnostics');
+    if (!diagEl) {
+      diagEl = document.createElement('details');
+      diagEl.id = 'fc-diagnostics';
+      diagEl.style.cssText = 'margin:0.5rem 0; font-size:0.75rem; color:#666; max-width:600px;';
+      const summary = document.createElement('summary');
+      summary.textContent = 'Diagnostics';
+      summary.style.cursor = 'pointer';
+      diagEl.appendChild(summary);
+      outputCaption.parentNode.insertBefore(diagEl, outputCaption.nextSibling);
+    }
+    if (state.lastDiagnostics) {
+      const d = state.lastDiagnostics;
+      const lines = [
+        `Source image: ${d.sourceWidth} × ${d.sourceHeight} px`,
+        `Model input: ${d.modelInputDims[0]} × ${d.modelInputDims[1]} (NCHW, RGB, 0–255)`,
+        `Model: MSI-Net fine-tuned on UEyes (v0.1.0, FP16)`,
+        `Saliency output: ${d.saliencyLength} values, range [${d.saliencyMin}, ${d.saliencyMax}], mean ${d.saliencyMean}`,
+        `Peak attention at: ${d.peakLocation} in model space`,
+        `Preprocessing: aspect-preserving bilinear resize + pad 126`,
+        `Postprocess: upsample to source dims → σ=5 Gaussian blur → normalise`,
+      ];
+      // Keep the <summary>, replace everything after it.
+      while (diagEl.childNodes.length > 1) diagEl.removeChild(diagEl.lastChild);
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'margin:0.3rem 0; white-space:pre-wrap; font-family:monospace; font-size:0.7rem; line-height:1.5;';
+      pre.textContent = lines.join('\n');
+      diagEl.appendChild(pre);
+    }
+
     if (state.view === 'original') {
       const plain = drawPlainImageCanvas(state.lastImage);
       plain.setAttribute(
@@ -507,7 +558,7 @@ function boot() {
   /**
    * Render (or refresh) the attribution footer. The footer carries:
    *   - Model version indicator.
-   *   - Credits for UNISAL, ONNX Runtime Web, and heatmap.js.
+   *   - Credits for MSI-Net, UEyes, ONNX Runtime Web, and foveacast-training.
    *   - Non-dismissible bias disclosure (PRD §Attribution).
    *   - A "Need more?" button that opens the commercial-alternatives
    *     modal, per PRD §Positioning and Alternatives.
@@ -519,7 +570,7 @@ function boot() {
 
     const modelLine = document.createElement('p');
     modelLine.className = 'fc-footer__line fc-footer__model';
-    modelLine.textContent = 'Model: UNISAL · SALICON (288×384)';
+    modelLine.textContent = 'Model: MSI-Net · fine-tuned on UEyes (240×320)';
     footer.appendChild(modelLine);
 
     // Attribution lines are built as individual nodes rather than one
@@ -530,10 +581,26 @@ function boot() {
     credits.className = 'fc-footer__line';
     credits.appendChild(
       textAndLink(
-        'Attention prediction powered by ',
-        'UNISAL',
-        'https://github.com/rdroste/unisal',
-        ' by Richard Droste et al. (Apache 2.0). ',
+        'Architecture: ',
+        'MSI-Net',
+        'https://doi.org/10.1016/j.neunet.2020.05.004',
+        ' (Kroner et al. 2020, MIT). ',
+      ),
+    );
+    credits.appendChild(
+      textAndLink(
+        'Fine-tuned on ',
+        'UEyes',
+        'https://doi.org/10.1145/3544548.3581096',
+        ' (Jiang et al. 2023, CC BY 4.0). ',
+      ),
+    );
+    credits.appendChild(
+      textAndLink(
+        'Training pipeline: ',
+        'foveacast-training',
+        'https://github.com/khawkins98/foveacast-training',
+        '. ',
       ),
     );
     credits.appendChild(

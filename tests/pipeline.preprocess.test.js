@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  UNISAL_INPUT_DIMS,
+  MODEL_INPUT_DIMS,
   toInputTensorData,
   downsampleIfLarge,
 } from '../docs/src/pipeline/preprocess.js';
@@ -27,21 +27,13 @@ function makeImageData(width, height, fill = [0, 0, 0, 255]) {
   return { data, width, height };
 }
 
-// ImageNet constants — duplicated here so the tests do not depend on
-// internal module state. If the numbers in preprocess.js ever change,
-// the same change has to land in both places, which is the intended
-// friction.
-const MEAN = [0.485, 0.456, 0.406];
-const STD = [0.229, 0.224, 0.225];
+// V3 uses raw 0–255 values (no ImageNet normalisation). The ONNX graph
+// handles mean subtraction internally. Tests assert raw clamped pixel
+// values rather than norm(c, byte) transforms.
 
-/** Expected normalised value for channel c given 0–255 input. */
-function norm(c, byte) {
-  return (byte / 255 - MEAN[c]) / STD[c];
-}
-
-describe('UNISAL_INPUT_DIMS', () => {
-  it('is the SALICON-native [288, 384] shape UNISAL was exported for', () => {
-    expect(Array.from(UNISAL_INPUT_DIMS)).toEqual([288, 384]);
+describe('MODEL_INPUT_DIMS', () => {
+  it('is the SALICON-native [240, 320] shape MSI-Net V3 was exported for', () => {
+    expect(Array.from(MODEL_INPUT_DIMS)).toEqual([240, 320]);
   });
 });
 
@@ -61,9 +53,9 @@ describe('toInputTensorData', () => {
     // values are what the ONNX graph actually receives.
     const img = makeImageData(1, 1, [255, 0, 0, 255]);
     const out = toInputTensorData(img, [1, 1]);
-    expect(out[0]).toBeCloseTo(norm(0, 255), 5); // R plane
-    expect(out[1]).toBeCloseTo(norm(1, 0), 5); // G plane
-    expect(out[2]).toBeCloseTo(norm(2, 0), 5); // B plane
+    expect(out[0]).toBeCloseTo(255, 5); // R plane
+    expect(out[1]).toBeCloseTo(0, 5); // G plane
+    expect(out[2]).toBeCloseTo(0, 5); // B plane
   });
 
   it('emits RGB for pure blue too (sanity)', () => {
@@ -71,9 +63,9 @@ describe('toInputTensorData', () => {
     // (the normalised zero), green similar, blue around +2.64.
     const img = makeImageData(1, 1, [0, 0, 255, 255]);
     const out = toInputTensorData(img, [1, 1]);
-    expect(out[0]).toBeCloseTo(norm(0, 0), 5);
-    expect(out[1]).toBeCloseTo(norm(1, 0), 5);
-    expect(out[2]).toBeCloseTo(norm(2, 255), 5);
+    expect(out[0]).toBeCloseTo(0, 5);
+    expect(out[1]).toBeCloseTo(0, 5);
+    expect(out[2]).toBeCloseTo(255, 5);
   });
 
   it('normalises pixel bytes to ImageNet mean/std', () => {
@@ -81,9 +73,9 @@ describe('toInputTensorData', () => {
     // independently because the ImageNet means/stds differ slightly.
     const img = makeImageData(1, 1, [128, 128, 128, 255]);
     const out = toInputTensorData(img, [1, 1]);
-    expect(out[0]).toBeCloseTo(norm(0, 128), 5);
-    expect(out[1]).toBeCloseTo(norm(1, 128), 5);
-    expect(out[2]).toBeCloseTo(norm(2, 128), 5);
+    expect(out[0]).toBeCloseTo(128, 5);
+    expect(out[1]).toBeCloseTo(128, 5);
+    expect(out[2]).toBeCloseTo(128, 5);
   });
 
   it('handles non-square input resized into a target shape', () => {
@@ -98,9 +90,9 @@ describe('toInputTensorData', () => {
     const off = cy * w + cx;
     // Centre pixel is deep inside the constant fill, so bilinear
     // interpolation should reproduce the source colour closely.
-    expect(out[off]).toBeCloseTo(norm(0, 100), 1);
-    expect(out[plane + off]).toBeCloseTo(norm(1, 150), 1);
-    expect(out[2 * plane + off]).toBeCloseTo(norm(2, 200), 1);
+    expect(out[off]).toBeCloseTo(100, 1);
+    expect(out[plane + off]).toBeCloseTo(150, 1);
+    expect(out[2 * plane + off]).toBeCloseTo(200, 1);
   });
 
   it('preserves constant colour fields through resize', () => {
@@ -109,14 +101,20 @@ describe('toInputTensorData', () => {
     const [h, w] = dims;
     const out = toInputTensorData(img, dims);
     const plane = h * w;
-    // Inner pixels have all four bilinear neighbours inside the
-    // constant fill, so they should be exactly the normalised values.
-    for (let y = 1; y < h - 1; y++) {
-      for (let x = 1; x < w - 1; x++) {
+    // With aspect-ratio-preserving resize, a 32×32 source into a 24×32
+    // target scales to 24×24 (preserving aspect) and pads left/right
+    // with 126. Check the centre of the non-padded region.
+    const scale = Math.min(h / 32, w / 32);
+    const scaledH = Math.round(32 * scale);
+    const scaledW = Math.round(32 * scale);
+    const padTop = Math.floor((h - scaledH) / 2);
+    const padLeft = Math.floor((w - scaledW) / 2);
+    for (let y = padTop + 1; y < padTop + scaledH - 1; y++) {
+      for (let x = padLeft + 1; x < padLeft + scaledW - 1; x++) {
         const off = y * w + x;
-        expect(out[off]).toBeCloseTo(norm(0, 50), 5);
-        expect(out[plane + off]).toBeCloseTo(norm(1, 60), 5);
-        expect(out[2 * plane + off]).toBeCloseTo(norm(2, 70), 5);
+        expect(out[off]).toBeCloseTo(50, 5);
+        expect(out[plane + off]).toBeCloseTo(60, 5);
+        expect(out[2 * plane + off]).toBeCloseTo(70, 5);
       }
     }
   });
@@ -127,9 +125,9 @@ describe('toInputTensorData', () => {
     const [h, w] = dims;
     const out = toInputTensorData(img, dims);
     const plane = h * w;
-    const expR = norm(0, 200);
-    const expG = norm(1, 100);
-    const expB = norm(2, 50);
+    const expR = 200;
+    const expG = 100;
+    const expB = 50;
     for (let i = 0; i < plane; i++) {
       expect(out[i]).toBeCloseTo(expR, 5);
       expect(out[plane + i]).toBeCloseTo(expG, 5);

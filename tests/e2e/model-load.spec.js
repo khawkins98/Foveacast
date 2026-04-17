@@ -9,7 +9,7 @@
 // navigates to the bare URL, lets the real loader run, and asserts
 // the app reaches the "model ready" state without a console error.
 //
-// The UNISAL ONNX artefact is 12.5 MB and the ORT Web WASM is 12 MB.
+// The V3 MSI-Net ONNX artefact is 57 MB (FP16) and the ORT Web WASM is 12 MB.
 // Over localhost that is a second or two on a reasonable machine;
 // the timeouts below leave ample headroom without being silly.
 
@@ -30,7 +30,7 @@ test.describe('Foveacast — real model load end-to-end', () => {
     page.__foveacastErrors = { pageErrors, consoleErrors };
   });
 
-  test('boots, loads UNISAL, and reaches the ready state without errors', async ({ page }) => {
+  test('boots, loads the V3 model, and reaches the ready state without errors', async ({ page }) => {
     await page.goto('/');
 
     // The ready banner is the single observable signal that `loadModel`

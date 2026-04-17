@@ -13,10 +13,10 @@
 #     are fast.
 #   - Tests themselves run in ~10 s. Full job time (install + cached
 #     browser + tests) is typically under 60 s.
-#   - Demo mode is deliberately the only path covered. The real-model
-#     path depends on Google Cloud Storage and adds 40–60 s of weight
-#     download per run; keeping it out of CI keeps the loop fast and
-#     keeps the suite from going red when an upstream bucket hiccups.
+#   - V3 model is fetched from a GitHub Release (~57 MB, ~10s). The
+#     model-load test exercises the real ORT-Web load path, not just
+#     demo mode. The fetch is SHA-verified and cached by GitHub's
+#     network proximity to the runner.
 #
 # When the suite is red, a render-layer change is probably the cause.
 # Open the Playwright trace from the job artefacts for the failing
@@ -86,6 +86,14 @@ jobs:
       - name: Install Playwright system deps
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: pnpm exec playwright install-deps chromium
+
+      # V3 model is not committed to the repo (57 MB). Fetch from the
+      # foveacast-training release so model-load E2E tests have the
+      # artefact available. The script is idempotent and SHA-verified.
+      - name: Fetch V3 model
+        run: bash scripts/fetch-v3-model.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Run E2E tests
         run: pnpm test:e2e
