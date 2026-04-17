@@ -17,7 +17,7 @@ import { createDropzone } from './ui/dropzone.js';
 import { createControls } from './ui/controls.js';
 import { loadModel } from './model/loader.js';
 import { runInference } from './model/inference.js';
-import { downsampleIfLarge } from './pipeline/preprocess.js';
+import { downsampleIfLarge } from './ui/image-resize.js';
 import { postprocess } from './pipeline/postprocess.js';
 import { firstFixationCentroid } from './pipeline/fixation.js';
 import { renderSaliencyCanvas, compositeImageAndHeatmap } from './render/saliency-canvas.js';

@@ -9,7 +9,7 @@
 // ONNX graph outputs a saliency map already normalised to [0, 1] —
 // no log-probability conversion needed (unlike V2's UNISAL).
 
-import { imageSourceToInputData } from '../pipeline/preprocess.js';
+import { imageSourceToInputData } from './image-source.js';
 
 /**
  * @typedef {Object} InferenceContext

@@ -17,7 +17,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // dimensions so we can assert the sourceDims pass-through behaviour.
 let mockSourceWidth = 400;
 let mockSourceHeight = 300;
-vi.mock('../docs/src/pipeline/preprocess.js', () => ({
+vi.mock('../docs/src/model/image-source.js', () => ({
   imageSourceToInputData: vi.fn((_source, inputDims) => {
     const [h, w] = inputDims;
     return {

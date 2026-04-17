@@ -8,8 +8,8 @@ import { describe, it, expect } from 'vitest';
 import {
   MODEL_INPUT_DIMS,
   toInputTensorData,
-  downsampleIfLarge,
 } from '../docs/src/pipeline/preprocess.js';
+import { downsampleIfLarge } from '../docs/src/ui/image-resize.js';
 
 /**
  * Build a synthetic ImageData-like object. `toInputTensorData` only

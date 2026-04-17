@@ -40,10 +40,10 @@ Four layers. The boundary between them is load-bearing; changes that blur it wil
 
 | Layer | Location | What lives there |
 |---|---|---|
-| `model/` | `docs/src/model/` | Loads the UNISAL ONNX graph, runs inference. **The only place `onnxruntime-web` is imported.** |
-| `pipeline/` | `docs/src/pipeline/` | Pure functions: preprocess, postprocess, fixation centroid. No framework imports. |
-| `render/` | `docs/src/render/` | heatmap.js wrapper + Canvas compositor + PNG download. |
-| `ui/` | `docs/src/ui/` | DOM: drop zone, controls, status banner, mobile guard. |
+| `model/` | `docs/src/model/` | Loads the ONNX graph, runs inference, and contains `image-source.js` — the DOM-touching input adapter that bridges image pixels into the pure pipeline. **The only place `onnxruntime-web` is imported.** |
+| `pipeline/` | `docs/src/pipeline/` | Pure functions: preprocess, postprocess, fixation centroid. No DOM, no browser APIs, no library imports. |
+| `render/` | `docs/src/render/` | Canvas compositor (saliency colormap, crosshair, watermark) + PNG download. |
+| `ui/` | `docs/src/ui/` | DOM: drop zone, controls, status banner, mobile guard, and `image-resize.js` — the pre-inference downsampler called from `main.js`/`demo.js`. |
 
 If you need ORT (or `ort.Tensor`) in the `ui/` or `render/` layer, you almost certainly don't — reach through `model/inference.js` instead.
 
