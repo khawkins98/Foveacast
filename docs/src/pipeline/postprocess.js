@@ -178,32 +178,6 @@ export function normaliseToUnit(data) {
 }
 
 /**
- * Convert a log-probability saliency map into a probability-like map
- * via a numerically-stable `exp(y - max(y))`. Subtracting the max
- * before `exp` keeps the result in `[0, 1]` and prevents `Infinity`
- * for log-probs close to zero (which should not happen for UNISAL
- * output, but cheap to guard against).
- *
- * Returns a NEW Float32Array; the input is not mutated. If the input
- * is empty, returns an empty array rather than erroring.
- *
- * @param {Float32Array} data - Log-probability saliency map.
- * @returns {Float32Array}
- */
-export function logProbsToProbabilities(data) {
-  const out = new Float32Array(data.length);
-  if (data.length === 0) return out;
-  let max = data[0];
-  for (let i = 1; i < data.length; i++) {
-    if (data[i] > max) max = data[i];
-  }
-  for (let i = 0; i < data.length; i++) {
-    out[i] = Math.exp(data[i] - max);
-  }
-  return out;
-}
-
-/**
  * Full post-processing pipeline: upsample → blur → normalise.
  *
  * V3 MSI-Net outputs saliency already in [0, 1] (min-max normalised
