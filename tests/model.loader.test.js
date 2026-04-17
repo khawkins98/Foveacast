@@ -1,235 +1,244 @@
-// Loader tests. We stub `globalThis.tf.loadGraphModel` so we can assert
-// on URL routing and the progress-callback contract without depending on
-// a real TensorFlow.js runtime.
+// Loader tests. We stub `globalThis.ort.InferenceSession.create` and
+// `globalThis.fetch` so we can assert on download behaviour, progress
+// reporting, and error classification without depending on a real
+// ONNX Runtime Web bundle or the 12.5 MB artefact on disk.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   loadModel,
-  MODEL_URLS,
-  GCS_MODEL_URLS,
-  LOCAL_MODEL_URLS,
-  resolveModelUrl,
+  MODEL_URL,
+  MODEL_INPUT_DIMS,
 } from '../docs/src/model/loader.js';
-import { PRESETS } from '../docs/src/pipeline/preprocess.js';
 
-describe('MODEL_URLS', () => {
-  it('has an entry for every preset, pointing at the GCS bucket', () => {
-    for (const preset of Object.keys(PRESETS)) {
-      expect(MODEL_URLS[preset]).toBe(
-        `https://storage.googleapis.com/msi-net/model/${preset}/model.json`
-      );
-    }
+/**
+ * Build a minimal ort-like mock that returns the session shape
+ * `loadModel` expects. Any test that needs per-call behaviour
+ * overrides this with its own vi.fn after installation.
+ */
+function installOrtMock({ sessionCreate } = {}) {
+  const create = sessionCreate || vi.fn().mockResolvedValue({ fake: 'session' });
+  /** @type {any} */ (globalThis).ort = {
+    InferenceSession: { create },
+    Tensor: function () {},
+    env: { wasm: { wasmPaths: null, numThreads: null } },
+  };
+  return create;
+}
+
+/**
+ * Build a fetch mock that streams `bytes` through a ReadableStream so
+ * the progress-tracking code path is actually exercised.
+ */
+function makeStreamingFetch(bytes, { contentLength = bytes.byteLength, ok = true, status = 200 } = {}) {
+  return vi.fn().mockResolvedValue({
+    ok,
+    status,
+    headers: {
+      get: (name) => (String(name).toLowerCase() === 'content-length' ? String(contentLength) : null),
+    },
+    body: {
+      getReader() {
+        let delivered = false;
+        return {
+          async read() {
+            if (delivered) return { done: true, value: undefined };
+            delivered = true;
+            return { done: false, value: bytes };
+          },
+        };
+      },
+    },
+    arrayBuffer: async () => bytes.buffer,
+  });
+}
+
+describe('MODEL_URL + MODEL_INPUT_DIMS', () => {
+  it('points the app at the committed same-origin artefact', () => {
+    expect(MODEL_URL).toBe('./models/v3/model.onnx');
+  });
+
+  it('matches the SALICON export shape [240, 320]', () => {
+    expect(Array.from(MODEL_INPUT_DIMS)).toEqual([240, 320]);
   });
 });
 
 describe('loadModel', () => {
   /** @type {any} */
-  let originalTf;
-
-  beforeEach(() => {
-    originalTf = /** @type {any} */ (globalThis).tf;
-  });
-
-  afterEach(() => {
-    /** @type {any} */ (globalThis).tf = originalTf;
-  });
-
-  it('throws when tf is missing from globalThis', async () => {
-    /** @type {any} */ (globalThis).tf = undefined;
-    await expect(loadModel('medium')).rejects.toThrow(/TensorFlow\.js is not available/);
-  });
-
-  it('throws on unknown preset', async () => {
-    /** @type {any} */ (globalThis).tf = {
-      loadGraphModel: vi.fn().mockResolvedValue({ fake: true }),
-    };
-    await expect(loadModel('ultra')).rejects.toThrow(/Unknown preset: ultra/);
-  });
-
-  it('uses the correct URL for each of the five presets', async () => {
-    const stub = vi.fn().mockResolvedValue({ fake: 'model' });
-    /** @type {any} */ (globalThis).tf = { loadGraphModel: stub };
-
-    for (const preset of /** @type {(keyof typeof PRESETS)[]} */ (Object.keys(PRESETS))) {
-      stub.mockClear();
-      const result = await loadModel(preset);
-      expect(stub).toHaveBeenCalledTimes(1);
-      expect(stub.mock.calls[0][0]).toBe(MODEL_URLS[preset]);
-      expect(result.preset).toBe(preset);
-      expect(result.inputDims).toEqual(PRESETS[preset]);
-      expect(result.model).toEqual({ fake: 'model' });
-    }
-  });
-
-  it('invokes the caller onProgress with a richer shape when tf fires its native callback', async () => {
-    const stub = vi.fn().mockImplementation(async (_url, opts) => {
-      // Simulate tf.js firing its fraction-only onProgress twice.
-      opts.onProgress(0.25);
-      opts.onProgress(1.0);
-      return { fake: 'model' };
-    });
-    /** @type {any} */ (globalThis).tf = { loadGraphModel: stub };
-
-    const events = [];
-    await loadModel('high', (p) => events.push(p));
-
-    expect(events.length).toBeGreaterThanOrEqual(1);
-    expect(events[0]).toEqual({ fraction: 0.25, loaded: undefined, total: undefined });
-    expect(events[events.length - 1].fraction).toBe(1.0);
-  });
-
-  it('does not pass an onProgress option when the caller omits the callback', async () => {
-    const stub = vi.fn().mockResolvedValue({ fake: 'model' });
-    /** @type {any} */ (globalThis).tf = { loadGraphModel: stub };
-
-    await loadModel('low');
-    // tf.loadGraphModel was called either with no second arg or with
-    // undefined. Either way, there is no onProgress wrapping.
-    const secondArg = stub.mock.calls[0][1];
-    expect(secondArg === undefined || secondArg.onProgress === undefined).toBe(true);
-  });
-});
-
-describe('resolveModelUrl', () => {
+  let originalOrt;
   /** @type {any} */
   let originalFetch;
 
   beforeEach(() => {
+    originalOrt = /** @type {any} */ (globalThis).ort;
     originalFetch = globalThis.fetch;
   });
 
   afterEach(() => {
+    /** @type {any} */ (globalThis).ort = originalOrt;
     globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
   });
 
-  it('returns the local URL when the HEAD probe responds 200', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
-    const url = await resolveModelUrl('medium');
-    expect(url).toBe(LOCAL_MODEL_URLS.medium);
-    const [probedUrl, init] = /** @type {any} */ (globalThis.fetch).mock.calls[0];
-    expect(probedUrl).toBe(LOCAL_MODEL_URLS.medium);
-    expect(init.method).toBe('HEAD');
+  it('throws when ort is missing from globalThis', async () => {
+    /** @type {any} */ (globalThis).ort = undefined;
+    await expect(loadModel()).rejects.toThrow(/ONNX Runtime Web is not available/);
   });
 
-  it('falls back to GCS when the HEAD probe responds 404', async () => {
-    // This is the exact path that bit us in CI. A dev server / fresh
-    // clone / Pages runner without a populated mirror MUST land on
-    // the GCS URL, not on a local path that will later 404 at GET.
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404 });
-    const url = await resolveModelUrl('medium');
-    expect(url).toBe(GCS_MODEL_URLS.medium);
+  it('accepts the real-shape ort.InferenceSession (a class, not a plain object)', async () => {
+    // Regression for a false-positive guard: the earlier check was
+    // `typeof ort.InferenceSession === 'object'`, but ORT Web exposes
+    // InferenceSession as a class — typeof 'function'. A successful
+    // load hit the guard and surfaced as "ORT is not available" on
+    // first drop. This test pins the real global shape so that
+    // failure mode cannot come back.
+    class FakeInferenceSession {
+      static async create() {
+        return { fake: 'session' };
+      }
+    }
+    /** @type {any} */ (globalThis).ort = {
+      InferenceSession: FakeInferenceSession,
+      Tensor: function () {},
+      env: { wasm: {} },
+    };
+    globalThis.fetch = makeStreamingFetch(new Uint8Array(8));
+
+    const result = await loadModel();
+    expect(result.session).toEqual({ fake: 'session' });
   });
 
-  it('falls back to GCS when the HEAD probe throws (filesystem, CORS, etc.)', async () => {
-    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
-    const url = await resolveModelUrl('high');
-    expect(url).toBe(GCS_MODEL_URLS.high);
+  it('fetches the committed same-origin artefact and hands its bytes to ort.InferenceSession.create', async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4, 5]);
+    const create = installOrtMock();
+    globalThis.fetch = makeStreamingFetch(bytes);
+
+    const result = await loadModel();
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(MODEL_URL);
+    expect(create).toHaveBeenCalledTimes(1);
+    const [passedBytes, opts] = create.mock.calls[0];
+    // Bytes are handed off as ArrayBuffer (or Uint8Array) — accept both
+    // so a future refactor of `fetchModelBytes` is not blocked by a
+    // too-specific assertion.
+    expect(passedBytes).toBeTruthy();
+    expect(opts.executionProviders).toContain('wasm');
+    expect(result).toEqual({ session: { fake: 'session' }, inputDims: MODEL_INPUT_DIMS });
   });
 
-  it('does NOT treat a 2xx status with an empty body as a valid mirror', async () => {
-    // Belt-and-braces: some servers answer HEAD with 200 even for
-    // SPA-fallback content. We check `ok` not the body, but the
-    // test documents the intent: an ambiguous 2xx still resolves to
-    // the local URL (the caller then discovers the garbage content
-    // when tf.js tries to parse it and surfaces MODEL_LOAD_FAILED).
-    // This test pins the current behaviour so anyone tightening the
-    // check knows they are changing an observable contract.
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
-    const url = await resolveModelUrl('low');
-    expect(url).toBe(LOCAL_MODEL_URLS.low);
+  it('forces single-threaded WASM (no COEP on Pages)', async () => {
+    // We deliberately do NOT set `ort.env.wasm.wasmPaths` here. ORT
+    // resolves its sibling `.mjs`/`.wasm` files relative to its own
+    // script URL by default, which gives the right path for both
+    // the dev server and GitHub Pages. An earlier draft set
+    // `wasmPaths = './vendor/'` and that broke in the browser —
+    // ORT resolves the override relative to its own script too,
+    // so it requested `/vendor/vendor/ort-wasm-simd-threaded.mjs`.
+    installOrtMock();
+    globalThis.fetch = makeStreamingFetch(new Uint8Array(8));
+
+    await loadModel();
+    const ort = /** @type {any} */ (globalThis).ort;
+    expect(ort.env.wasm.numThreads).toBe(1);
+    expect(ort.env.wasm.wasmPaths).toBeFalsy();
+  });
+
+  it('reports progress as fraction + loaded/total when Content-Length is set', async () => {
+    installOrtMock();
+    const bytes = new Uint8Array(1024);
+    globalThis.fetch = makeStreamingFetch(bytes);
+
+    const events = [];
+    await loadModel((p) => events.push(p));
+
+    expect(events.length).toBeGreaterThanOrEqual(1);
+    const final = events[events.length - 1];
+    expect(final.fraction).toBe(1);
+    expect(final.loaded).toBe(1024);
+    expect(final.total).toBe(1024);
+  });
+
+  it('still reports a final progress event when Content-Length is missing', async () => {
+    installOrtMock();
+    const bytes = new Uint8Array(256);
+    globalThis.fetch = makeStreamingFetch(bytes, { contentLength: undefined });
+
+    const events = [];
+    await loadModel((p) => events.push(p));
+
+    const final = events[events.length - 1];
+    expect(final.fraction).toBe(1);
+    expect(final.loaded).toBe(256);
   });
 });
 
 describe('loadModel — structured error classification', () => {
   /** @type {any} */
-  let originalTf;
+  let originalOrt;
+  /** @type {any} */
+  let originalFetch;
 
   beforeEach(() => {
-    originalTf = /** @type {any} */ (globalThis).tf;
+    originalOrt = /** @type {any} */ (globalThis).ort;
+    originalFetch = globalThis.fetch;
   });
 
   afterEach(() => {
-    /** @type {any} */ (globalThis).tf = originalTf;
+    /** @type {any} */ (globalThis).ort = originalOrt;
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it('classifies an HTTP-404 as MODEL_DOWNLOAD_FAILED', async () => {
+    installOrtMock();
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404 });
+
+    try {
+      await loadModel();
+      throw new Error('expected loadModel to reject');
+    } catch (err) {
+      expect(/** @type {any} */ (err).code).toBe('MODEL_DOWNLOAD_FAILED');
+      expect(/** @type {any} */ (err).url).toBe(MODEL_URL);
+    }
   });
 
   it('classifies a TypeError from fetch as MODEL_DOWNLOAD_FAILED', async () => {
-    const netErr = new TypeError('Failed to fetch');
-    /** @type {any} */ (globalThis).tf = {
-      loadGraphModel: vi.fn().mockRejectedValue(netErr),
-    };
+    installOrtMock();
+    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
 
     try {
-      await loadModel('medium');
-      throw new Error('expected loadModel to reject');
-    } catch (err) {
-      expect(/** @type {any} */ (err).code).toBe('MODEL_DOWNLOAD_FAILED');
-      expect(/** @type {any} */ (err).cause).toBe(netErr);
-      expect(/** @type {any} */ (err).url).toContain('medium/model.json');
-    }
-  });
-
-  it('classifies an HTTP-status failure as MODEL_DOWNLOAD_FAILED', async () => {
-    // tf.js wraps non-2xx responses this way.
-    const httpErr = new Error('Request failed with status 404');
-    /** @type {any} */ (globalThis).tf = {
-      loadGraphModel: vi.fn().mockRejectedValue(httpErr),
-    };
-
-    try {
-      await loadModel('low');
+      await loadModel();
       throw new Error('expected loadModel to reject');
     } catch (err) {
       expect(/** @type {any} */ (err).code).toBe('MODEL_DOWNLOAD_FAILED');
     }
   });
 
-  it('classifies a JSON parse error as MODEL_LOAD_FAILED', async () => {
-    // Downloaded bytes were garbled — this is the post-download path.
-    const parseErr = new SyntaxError('Unexpected token < in JSON at position 0');
-    /** @type {any} */ (globalThis).tf = {
-      loadGraphModel: vi.fn().mockRejectedValue(parseErr),
-    };
+  it('classifies an ORT parse/init failure as MODEL_LOAD_FAILED', async () => {
+    const parseErr = new Error('Failed to parse ONNX model: unexpected end of file');
+    installOrtMock({ sessionCreate: vi.fn().mockRejectedValue(parseErr) });
+    globalThis.fetch = makeStreamingFetch(new Uint8Array(16));
 
     try {
-      await loadModel('high');
+      await loadModel();
       throw new Error('expected loadModel to reject');
     } catch (err) {
       expect(/** @type {any} */ (err).code).toBe('MODEL_LOAD_FAILED');
+      expect(/** @type {any} */ (err).cause).toBe(parseErr);
     }
   });
 
   it('follows the cause chain to find a TypeError', async () => {
-    // Some environments wrap the underlying TypeError in a plain
-    // Error. The classifier should still recognise the inner network
-    // failure via `cause`.
     const inner = new TypeError('NetworkError when attempting to fetch resource');
-    const wrapper = /** @type {any} */ (new Error('loadGraphModel failed'));
+    const wrapper = /** @type {any} */ (new Error('fetch wrapped'));
     wrapper.cause = inner;
-
-    /** @type {any} */ (globalThis).tf = {
-      loadGraphModel: vi.fn().mockRejectedValue(wrapper),
-    };
+    installOrtMock();
+    globalThis.fetch = vi.fn().mockRejectedValue(wrapper);
 
     try {
-      await loadModel('very_low');
+      await loadModel();
       throw new Error('expected loadModel to reject');
     } catch (err) {
       expect(/** @type {any} */ (err).code).toBe('MODEL_DOWNLOAD_FAILED');
-    }
-  });
-
-  it('falls back to MODEL_LOAD_FAILED for unclassified errors', async () => {
-    const weird = new Error('mysterious library internal');
-    /** @type {any} */ (globalThis).tf = {
-      loadGraphModel: vi.fn().mockRejectedValue(weird),
-    };
-
-    try {
-      await loadModel('medium');
-      throw new Error('expected loadModel to reject');
-    } catch (err) {
-      expect(/** @type {any} */ (err).code).toBe('MODEL_LOAD_FAILED');
-      expect(/** @type {any} */ (err).cause).toBe(weird);
     }
   });
 });

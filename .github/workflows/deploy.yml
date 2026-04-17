@@ -93,22 +93,18 @@ jobs:
       - name: Run tests
         run: pnpm test
 
-      # Mirror MSI-Net weights into docs/models/ so the Pages artefact
-      # ships its own data. The repo does not commit these files
-      # (they are gitignored at ~129 MB across five presets) — we
-      # fetch them fresh from Google Cloud Storage at deploy time.
-      # This removes the user-facing single point of failure where a
-      # GCS outage or bucket rename would break every cache-evicted
-      # visitor. The loader prefers `./models/{preset}/model.json`
-      # at runtime and falls back to GCS only if that HEAD fails.
-      - name: Mirror model weights
-        run: bash scripts/fetch-weights.sh
+      # V3 model is NOT committed to the repo (57 MB FP16 ONNX would
+      # bloat the clone). Fetch it from the foveacast-training GitHub
+      # Release at deploy time. The script verifies SHA256 after download.
+      - name: Fetch V3 model from release
+        run: bash scripts/fetch-v3-model.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       # The Pages tooling expects a specific artifact format produced
       # by this action. Handing it `./docs` uploads the static-site
       # folder verbatim — no build invocation, no transformation.
-      # The folder now includes the mirrored weights from the step
-      # above.
+      # The V3 model was fetched above into docs/models/v3/model.onnx.
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

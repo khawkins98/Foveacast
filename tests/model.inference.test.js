@@ -1,26 +1,19 @@
-// Unit tests for the `runInference` contract.
+// Unit tests for the `runInference` contract on the V2 ORT Web stack.
 //
-// Why this file exists now: the PRD names `runInference` as the V2
-// ONNX swap contract, and until this commit the file had no tests.
-// The maintainer review flagged it as a High-severity gap — the
-// three things that would silently break on a refactor are:
-//   1. Input tensor shape `[1, H, W, 3]` (batch + HWC).
-//   2. Tensor disposal — forgetting to `.dispose()` leaks VRAM and
-//      kills the page after a few inferences.
-//   3. `new Float32Array(flat)` copies out of tf.js's internal
-//      buffer — some backends reuse storage, and returning the raw
-//      `.data()` result would be a silent cross-inference corruption
-//      bug.
+// Three things matter enough to pin:
 //
-// The tests stub `globalThis.tf` so they never touch a real TF.js
-// runtime, and stub `imageSourceToInputData` via a jsdom-compatible
-// canvas source.
+//   1. Input tensor shape `[1, 3, H, W]` (NCHW, float32).
+//   2. `session.run` is awaited with an `image` key; the output is
+//      extracted from the returned map.
+//   3. `new Float32Array(outTensor.data)` copies out of ORT's internal
+//      buffer — some EPs reuse storage, and returning the raw reference
+//      would be a silent cross-inference corruption bug.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // Mock the preprocess helper so these tests don't depend on a real
-// 2D canvas context (jsdom doesn't provide one). The mock returns
-// a Float32Array sized for the requested dims plus canned source
+// 2D canvas context (jsdom doesn't provide one). The mock returns a
+// Float32Array sized for the requested dims plus canned source
 // dimensions so we can assert the sourceDims pass-through behaviour.
 let mockSourceWidth = 400;
 let mockSourceHeight = 300;
@@ -28,7 +21,7 @@ vi.mock('../docs/src/pipeline/preprocess.js', () => ({
   imageSourceToInputData: vi.fn((_source, inputDims) => {
     const [h, w] = inputDims;
     return {
-      data: new Float32Array(h * w * 3),
+      data: new Float32Array(3 * h * w),
       sourceWidth: mockSourceWidth,
       sourceHeight: mockSourceHeight,
     };
@@ -38,121 +31,96 @@ vi.mock('../docs/src/pipeline/preprocess.js', () => ({
 const { runInference } = await import('../docs/src/model/inference.js');
 
 /**
- * Build a minimal tf-alike that records the shape passed to
- * `tf.tensor`, captures `.dispose()` calls on the tensors it
- * produces, and returns a configurable `.predict()` output.
+ * Build a minimal ort-alike that records Tensor construction and
+ * returns a configurable output for `session.run`.
  */
-function makeTfStub(predictedFlat) {
-  const input = { shape: null, disposed: false, dispose: vi.fn(function () { this.disposed = true; }) };
-  const output = {
-    disposed: false,
-    dispose: vi.fn(function () { this.disposed = true; }),
-    data: vi.fn().mockResolvedValue(predictedFlat),
+function makeOrtStub(outputFlat) {
+  const tensorCtor = vi.fn(function (dtype, data, shape) {
+    this.dtype = dtype;
+    this.data = data;
+    this.dims = shape;
+  });
+  const run = vi.fn(async () => ({
+    output: { data: outputFlat, dims: [1, mockSourceHeight, mockSourceWidth] },
+  }));
+  const session = { run };
+  const ort = {
+    Tensor: tensorCtor,
   };
-  const model = {
-    predict: vi.fn(() => output),
-  };
-  const tf = {
-    tensor: vi.fn((data, shape, dtype) => {
-      input.shape = shape;
-      input.dtype = dtype;
-      input.data = data;
-      return input;
-    }),
-  };
-  return { tf, model, input, output };
+  return { ort, session, tensorCtor, run };
 }
 
-/**
- * Any opaque source is fine for these tests because the real
- * `imageSourceToInputData` is mocked above. We still set
- * `mockSourceWidth`/`mockSourceHeight` before each call so the
- * sourceDims pass-through test can vary per case.
- */
 function makeFakeSource() {
   return /** @type {any} */ ({});
 }
 
 describe('runInference', () => {
   /** @type {any} */
-  let originalTf;
+  let originalOrt;
 
   beforeEach(() => {
-    originalTf = /** @type {any} */ (globalThis).tf;
+    originalOrt = /** @type {any} */ (globalThis).ort;
   });
 
   afterEach(() => {
-    /** @type {any} */ (globalThis).tf = originalTf;
+    /** @type {any} */ (globalThis).ort = originalOrt;
   });
 
-  it('throws a friendly error when tf is missing from globalThis', async () => {
-    /** @type {any} */ (globalThis).tf = undefined;
+  it('throws a friendly error when ort is missing from globalThis', async () => {
+    /** @type {any} */ (globalThis).ort = undefined;
     await expect(
       runInference(makeFakeSource(), {
-        model: /** @type {any} */ ({ predict: () => null }),
+        session: /** @type {any} */ ({ run: async () => ({}) }),
         inputDims: [8, 8],
       }),
-    ).rejects.toThrow(/TensorFlow\.js is not available/);
+    ).rejects.toThrow(/ONNX Runtime Web is not available/);
   });
 
-  it('builds the input tensor with shape [1, H, W, 3] and dtype float32', async () => {
-    const [h, w] = [48, 64];
-    const stub = makeTfStub(new Float32Array(h * w));
-    /** @type {any} */ (globalThis).tf = stub.tf;
+  it('builds the input tensor with shape [1, 3, H, W] and dtype float32', async () => {
+    const [h, w] = [288, 384];
+    const stub = makeOrtStub(new Float32Array(h * w));
+    /** @type {any} */ (globalThis).ort = stub.ort;
 
     await runInference(makeFakeSource(), {
-      model: stub.model,
+      session: stub.session,
       inputDims: [h, w],
     });
 
-    expect(stub.tf.tensor).toHaveBeenCalledTimes(1);
-    const [, shape, dtype] = stub.tf.tensor.mock.calls[0];
-    expect(shape).toEqual([1, h, w, 3]);
+    expect(stub.tensorCtor).toHaveBeenCalledTimes(1);
+    const [dtype, data, shape] = stub.tensorCtor.mock.calls[0];
     expect(dtype).toBe('float32');
+    expect(shape).toEqual([1, 3, h, w]);
+    expect(data).toBeInstanceOf(Float32Array);
+    expect(data.length).toBe(3 * h * w);
   });
 
-  it('passes the preprocessed data array to tf.tensor with length H * W * 3', async () => {
-    const [h, w] = [32, 24];
-    const stub = makeTfStub(new Float32Array(h * w));
-    /** @type {any} */ (globalThis).tf = stub.tf;
+  it('runs session.run exactly once with an `input` tensor key', async () => {
+    const [h, w] = [240, 320];
+    const stub = makeOrtStub(new Float32Array(h * w));
+    /** @type {any} */ (globalThis).ort = stub.ort;
 
     await runInference(makeFakeSource(), {
-      model: stub.model,
+      session: stub.session,
       inputDims: [h, w],
     });
 
-    const [data] = stub.tf.tensor.mock.calls[0];
-    expect(data).toBeInstanceOf(Float32Array);
-    expect(data.length).toBe(h * w * 3);
+    expect(stub.run).toHaveBeenCalledTimes(1);
+    const feeds = stub.run.mock.calls[0][0];
+    expect(feeds).toHaveProperty('input');
+    expect(feeds.input).toBeInstanceOf(stub.ort.Tensor);
   });
 
-  it('disposes both the input and output tensors (no VRAM leak)', async () => {
-    const stub = makeTfStub(new Float32Array(48 * 64));
-    /** @type {any} */ (globalThis).tf = stub.tf;
-
-    await runInference(makeFakeSource(), {
-      model: stub.model,
-      inputDims: [48, 64],
-    });
-
-    expect(stub.input.dispose).toHaveBeenCalledTimes(1);
-    expect(stub.output.dispose).toHaveBeenCalledTimes(1);
-    expect(stub.input.disposed).toBe(true);
-    expect(stub.output.disposed).toBe(true);
-  });
-
-  it('returns a Float32Array copy detached from tf.js internal storage', async () => {
-    // Some tf.js backends reuse the buffer returned by .data() across
-    // inferences. Returning the raw reference would cause the
-    // postprocess pipeline to see a later inference's data under the
-    // wrong dims. The contract is: the returned `saliency` array is a
-    // fresh allocation.
+  it('returns a Float32Array copy detached from ORT internal storage', async () => {
+    // Some ORT EPs reuse the buffer returned by a tensor across runs.
+    // Returning the raw reference would cause the postprocess pipeline
+    // to see a later inference's data under the wrong dims. The
+    // contract is: the returned `saliency` array is a fresh allocation.
     const internalBuffer = new Float32Array([1, 2, 3, 4]);
-    const stub = makeTfStub(internalBuffer);
-    /** @type {any} */ (globalThis).tf = stub.tf;
+    const stub = makeOrtStub(internalBuffer);
+    /** @type {any} */ (globalThis).ort = stub.ort;
 
     const { saliency } = await runInference(makeFakeSource(), {
-      model: stub.model,
+      session: stub.session,
       inputDims: [2, 2],
     });
 
@@ -160,35 +128,42 @@ describe('runInference', () => {
     expect(saliency).not.toBe(internalBuffer);
     expect(Array.from(saliency)).toEqual([1, 2, 3, 4]);
 
-    // Mutating the returned array must not touch the internal buffer.
     saliency[0] = 999;
     expect(internalBuffer[0]).toBe(1);
   });
 
   it('returns inputDims and sourceDims (height, width) for downstream postprocessing', async () => {
-    const stub = makeTfStub(new Float32Array(120 * 160));
-    /** @type {any} */ (globalThis).tf = stub.tf;
+    const stub = makeOrtStub(new Float32Array(288 * 384));
+    /** @type {any} */ (globalThis).ort = stub.ort;
 
     const { inputDims, sourceDims } = await runInference(makeFakeSource(), {
-      model: stub.model,
-      inputDims: [120, 160],
+      session: stub.session,
+      inputDims: [288, 384],
     });
 
-    expect(inputDims).toEqual([120, 160]);
+    expect(inputDims).toEqual([288, 384]);
     // sourceDims is [height, width] — postprocess expects that order.
     expect(sourceDims).toEqual([300, 400]);
   });
 
-  it('calls model.predict exactly once with the input tensor', async () => {
-    const stub = makeTfStub(new Float32Array(48 * 64));
-    /** @type {any} */ (globalThis).tf = stub.tf;
+  it('falls back to the first output key when the graph does not name "output"', async () => {
+    const buf = new Float32Array(4);
+    const ort = {
+      Tensor: function (dtype, data, dims) {
+        this.dtype = dtype;
+        this.data = data;
+        this.dims = dims;
+      },
+    };
+    const run = vi.fn(async () => ({ output_0: { data: buf, dims: [1, 2, 2] } }));
+    /** @type {any} */ (globalThis).ort = ort;
 
-    await runInference(makeFakeSource(), {
-      model: stub.model,
-      inputDims: [48, 64],
+    const { saliency } = await runInference(makeFakeSource(), {
+      session: { run },
+      inputDims: [2, 2],
     });
 
-    expect(stub.model.predict).toHaveBeenCalledTimes(1);
-    expect(stub.model.predict.mock.calls[0][0]).toBe(stub.input);
+    expect(saliency).toBeInstanceOf(Float32Array);
+    expect(saliency.length).toBe(4);
   });
 });

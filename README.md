@@ -2,7 +2,7 @@
 
 Predicted attention heatmaps, right in your browser.
 
-![version 0.1.0](https://img.shields.io/badge/version-0.1.0-blue) ![status V1](https://img.shields.io/badge/status-V1-green) ![licence MIT](https://img.shields.io/badge/licence-MIT-lightgrey)
+![version 0.2.0](https://img.shields.io/badge/version-0.2.0-blue) ![status V2](https://img.shields.io/badge/status-V2-green) ![licence MIT](https://img.shields.io/badge/licence-MIT-lightgrey)
 
 ## What it is
 
@@ -16,13 +16,13 @@ It is aimed at comms staff, web officers, and UX-aware developers who want a qui
 
 ### Instant preview with demo mode
 
-Don't want to wait on the ~60 MB first-run model download just to see what the tool looks like? Append `?demo=1` to the URL:
+Don't want to wait on the one-time ~13 MB model download just to see what the tool looks like? Append `?demo=1` to the URL:
 
 ```
 https://khawkins98.github.io/Foveacast/?demo=1
 ```
 
-Demo mode loads a committed example screenshot and renders a synthetic saliency map through the real postprocess → fixation → heatmap → composite pipeline. You see output in under a second, no network round-trip to the model CDN. The banner above the output says plainly that demo output is a synthetic preview, not a real MSI-Net prediction — drop your own screenshot or remove `?demo=1` to run real inference.
+Demo mode loads a committed example screenshot and renders a synthetic saliency map through the real postprocess → fixation → heatmap → composite pipeline. You see output in under a second, no network round-trip to the model file. The banner above the output says plainly that demo output is a synthetic preview, not a real UNISAL prediction — drop your own screenshot or remove `?demo=1` to run real inference.
 
 Demo mode also doubles as the target for the Playwright end-to-end test suite (see [Run the tests](#run-the-tests)).
 
@@ -32,7 +32,7 @@ Three ways, in order of how quickly you want to be looking at a heatmap.
 
 ### 1. Zero install
 
-Download or unzip the repo, open `docs/index.html` directly in Chrome or Firefox, and drop a screenshot onto the drop zone. That's the whole flow. The first run downloads the model weights from Google Cloud Storage; after that the browser cache handles it and the tool works offline.
+Download or unzip the repo, open `docs/index.html` directly in Chrome or Firefox, and drop a screenshot onto the drop zone. That's the whole flow. The model weights are committed directly to the repo under `docs/models/unisal/`, so the zero-install path works offline once you have the folder.
 
 ### 2. Dev server (hot reload)
 
@@ -78,8 +78,8 @@ Four layers, laid out so the model backend can be swapped without touching anyth
 
 | Layer | Location | What it does |
 |---|---|---|
-| `model/` | `docs/src/model/` | Loads the MSI-Net Graph Model and runs inference. The only place TF.js is imported. |
-| `pipeline/` | `docs/src/pipeline/` | Pure functions: preprocess an image to the model's input tensor, upsample and normalise the saliency map, compute the first-fixation centroid. |
+| `model/` | `docs/src/model/` | Loads the UNISAL ONNX graph and runs inference. The only place ONNX Runtime Web is imported. |
+| `pipeline/` | `docs/src/pipeline/` | Pure functions: preprocess an image to the model's input tensor, exp → upsample → blur → normalise the saliency map, compute the first-fixation centroid. |
 | `render/` | `docs/src/render/` | Wraps heatmap.js, composites the overlay onto the original image, exports a PNG. |
 | `ui/` | `docs/src/ui/` | DOM interaction: drop zone, controls, status banner, mobile-browser guard. |
 
@@ -87,41 +87,43 @@ Four layers, laid out so the model backend can be swapped without touching anyth
 +-----------+     +------------+     +----------+     +----+
 |   model   | --> |  pipeline  | --> |  render  | --> | ui |
 +-----------+     +------------+     +----------+     +----+
-     TF.js        pure functions     heatmap.js +       DOM
-                                     Canvas 2D
+  ORT Web         pure functions   heatmap.js +        DOM
+                                   Canvas 2D
 ```
 
-The full architecture notes — including the exported contracts each layer must honour — are in [docs/PRD.md](docs/PRD.md) under "Code architecture". The rule that matters in practice: nothing outside `model/` imports `@tensorflow/tfjs`. That is what makes swapping the backend a contained change.
+The full architecture notes — including the exported contracts each layer must honour — are in [docs/PRD.md](docs/PRD.md) under "Code architecture". The rule that matters in practice: nothing outside `model/` imports `onnxruntime-web`. That is what let V2 swap the model backend without touching anything below — see the 0.2.0 diff in [CHANGELOG.md](CHANGELOG.md) and the long-form account in [LEARNINGS.md](LEARNINGS.md).
 
-## Model swap notes
+## Model history
 
-V1 uses MSI-Net through TensorFlow.js because the model's author has already published a working TF.js Graph Model with five quality presets. V2, per the PRD, is meant to move to UNISAL through ONNX Runtime Web. The migration looks small on paper: keep the `pipeline/`, `render/`, and `ui/` layers untouched, rewrite `model/loader.js` and `model/inference.js` against `onnxruntime-web`, and update the preset-to-URL mapping to point at an ONNX artefact instead of a TF.js Graph Model. Both backends expose a "load a graph, feed a tensor, get a tensor back" shape, so the module contract documented in the PRD should carry over.
+V1 (0.1.0 / 0.1.1) shipped with MSI-Net through TensorFlow.js — the path the model's author had already proven with a working TF.js Graph Model and five quality presets. V2 (0.2.0) swapped to UNISAL through ONNX Runtime Web. The migration was smaller than a reader of the PRD might expect: every change lived inside `model/`, `pipeline/`, or the boot wiring, and the `render/` + `ui/` layers came through untouched. That outcome is the best-case argument for the layer boundaries the PRD specifies.
 
-The open questions are less about code and more about the runtime: ORT Web's bundle size compared with TF.js's, whether the WebGPU execution provider covers UNISAL's depthwise separable convolutions, and how the first-run download UX changes if the model is hosted somewhere other than the existing Google Cloud bucket. Those investigations are the subject of [LEARNINGS.md](LEARNINGS.md) — that file is also where the V3 (SUM) CUDA-kernel blocker is written up. Read it before starting on either a UNISAL or a SUM migration; it will save you rediscovering things the hard way.
+The desk-research and hands-on export spike that preceded the V2 merge is preserved at [docs/spikes/unisal-onnx-research.md](docs/spikes/unisal-onnx-research.md). It documents the questions the swap answered and the ones it deliberately left open — most notably, the qualitative comparison between MSI-Net and UNISAL on Foveacast's target content, which the roadmap flags as its own work item. [LEARNINGS.md](LEARNINGS.md) carries the running commentary for both versions.
+
+V3, per the PRD, is SUM. That one is blocked upstream on Mamba's CUDA-kernel dependency; see the entry in [LEARNINGS.md](LEARNINGS.md) before starting on it.
 
 ## Attribution
 
 Foveacast stands on three pieces of open-source work:
 
-- **MSI-Net** by Alexander Kroner — the saliency model. MIT licence. [github.com/alexanderkroner/saliency](https://github.com/alexanderkroner/saliency)
-- **TensorFlow.js** — the inference runtime. Apache 2.0. [tensorflow.org/js](https://www.tensorflow.org/js)
+- **UNISAL** by Richard Droste, Jianbo Jiao and J. Alison Noble — the saliency model. Apache 2.0. [github.com/rdroste/unisal](https://github.com/rdroste/unisal)
+- **ONNX Runtime Web** — the inference runtime. MIT. [onnxruntime.ai/docs/tutorials/web/](https://onnxruntime.ai/docs/tutorials/web/)
 - **heatmap.js** by Patrick Wied — the overlay renderer. MIT licence. [patrick-wied.at/static/heatmapjs](https://www.patrick-wied.at/static/heatmapjs/)
 
 Full licence text for Foveacast itself is in [LICENSE](LICENSE) (MIT, Ken Hawkins).
 
 ## Limitations
 
-- Desktop Chrome and Firefox only. Mobile browsers are out of scope; they do not have the working memory for this kind of inference, and users get a friendly "use a desktop" message instead.
-- MSI-Net was trained primarily on natural scenes, so accuracy drops on dense text, data tables, maps, and other content types that are underrepresented in the SALICON dataset.
+- Desktop Chrome and Firefox only. Mobile browsers are out of scope; they do not have the working memory for this kind of inference, and users get a friendly "use a desktop" message instead (now dismissible via a "Proceed anyway" button, at the user's own risk).
+- UNISAL was trained on SALICON — natural scenes and photographs. Accuracy drops on dense text, data tables, maps, and other content types underrepresented in the training set. That was true of MSI-Net too; it is the reason "qualitative benchmarking on Foveacast's target content" is still a live roadmap item.
 - Output is a probabilistic estimate based on population-average gaze patterns, not measured eye-tracking data. Saliency models have documented biases that reflect their training distribution; the UI carries a non-dismissible note to that effect.
 - Images above 20 MB are rejected at the drop zone, and anything wider than 2560 px is downsampled before inference to keep memory behaviour predictable on modest hardware.
-- Recommended machine is 8 GB RAM with a reasonably modern CPU; the High and Very high presets are slow on anything smaller. Pick Fast or Low on older hardware.
+- Recommended machine is 8 GB RAM with a reasonably modern CPU. V2 inference is single-threaded on GitHub Pages (the origin cannot set the `Cross-Origin-Embedder-Policy` header that ORT Web threading needs), so performance on an older CPU is slower than V1 was in comparable settings.
 
 ## How this was built
 
 Foveacast started as a hypothesis: the underlying science (visual saliency prediction) is well-established, the models are open source, and the browser is now capable enough to run inference locally. If all three are true, the thing a $200-per-seat SaaS sells is packaging and integrations — not the core capability.
 
-V1 is the test of that hypothesis. It was specified, researched, reviewed, and built with heavy AI assistance (Claude Code, Claude Sonnet/Opus). The process is documented in [LEARNINGS.md](LEARNINGS.md) — not as a polished case study, but as a running log written at the time the decisions were made. That file carries: the moment we discovered the MSI-Net TF.js weights were not where the PRD said they were, the bug that shipped because vitest mocked at exactly the wrong layer and was only caught by a user on first drop, the four-reviewer loop that pointed at the UX cliffs we didn't see in our own work, the ship-day pitfalls with GitHub Pages enablement and deploy retry, and the moment we ran Foveacast on its own landing page and used the heatmap to inform the next layout pass.
+V1 was the test of that hypothesis. V2 is the test of whether the V1 architecture bet — strict layer boundaries so the model backend could be swapped cleanly — actually paid off. Both versions were specified, researched, reviewed, and built with heavy AI assistance (Claude Code, Claude Sonnet/Opus). The process is documented in [LEARNINGS.md](LEARNINGS.md) — not as a polished case study, but as a running log written at the time the decisions were made. That file carries: the moment we discovered the MSI-Net TF.js weights were not where the PRD said they were, the bug that shipped because vitest mocked at exactly the wrong layer and was only caught by a user on first drop, the four-reviewer loop that pointed at the UX cliffs we didn't see in our own work, the ship-day pitfalls with GitHub Pages enablement and deploy retry, the moment we ran Foveacast on its own landing page and used the heatmap to inform the next layout pass, and — for V2 — the desk-research-then-hands-on spike that turned a "3–7 day investigation" into a one-day export.
 
 If you're curious about the shape of AI-assisted development on a small, opinionated project, [LEARNINGS.md](LEARNINGS.md) is the primary source. The [CHANGELOG.md](CHANGELOG.md) is the secondary source. A retrospective blog post may eventually draw from both.
 

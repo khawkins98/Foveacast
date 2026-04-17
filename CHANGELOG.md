@@ -4,6 +4,70 @@ All notable changes to Foveacast are recorded here. Format follows [Keep a Chang
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-04-17
+
+V3: the saliency model is now fine-tuned on real UI eye-tracking data. The stock SALICON-pretrained models from V1 and V2 were trained on natural photographs and missed UI-specific attention targets (buttons, CTAs, navigation). V3 fine-tunes [MSI-Net](https://doi.org/10.1016/j.neunet.2020.05.004) (Kroner et al. 2020) on the [UEyes dataset](https://doi.org/10.1145/3544548.3581096) (Jiang et al. 2023) — 1,980 UI screenshots with real eye-tracking from 62 participants. On a held-out test split: CC +43%, KLD −44%, NSS +45% vs the stock model.
+
+The heatmap renderer is also replaced. heatmap.js added visual distortion (radius spreading, stride sampling, internal blur) that made the overlay look more diffuse than the model's actual predictions. The new renderer maps saliency values directly to pixels via the inferno colormap — what you see now matches what the model actually predicts.
+
+### Added
+
+- **V3 saliency model** — MSI-Net fine-tuned on UEyes, exported as a 57 MB FP16 ONNX artefact from [foveacast-training v0.1.0](https://github.com/khawkins98/foveacast-training/releases/tag/v0.1.0). Input: 240×320 RGB. Output: [0, 1] saliency map with mean subtraction baked into the graph.
+- **Direct inferno colormap renderer** (`docs/src/render/saliency-canvas.js`) — pixel-accurate, no external library, perceptually uniform and colour-blind safe. Replaces heatmap.js for the saliency overlay.
+- **Deploy-time model fetch** (`scripts/fetch-v3-model.sh`) — the 57 MB artefact is downloaded from the foveacast-training GitHub Release at deploy time rather than committed to the repo. SHA256-verified after download. For local dev: `bash scripts/fetch-v3-model.sh`.
+- **Diagnostics panel** — collapsible section below the heatmap output showing source dimensions, model identity, saliency stats, peak location, and preprocessing/postprocess details. Click "Diagnostics" to expand.
+- **Attribution footer** credits [MSI-Net](https://doi.org/10.1016/j.neunet.2020.05.004) (Kroner et al. 2020, MIT), [UEyes](https://doi.org/10.1145/3544548.3581096) (Jiang et al. 2023, CC BY 4.0), and [foveacast-training](https://github.com/khawkins98/foveacast-training).
+
+### Changed
+
+- **Inference model: UNISAL (3.7M params, 288×384) → MSI-Net fine-tuned on UEyes (25M params, 240×320).** Larger model but substantially better on UI content. FP16 quantisation keeps the download at 57 MB (vs UNISAL's 12.5 MB).
+- **Preprocessing: ImageNet normalisation removed.** V3's ONNX graph handles mean subtraction internally — the preprocessing pipeline now passes raw 0–255 RGB pixels. Aspect-ratio-preserving resize with constant-126 padding replaces the previous stretch-to-fill.
+- **Postprocessing: log-probability `exp()` step removed.** V3 outputs direct [0, 1] saliency (min-max normalised inside the graph). Gaussian blur reduced from σ=28 to σ=5 — V3's output is already smooth from the VGG16 decoder's bilinear upsamples.
+- **Model delivery: committed artefact → deploy-time fetch.** The `.onnx` file is no longer in the git repo. `deploy.yml` runs `scripts/fetch-v3-model.sh` before the Pages upload step. Eliminates repo bloat for a 57 MB binary.
+- **Heatmap rendering: heatmap.js → direct canvas colormap.** The old renderer added radius spreading (40px per point), stride sampling, and internal blur that distorted the spatial precision of the model's predictions. The new renderer maps each pixel directly to the inferno colormap — no spreading, no sampling, no external dependency.
+
+### Removed
+
+- **heatmap.js dependency** — no longer imported by main.js or demo.js. The library file is retained in the repo for reference but unused at runtime.
+- **UNISAL model** at `docs/models/unisal/model.onnx` — replaced by the V3 model fetched at deploy time to `docs/models/v3/model.onnx`.
+
+## [0.2.0] — 2026-04-16
+
+V2 per the PRD: the inference model and runtime both change. MSI-Net through TensorFlow.js is replaced by UNISAL through ONNX Runtime Web. The user-visible feature set is unchanged — drop a screenshot, get back a heatmap — but the bytes under the hood are different, and the preset picker is gone because UNISAL is a single fixed-shape model.
+
+This release is a breaking change for anyone with cached MSI-Net weights; the new model is served from `./models/unisal/model.onnx` and the old `./models/{preset}/` paths are no longer populated by any ship path.
+
+### Added
+
+- **UNISAL ONNX model, committed at `docs/models/unisal/model.onnx`** — 12.5 MB single-file artefact, exported from the stock `rdroste/unisal` SALICON checkpoint. No CDN dependency: the file is served same-origin from the repo. The export script lives at `scripts/unisal-onnx-export.py`, with the reproduction recipe documented in the script's docstring.
+- **ONNX Runtime Web runtime**, vendored at `docs/vendor/ort.wasm.min.js` + `docs/vendor/ort-wasm-simd-threaded.wasm` + `docs/vendor/ort-wasm-simd-threaded.mjs` (version 1.24.3, MIT licence). Runs single-threaded on GitHub Pages because COEP headers are not available; ORT Web handles the fallback automatically.
+- **Desk-research and hands-on export spike write-up** at `docs/spikes/unisal-onnx-research.md`. Answers every question the earlier V2 investigation had left open, including the ORT Web bundle reality, community-export status, and the log-probability output quirk.
+
+### Changed
+
+- **Inference model: MSI-Net (~25M params, 5 presets) → UNISAL (3.7M params, 1 shape).** UNISAL is ~6.7× smaller by parameter count. Input is a fixed 288×384 RGB tensor with ImageNet normalisation. The fixed shape removes the speed/quality trade-off the preset picker used to expose.
+- **Inference runtime: `@tensorflow/tfjs` 4.22 → `onnxruntime-web` 1.24.3.** Net first-load budget moved from ~1.4 MB of JS + ~24 MB of weights to ~12 MB of WASM + 12.5 MB of weights. Subsequent cached loads pay only the asset cache cost, which is comparable.
+- **Postprocess pipeline** gained a `logProbsToProbabilities` step (`exp(y - max(y))`) before the upsample/blur/normalise path. UNISAL's output is log-softmax over the grid; MSI-Net's was direct 0–255 intensity. The exp step turns the diffuse raw logits into a localised saliency peak.
+- **Preprocess layout** moved from NHWC BGR 0–255 (MSI-Net / VGG inheritance) to NCHW RGB ImageNet-normalised 0–1 (UNISAL / MobileNetV2 inheritance). The module is still framework-agnostic — no `onnxruntime-web` dependency.
+- **Preset picker removed** from the controls UI. Opacity, view toggle, and download button remain.
+- **Attribution footer** credits UNISAL (Apache 2.0) and ONNX Runtime Web (MIT) in place of MSI-Net and TensorFlow.js.
+- **First-run banner copy** cites the actual UNISAL download size (~13 MB) rather than MSI-Net's ~60 MB. Ready-state copy unchanged.
+- **`loadModel` signature simplified** from `loadModel(preset, onProgress)` to `loadModel(onProgress)`. Progress events now carry real `loaded` / `total` byte counts — `loader.js` fetches via a `ReadableStream` so the progress bar can show byte counts instead of falling back to opaque fractions.
+- **Demo-mode synthetic saliency** now generates log-probability-range values at UNISAL's native 288×384 shape so it flows through the same postprocess as real inference.
+- **Deploy workflow** no longer calls `scripts/fetch-weights.sh`. The UNISAL artefact is committed, so the Pages upload picks it up directly from the repo.
+
+### Removed
+
+- **`@tensorflow/tfjs` vendor** (`docs/vendor/tf.min.js`, `docs/vendor/LICENCE-TFJS.txt`).
+- **`scripts/fetch-weights.sh`** and **`scripts/test-e2e-no-mirror.sh`** — the former mirrored MSI-Net weights at deploy time, the latter simulated a missing mirror in CI. Neither is meaningful under V2's in-repo weight story.
+- **Preset-related code** across loader, controls, main, and tests: `PRESETS` constant, `resolveModelUrl`, `GCS_MODEL_URLS`, `LOCAL_MODEL_URLS`, `MODEL_URLS`, `PRESET_CODE_NAMES`, `onPresetChange` callback.
+
+### Notes
+
+- **Quality benchmark against MSI-Net: not done.** The spike doc recommended a qualitative comparison before committing to V2; we shipped anyway. If user-facing output looks worse on real content, the revert path is clean — the layer boundaries held, and a V1 restore is mechanically a diff revert plus re-running `scripts/fetch-weights.sh` (preserved in git history).
+- **WebGPU is off.** GitHub Pages cannot set `Cross-Origin-Embedder-Policy: require-corp`, which ORT Web's WebGPU EP needs for threading; the JSEP WASM variant is an extra ~10 MB for capability we cannot use. The ship build is the WASM-only `ort.wasm.min.js`.
+- **Model credit:** UNISAL (Droste, Jiao & Noble, ECCV 2020; Apache 2.0), single SALICON-trained export, ~3.7M parameters.
+
 ## [0.1.1] — 2026-04-16
 
 Post-release housekeeping. First pass of changes informed by actually using the shipped product, running Foveacast on its own landing page, and closing the smallest items from the overnight reviews that didn't block V1.

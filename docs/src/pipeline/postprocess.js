@@ -1,20 +1,19 @@
 // Saliency-map post-processing.
 //
-// The raw output of MSI-Net is a `[inputH × inputW]` Float32 tensor — i.e.
-// one scalar per input-resolution pixel. Before this map is useful for an
-// overlay, the PRD (§Post-processing pipeline) requires three steps:
+// V3 MSI-Net outputs a [240 × 320] Float32 tensor already normalised to
+// [0, 1] inside the ONNX graph. Three steps make it overlay-ready:
 //
-//   1. Bilinearly upsample to the original screenshot's dimensions so each
-//      saliency value aligns with a real-world pixel on the user's canvas.
-//   2. Apply a Gaussian blur with σ ≈ 20-40 px at 1× resolution, which
-//      smooths out the staircase edges introduced by the upsample and
-//      produces visually-pleasant contour lines after the heatmap.js
-//      colour ramp is applied.
-//   3. Rescale to [0, 1] so the heatmap library's default colour ramp has
-//      consistent dynamic range regardless of the absolute raw values.
+//   1. Bilinearly upsample to the original screenshot's dimensions so
+//      each saliency value aligns with a real-world pixel on the user's
+//      canvas.
+//   2. Apply a light Gaussian blur (σ=5 at 1× resolution) to smooth
+//      out staircase edges from the upsample without washing out the
+//      attention peaks.
+//   3. Rescale to [0, 1] so the inferno colour ramp has consistent
+//      dynamic range regardless of the absolute values.
 //
-// All functions here are pure — they take and return typed arrays, never
-// touch a canvas — so they unit-test cleanly under jsdom or node.
+// All functions here are pure — they take and return typed arrays,
+// never touch a canvas — so they unit-test cleanly under jsdom or node.
 
 /**
  * Bilinearly upsample (or downsample) a single-channel saliency map.
@@ -179,22 +178,53 @@ export function normaliseToUnit(data) {
 }
 
 /**
- * Full post-processing pipeline: upsample raw saliency to the screenshot's
- * dimensions, blur, then normalise to `[0, 1]`.
+ * Convert a log-probability saliency map into a probability-like map
+ * via a numerically-stable `exp(y - max(y))`. Subtracting the max
+ * before `exp` keeps the result in `[0, 1]` and prevents `Infinity`
+ * for log-probs close to zero (which should not happen for UNISAL
+ * output, but cheap to guard against).
  *
- * Default `sigmaPx = 28` sits in the middle of the PRD's specified 20-40 px
- * range. 28 gives a visibly smooth contour without washing out the
- * location of the attention peak; in practice the right number depends on
- * screenshot resolution, and a future version can expose this as a slider
- * or scale it with image size.
+ * Returns a NEW Float32Array; the input is not mutated. If the input
+ * is empty, returns an empty array rather than erroring.
  *
- * @param {Float32Array} raw - Raw saliency, length `srcH * srcW`.
+ * @param {Float32Array} data - Log-probability saliency map.
+ * @returns {Float32Array}
+ */
+export function logProbsToProbabilities(data) {
+  const out = new Float32Array(data.length);
+  if (data.length === 0) return out;
+  let max = data[0];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i] > max) max = data[i];
+  }
+  for (let i = 0; i < data.length; i++) {
+    out[i] = Math.exp(data[i] - max);
+  }
+  return out;
+}
+
+/**
+ * Full post-processing pipeline: upsample → blur → normalise.
+ *
+ * V3 MSI-Net outputs saliency already in [0, 1] (min-max normalised
+ * inside the ONNX graph), so there is no log-probability exp step.
+ * The pipeline is: upsample to the user's screenshot resolution →
+ * Gaussian blur for smooth contours → normalise to [0, 1].
+ *
+ * V3's model output is already smooth (VGG16 decoder with bilinear
+ * upsamples + min-max normalisation inside the ONNX graph). A light
+ * sigma suffices to remove any resize staircasing without washing
+ * out the attention peaks. V2's UNISAL needed sigma=28 because its
+ * log-probability → exp() output was very peaky; V3 does not.
+ *
+ * @param {Float32Array} raw - Model output, length `srcH * srcW`, values in [0, 1].
  * @param {[number, number]} srcDims - Model output dims `[srcH, srcW]`.
  * @param {[number, number]} targetDims - Final dims `[h, w]` to upsample to.
  * @param {number} [sigmaPx=28] - Gaussian sigma in target-space pixels.
  * @returns {Float32Array} Length `targetH * targetW`, values in `[0, 1]`.
  */
-export function postprocess(raw, srcDims, targetDims, sigmaPx = 28) {
+export function postprocess(raw, srcDims, targetDims, sigmaPx = 5) {
+  // V3: raw is already [0, 1], no logProbsToProbabilities needed.
   const upsampled = upsampleBilinear(raw, srcDims, targetDims);
   const blurred = gaussianBlur(upsampled, targetDims, sigmaPx);
   return normaliseToUnit(blurred);

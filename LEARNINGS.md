@@ -179,6 +179,138 @@ Open questions before committing effort:
 
 Suggested spike as a separate piece of work: run `torch.onnx.export` on a stock UNISAL checkpoint, validate the resulting graph in ORT on CPU first, and only then try it in ORT Web. That ordering catches export problems without the browser-runtime variable layered on top.
 
+## 2026-04-16 — UNISAL ONNX desk-research spike
+
+Went back and answered the three open questions from the V2 investigation entry. The full write-up is [`docs/spikes/unisal-onnx-research.md`](docs/spikes/unisal-onnx-research.md). The short version:
+
+The ONNX export itself should be clean. Every op UNISAL uses is standard PyTorch. The convolutional GRU is implemented from Conv2d + sigmoid + tanh rather than `nn.GRUCell`, and — more importantly — the image-only path bypasses the GRU entirely when `static=True` and `bypass_rnn=True`. That removes the one construct (the Python `for t in range(T)` loop) that would have forced us to deal with ONNX Loop ops or unrolling. Two things to handle at export time: the forward signature is 5-D (`[batch, time, channel, h, w]`), and the `source` string argument drives Python-side attribute lookups that will hard-code whichever dataset we pass at export. Neither is a blocker; both are scope for the export script.
+
+The ORT Web runtime cost is larger than expected. The default WebGPU-capable build is around 20 MB of WASM (~6 MB gzipped); a size-optimised source build drops to ~8 MB; the minimal-build path gets to ~3 MB but requires converting the model to ORT format and a local build that only links the ops UNISAL needs. TF.js today is 1.4 MB vendored. The weight-file side moves in the opposite direction — UNISAL is 5–20× smaller than MSI-Net per the PRD, so a single preset weight file is probably 5–15 MB against MSI-Net's ~24 MB. Net first-run total is a wash or slightly worse for the default build and clearly better for the minimal build.
+
+ORT Web falls back to single-threaded WASM without COEP headers, which is the behaviour we need for GitHub Pages. Not an error path, not a warning — just slower than it would be with cross-origin isolation. Given GitHub Pages cannot set COEP, this is the permanent browser-side performance floor for any V2 built on ORT Web.
+
+No community ONNX export exists. Searches across GitHub and HuggingFace turn up the reference PyTorch repo and the KDSalBox knowledge-distillation toolbox, nothing else. We own the export end-to-end.
+
+Recommendation going forward: proceed to a hands-on export spike on a one-day time box. Do *not* schedule a V2 integration until that spike validates the export and until a separate qualitative comparison confirms UNISAL actually outperforms MSI-Net on Foveacast's target content types. "UNISAL was trained on more diverse data" is a reason to look, not a reason to ship; accuracy on the actual screenshots is the metric that matters.
+
+## 2026-04-16 — UNISAL ONNX hands-on export
+
+Ran the export. Everything worked on the first pass end-to-end, which is not something I often get to write about this kind of integration. Full write-up in [`docs/spikes/unisal-onnx-research.md`](docs/spikes/unisal-onnx-research.md) §Option B; short form here.
+
+Set up a Python 3.12 venv via `uv`, installed torch 2.11, onnx, onnxruntime, onnxscript, plus the UNISAL runtime dependencies its `__init__.py` drags in (opencv-python, tensorboardX, fire, scipy) even when you only want the model class. Cloned `rdroste/unisal` into `/tmp`. Wrote `scripts/unisal-onnx-export.py`, which loads the SALICON checkpoint, wraps the model in a thin `nn.Module` adapter that accepts `[1, 3, 288, 384]` and squeezes out UNISAL's native time and channel dims, and calls `torch.onnx.export` with `source="SALICON"` and `static=True` baked in.
+
+Three things from the desk spike that turned out right: every op traced cleanly, the image path skipped the convolutional GRU entirely, no `torch.jit` or custom autograd to fight. One thing the desk spike missed: UNISAL's forward() returns **log-probabilities**, not a sigmoid'd 0–1 saliency map. Raw output on the surfer test image lives in `[-23.537, -7.732]`. You can see this either by reading the training loss (KLD + NSS + CC; KLD implies log-softmax output) or just by printing the tensor after a forward pass. A browser port will need an `exp()` step before the heatmap rendering path.
+
+The exported artefact is 12.5 MB as a single self-contained `.onnx` file after forcing `onnx.save_model(save_as_external_data=False)`. The first export pass wrote weights to a sidecar `.onnx.data`, which the modern torch exporter does by default. For the browser we want one file; the script handles the rewrite in-place.
+
+Parity is essentially perfect: max |Δ| between ORT CPU and stock PyTorch across three synthetic fixtures and one real photo is 5.3e-05. For context, "good enough" is 1e-3 and "something went wrong" is 1e-2. ORT CPU inference time on macOS ARM64 is ~27 ms per frame, which is more than fast enough for a one-at-a-time drop-and-render interaction in the browser.
+
+Net: the technical story for V2 is no longer "can we get UNISAL into the browser". It is "do we want to pay 8–20 MB of extra ORT Web wasm for a 12.5 MB weight file and potentially better content generalisation". That is a product judgement and should be informed by an actual qualitative comparison between MSI-Net and UNISAL output on representative Foveacast screenshots. The "Model-quality benchmarking" roadmap item is the gate, not another engineering spike.
+
+The ONNX artefact itself is committed to `docs/models/unisal/model.onnx` on the spike branch. If V2 ships, this is already the production artefact; if the spike branch gets archived, nothing is lost because the recipe in `scripts/unisal-onnx-export.py` is reproducible.
+
+## 2026-04-16 — V1 vs V2 qualitative benchmark (with ground truth)
+
+The spike doc said a qualitative MSI-Net vs UNISAL benchmark was the gate before committing to V2. We shipped V2 without it. After shipping, I ran the A/B on four screenshots — two without ground truth and two with real eye-tracking data from a published usability study. The result is strong enough that it deserves a record separate from the PR comment thread.
+
+**Ground-truth source.** The two ACS (American Community Survey) screens in the comparison folder come from [ResearchGate figure 4, "Round 1 Welcome Screen"](https://www.researchgate.net/figure/Round-1-Welcome-Screen_fig4_235343733) — a published Census Bureau usability study with participant eye-tracking heatmaps overlaid. The "counts" legend in the ground-truth images is participant fixation counts, which makes them directly comparable to a saliency prediction: where the real users looked, and how intensely. For UI content specifically, this is the kind of signal that would take weeks to collect in-house — having someone else's study already on the internet is a gift, and we should use it.
+
+**Comparison screenshots, all in `docs/spikes/comparison/`:**
+
+- `undrr-gar-*` — UNDRR Global Assessment Report page. Dense UN/NGO text content. No ground truth.
+- `youtube-home-*` — YouTube logged-out home page. Thumbnail grid, category chips, Shorts reel. No ground truth.
+- `acs-welcome-*` — ACS welcome screen with Begin button. Ground truth present.
+- `acs-question-*` — ACS survey question page with sidebar navigation. Ground truth present.
+
+**What the no-ground-truth screens showed.** MSI-Net produces a visibly more granular output on both — individual page elements register as distinct hotspots; UNISAL produces a central blob. For a designer reviewing a layout, "which of these elements competes for attention" is the question being asked, and MSI-Net answers it with more resolution. That alone is a readable product win, but it is subjective.
+
+**What the ACS welcome screen showed.** Both models miss the Begin button that real participants fixated on most. MSI-Net's fixation falls on the title; UNISAL's lands in the negative space between text lines. Neither prediction is "right" — they both behave like natural-scene models, weighing text and faces over CTAs, because that is what they were trained to do. This is the strongest evidence that the SALICON-training-data limit is the ceiling for this kind of content regardless of which SALICON-trained model we pick.
+
+**What the ACS question screen showed.** This is where the comparison got interesting. Real-participant fixations clustered on (a) the question "What is your sex?" with its radio buttons, (b) the right-hand "Where You Are" navigation box, and (c) the Previous/Next buttons. MSI-Net's predicted heatmap has clear hotspots on the first two — the question area AND the right sidebar — plus visible warmth on the button row. UNISAL's predicted heatmap is one large central blob with barely any sidebar activation. **MSI-Net's prediction tracks the real eye-tracking data meaningfully better than UNISAL's on this screen.** Whatever slight "newer model" theoretical advantage UNISAL has on natural scenes does not carry over to UI forms.
+
+**The pattern across all four:**
+
+| Screen | Content type | Ground truth? | MSI-Net | UNISAL |
+|---|---|---|---|---|
+| UNDRR GAR | Dense text | No | Granular hotspots on accordion items | Single central blob |
+| YouTube home | Thumbnail grid | No | Each tile resolves separately | Uniform red over upper 2/3 |
+| ACS welcome | Form CTA | Yes | Diffuse, misses Begin | Diffuse, misses Begin |
+| ACS question | Form + sidebar | Yes | **Tracks ground truth hotspots** | Central blob, weak sidebar |
+
+**Conclusion.** The architectural wins of V2 (12.5 MB in-repo artefact, no GCS dependency, single-file ONNX, proof that the layer boundary cleanly supports a model swap) are real and measurable. The output-quality argument for V2 is not landing. On the one comparison with ground-truth signal and enough structure to differentiate, MSI-Net is materially closer to what real users looked at.
+
+**What this changes about the V2 decision.** At minimum: the "no clear winner" framing the PR comment offered after n=2 was too generous. With n=4 and two ground-truth comparisons, MSI-Net looks better for Foveacast's target content (UI screenshots). The reasonable paths forward are (1) revert V2 and keep the architecture work + ONNX artefact as proof-of-concept, (2) ship both and expose a model toggle, or (3) ship V2 anyway because the architectural discipline wins are worth more than the output-quality loss on this specific content class. None of these three is obviously right, and the call is a product judgement the maintainer has to make with eyes open rather than by default. This LEARNINGS entry is the eyes-open record.
+
+**What this reinforces about V3.** SUM's value proposition — a model explicitly trained on UI screenshots — becomes more compelling after seeing how badly SALICON-trained models miss UI-specific attention targets like CTAs. The Mamba CUDA-kernel blocker stays the same, but the urgency of cracking it is higher than the V1 build suggested.
+
+## 2026-04-16 — Wider model survey; V3 pivots from SUM to UMSI++
+
+After the V1-vs-V2 benchmark made clear that both shipped-candidate models were SALICON-limited, cast a wider net. Full write-up in [`docs/spikes/model-survey-2026-04.md`](docs/spikes/model-survey-2026-04.md); short version here.
+
+The survey looked for post-2023 saliency models that were (a) permissively licensed, (b) ONNX-exportable, and (c) ideally evaluated on UI / web / document content rather than natural scenes. Ten candidates came back, most of which fall out immediately — closed-source (UniAR), non-commercial licence (ViNet-S), or no UI evidence (SalTR, MDS-ViTNet). Two survive the filter.
+
+**UMSI++ (the model UEyes actually ships)** is the surprise of the survey. It is in MSI-Net's architectural family, which means our existing pipeline (NCHW preprocess, ImageNet normalisation, the ORT Web loader scaffolding from the V2 work on PR #4) likely drops in with minor tweaks. And it was trained on 1,980 UI screenshots with real eye-tracking data via the UEyes dataset — webpages, desktop, mobile, posters. That is the training-data match Foveacast has been missing since V1. The catch is the licence: the UEyes repo has no `LICENSE` file at root, so the code is technically all-rights-reserved until the authors say otherwise. An email to Yue Jiang's group is faster to resolve than SUM's Mamba CUDA blocker is to engineer around, so this moves to the top of the V3 list.
+
+**SUM** stays in the backup slot. The Mamba CPU-fallback story still has not matured upstream in the way the original PRD hoped. If UMSI++'s licence doesn't clear, we revisit SUM. If it does, SUM can wait.
+
+The V3 plan drafted earlier (desk research → hands-on export → browser integration, each phase gated) carries over unchanged. Only the model under investigation changes. PR #4's branch stays the starting point — its ORT Web infrastructure, Playwright real-load test, and comparison tooling all apply to a UMSI++ spike the same way they applied to a SUM one.
+
+One meta-note worth naming: the survey almost didn't happen. The overnight V1 build deferred "wider model survey" as out of scope, the V2 work went with UNISAL because the PRD had already chosen it, and it took an unflattering benchmark against real eye-tracking data to make the case for going back and re-surveying the field. If a PRD's model choice is older than a year or two, it is worth re-asking the question before spending engineering effort on it — the lag between "model published" and "model known-good in practice" is short enough that a one-hour survey can reshape a multi-day spike.
+
+## 2026-04-16 — Correction: UMSI++ is not in MSI-Net's family, and the V3 target shifts again
+
+A few hours after posting the "pivot to UMSI++" decision above, a direct look at the UEyes repo corrected two claims the background survey agent had made:
+
+**First, UMSI++ is not the MSI-Net lineage the survey described.** Reading `saliency_models/UMSI++/src/` in the repo, the model is built on DCN-ResNet + Xception + attentive ConvLSTM, implemented in Keras 2 / TensorFlow. MSI-Net is a VGG-16 encoder with a multi-scale contextual decoder, implemented in PyTorch. The two share "saliency over images" as a problem description and not much else architecturally. The "same family as MSI-Net, so the V2 pipeline drops in" argument I wrote above does not hold — a Keras + ConvLSTM model has a different export story than the PyTorch → ONNX path V2 proved out.
+
+**Second, the UMSI++ weights are not where the README implies.** `saliency_models/UMSI++/README.md` says "remember to put umsi++.hdf5 to the folder weights", meaning the weights file is referenced but is not committed to the repo and is not included in the Zenodo deposit (which is 12.9 GB of *dataset*, not model artefacts). The weights' hosting location is undocumented. Without an author-contact resolution, they are not publicly retrievable.
+
+**What IS cleanly usable.** The UEyes **dataset** — 1,980 UI screenshots with real eye-tracking data — is on Zenodo under CC BY 4.0, attribution to Jiang et al. 2023 (CHI '23). That is a genuinely useful asset: we can use it to fine-tune any already-permissively-licensed saliency model on Foveacast's target content class, without waiting on an email from the UEyes authors and without inheriting any of UMSI++'s unclear licence state.
+
+**Revised plan.** V3 target is now "fine-tune MSI-Net on the UEyes dataset" rather than "ship UMSI++." Specifically:
+
+- MSI-Net is MIT-licensed; the code is Alexander Kroner's and the TF.js conversion path is proven from V1.
+- UEyes dataset is CC BY 4.0; attribution to the CHI 2023 paper.
+- The fine-tuned output belongs to Foveacast, under clean licences end-to-end.
+- The only new moving parts are a training script and a modest amount of GPU compute.
+
+SUM stays in the backup slot. If the fine-tune path turns out to have a blocker we haven't foreseen, we go back to the Mamba CPU-fallback spike.
+
+**The meta-lesson.** Agent summaries are useful for narrowing a search space; they are not sources of truth about what a repo actually contains. The "same family as MSI-Net" claim was almost certainly the agent pattern-matching on a name (UMSI-NET-family) rather than reading the architecture code. For any decision that flows from an agent-produced research summary, a 10-minute pass through the real code — file listing, README, any `src/` folder — is cheap insurance against building a plan on a false premise. Adding this to the "how I'd do this again" file.
+
+## 2026-04-16 — Splitting the model-training work into a companion repo
+
+V3 direction settled: fine-tune MSI-Net (MIT) on the UEyes dataset (CC BY 4.0) to get a Foveacast-owned saliency model trained on UI content. The implementation question that followed was "does this live in Foveacast or in its own repo?" Picked its own repo.
+
+The reasons are all pragmatic rather than ideological. Foveacast's README leans on "buildless static web app, vendored dependencies, nothing runs on a server." A training pipeline is the opposite of that — Python, PyTorch or TF, GB-scale dataset, checkpoints, TensorBoard, probably GPU-specific config. Mixing the two blurs the Foveacast positioning and starts making "clone and run" ambiguous ("run what? the web app or the training?"). Separating the repos keeps Foveacast's "clone, pnpm install, pnpm dev" story honest and gives the training work somewhere to exist where its concerns (dataset download, checkpoint management, reproducibility) are first-class.
+
+Attribution cleanliness also matters. The fine-tuned model's provenance chain is MSI-Net (Alexander Kroner, MIT) → UEyes dataset (Jiang et al. 2023, CHI '23, CC BY 4.0) → our fine-tune (MIT). Putting that chain in a companion repo's README makes it one place to maintain; Foveacast's attribution footer then carries a one-line "model from `foveacast-training` vX.Y" link. Single source of truth for where the weights came from and what licence they carry.
+
+The companion repo will own:
+- Training script and UEyes loader.
+- MSI-Net architecture reference (either vendored from Kroner's upstream or ported to PyTorch, decided at setup).
+- Evaluation harness, including runs against the four committed comparison screenshots in `docs/spikes/comparison/`.
+- ONNX export step.
+- Released `.onnx` artefacts tagged by training run.
+
+Foveacast's job is narrower: consume a specific release of the training repo's artefact, drop it at `docs/models/foveacast-v3/model.onnx`, wire it into the loader. That happens in a separate PR against Foveacast, gated on a good training result.
+
+PR #4 pauses here. Branch + commits + comparison evidence + spike docs all preserved. The work continues in the companion repo, and when there's a trained model good enough to merge, it comes back here for the integration PR.
+
+## 2026-04-16 — V2 shipped: UNISAL + ORT Web end-to-end
+
+Turned the export artefact into a shipped release. `0.2.0` is live; MSI-Net through TF.js is out of the repo; the landing page runs UNISAL through `onnxruntime-web`. The release went smoother than any of us had a right to expect, for one specific reason, and one specific concern is carried forward.
+
+The reason it went smoothly is the V1 layer boundary. The PRD's insistence that `model/` be the only place the inference runtime is imported — with a grep-rule in CLAUDE.md to pin that down — paid for itself in a single afternoon. Every substantive change lived inside `docs/src/model/`, `docs/src/pipeline/`, or the boot code that wires them. `docs/src/render/` came through without a single line changed. `docs/src/ui/` lost its preset picker and the footer's attribution line, and that was it. When a spec's structural choice pays off like that, the right thing to do is write it down so we remember to do it again: if V3 or any later swap ever lands, it will land the same way or it will be our fault.
+
+The concern carried forward is the skipped benchmark. The spike doc explicitly recommended running a qualitative comparison between UNISAL and MSI-Net on representative Foveacast screenshots before committing to a swap. We shipped without that comparison. The argument for shipping anyway is honest: we do not have users reporting a quality problem with MSI-Net either, so the comparison is against hypotheticals on both sides. The argument against is also honest: "UNISAL is newer and was trained on more diverse data" is a reason to investigate, not a reason to ship. If the comparison eventually happens and UNISAL underperforms on UN/NGO-style dense-text content, the revert path is mechanically clean — the diff is contained — but the reputational cost of a "we made it worse" release is real and is not mitigated by architectural tidiness. Logging this so the next reader (which may well be me) does not forget that the swap was a product call taken on thin evidence, not a technical call taken on strong evidence.
+
+One detail worth surfacing here because it is the kind of thing a future reader will otherwise have to derive from the diff: UNISAL's forward pass returns log-probabilities, not a sigmoid'd 0–1 saliency map. The real-image check during the spike made this obvious — the raw output on the surfer photo lives in `[-23.5, -7.7]`, consistent with log-softmax over 288×384 — but the pipeline has to know about it. `docs/src/pipeline/postprocess.js` gained a `logProbsToProbabilities` step that does `exp(y - max(y))` before the existing upsample/blur/normalise chain. Without it the heatmap is visibly diffuse even though the inference is correct. Any future model swap that moves back to direct-intensity outputs will need to drop that step.
+
+The bundle-size trade-off landed where the desk spike said it would. `docs/vendor/` grew from ~1.4 MB of TF.js to ~12.5 MB of ORT Web wasm + glue. The weight file shrank from ~24 MB per MSI-Net preset to a single 12.5 MB ONNX for UNISAL. Net first-run total is approximately a wash. Subsequent cached loads are the same order of magnitude. What users actually notice is gone-the-preset-picker and a slightly different saliency texture — not a bandwidth change.
+
+Running `pnpm test` and `pnpm test:e2e` at the end of the refactor showed 123 unit tests green and all 6 Playwright tests green against real Chromium. The Playwright suite does not exercise real inference (demo mode uses synthetic saliency) so the V2 stack is tested end-to-end at the render and composite layers but "real inference in a real browser" is still only tested by hand. The automated-inference-browser test is a worthwhile next item; it would have caught any ORT-Web-specific runtime issue before the merge rather than during it.
+
 ## 2026-04-16 — V3 SUM investigation (no code)
 
 V3 in the PRD is SUM (Saliency Unification through Mamba, WACV 2025 Oral), which matters because it is the only model in the field explicitly trained with a "user interface screenshot" condition. The blocker is well known: SUM's `requirements.txt` pulls in `mamba-ssm` and `causal-conv1d`, both of which ship as compiled CUDA C++ extensions with no ONNX operator equivalents. `torch.onnx.export` cannot trace what it cannot reach; WebAssembly cannot execute compiled CUDA. That is a hard wall, not a config tweak.

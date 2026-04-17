@@ -61,13 +61,13 @@ Serialise `{ sourceImage, saliencyMap, preset, opacity }` to an IndexedDB record
 
 ## Theme: model quality
 
-### V2 — UNISAL via ONNX Runtime Web
+### V2 — UNISAL via ONNX Runtime Web (shipped 0.2.0)
 
-**Size:** 3–7 days of spike, 1–2 days of integration if the spike lands. **Status:** named in PRD; investigation notes in LEARNINGS.
+**Status:** shipped in `0.2.0`. UNISAL replaced MSI-Net; ORT Web replaced TensorFlow.js. The spike notes remain at [`docs/spikes/unisal-onnx-research.md`](spikes/unisal-onnx-research.md); the ship-day write-up is in LEARNINGS. Delete from this roadmap once anything else on the V2 line ships (e.g. WebGPU unlocked if the distribution story changes, or a second UNISAL checkpoint tuned for a different source). For now, kept as a marker of what landed and a pointer to the open follow-up.
 
-Swap MSI-Net for UNISAL. Standard PyTorch ops, a clean ONNX export path in principle. Trade-offs documented in LEARNINGS.md §V2 UNISAL investigation. The open questions are: ORT Web bundle size, WebGPU execution-provider coverage for UNISAL's op set, and whether there's a community export we can start from.
-
-The integration shape is clean — the PRD's module architecture was designed for exactly this swap — but the spike itself is research work and should be treated as such. Don't commit to a UNISAL merge before the ONNX export has validated on CPU against stock UNISAL output.
+Open follow-ups tied directly to the V2 swap:
+- **Qualitative benchmark against MSI-Net** — still unanswered. The spike flagged it as a gate; the ship happened without it. This is the "Model-quality benchmarking" item below.
+- **Real-inference Playwright test** — the current E2E suite runs against demo mode (synthetic saliency), so the real ORT Web inference path is only tested by hand and by unit-level contract. A Playwright test that actually loads the 12.5 MB ONNX and runs inference on a committed fixture would close the only remaining gap in the four testing tiers.
 
 ### V3 — SUM (stretch)
 

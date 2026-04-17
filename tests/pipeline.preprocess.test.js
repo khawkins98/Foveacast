@@ -1,21 +1,20 @@
 // Unit tests for pipeline/preprocess.js. These run under jsdom (see
 // vitest.config.js) so `document.createElement('canvas')` exists, but
-// jsdom's canvas is a no-op — we exercise `toInputTensorData` purely on
-// synthetic `ImageData` objects to avoid depending on canvas rendering.
+// jsdom's canvas is a no-op — we exercise `toInputTensorData` purely
+// on synthetic `ImageData` objects to avoid depending on canvas
+// rendering.
 
 import { describe, it, expect } from 'vitest';
 import {
-  PRESETS,
+  MODEL_INPUT_DIMS,
   toInputTensorData,
   downsampleIfLarge,
 } from '../docs/src/pipeline/preprocess.js';
 
 /**
- * Build a synthetic ImageData-like object. `toInputTensorData` only needs
- * `.width`, `.height`, and `.data` (a Uint8ClampedArray of RGBA bytes),
- * which matches the real `ImageData` shape. jsdom doesn't always expose
- * the `ImageData` constructor globally, so we return a plain duck-typed
- * object — identical to what `ctx.getImageData` returns in real browsers.
+ * Build a synthetic ImageData-like object. `toInputTensorData` only
+ * needs `.width`, `.height`, and `.data` (a Uint8ClampedArray of RGBA
+ * bytes), which matches the real `ImageData` shape.
  */
 function makeImageData(width, height, fill = [0, 0, 0, 255]) {
   const data = new Uint8ClampedArray(width * height * 4);
@@ -28,79 +27,111 @@ function makeImageData(width, height, fill = [0, 0, 0, 255]) {
   return { data, width, height };
 }
 
-describe('PRESETS', () => {
-  it('exposes exactly the five PRD-specified presets with correct dims', () => {
-    expect(PRESETS).toEqual({
-      very_low: [48, 64],
-      low: [72, 96],
-      medium: [120, 160],
-      high: [168, 224],
-      very_high: [240, 320],
-    });
+// V3 uses raw 0–255 values (no ImageNet normalisation). The ONNX graph
+// handles mean subtraction internally. Tests assert raw clamped pixel
+// values rather than norm(c, byte) transforms.
+
+describe('MODEL_INPUT_DIMS', () => {
+  it('is the SALICON-native [240, 320] shape MSI-Net V3 was exported for', () => {
+    expect(Array.from(MODEL_INPUT_DIMS)).toEqual([240, 320]);
   });
 });
 
 describe('toInputTensorData', () => {
-  it('returns Float32Array of length H*W*3 for every preset', () => {
+  it('returns a Float32Array of length 3 * H * W in NCHW layout', () => {
     const img = makeImageData(64, 48, [128, 64, 32, 255]);
-    for (const [name, dims] of Object.entries(PRESETS)) {
-      const [h, w] = dims;
-      const out = toInputTensorData(img, dims);
-      expect(out, name).toBeInstanceOf(Float32Array);
-      expect(out.length, name).toBe(h * w * 3);
-    }
+    const dims = /** @type {[number, number]} */ ([24, 32]);
+    const [h, w] = dims;
+    const out = toInputTensorData(img, dims);
+    expect(out).toBeInstanceOf(Float32Array);
+    expect(out.length).toBe(3 * h * w);
   });
 
-  it('clamps values into [0, 255]', () => {
-    const img = makeImageData(4, 4, [255, 0, 128, 255]);
-    const out = toInputTensorData(img, [8, 8]);
-    for (const v of out) {
-      expect(v).toBeGreaterThanOrEqual(0);
-      expect(v).toBeLessThanOrEqual(255);
-    }
-  });
-
-  it('emits BGR order (pure-red input yields [0, 0, 255])', () => {
-    // Pure red: R=255, G=0, B=0. With BGR output, first three floats
-    // should be B, G, R == 0, 0, 255.
+  it('emits RGB channel-plane-major (NOT NHWC and NOT BGR)', () => {
+    // Pure red: R=255, G=0, B=0. In NCHW the red plane is [0..H*W),
+    // green is [H*W..2*H*W), blue is [2*H*W..3*H*W). ImageNet-normalised
+    // values are what the ONNX graph actually receives.
     const img = makeImageData(1, 1, [255, 0, 0, 255]);
     const out = toInputTensorData(img, [1, 1]);
-    expect(Array.from(out)).toEqual([0, 0, 255]);
+    expect(out[0]).toBeCloseTo(255, 5); // R plane
+    expect(out[1]).toBeCloseTo(0, 5); // G plane
+    expect(out[2]).toBeCloseTo(0, 5); // B plane
   });
 
-  it('emits BGR for pure blue too (sanity)', () => {
-    // Pure blue: R=0, G=0, B=255. BGR output first three floats == 255, 0, 0.
+  it('emits RGB for pure blue too (sanity)', () => {
+    // Pure blue: R=0, G=0, B=255. Red plane should be near -2.12
+    // (the normalised zero), green similar, blue around +2.64.
     const img = makeImageData(1, 1, [0, 0, 255, 255]);
     const out = toInputTensorData(img, [1, 1]);
-    expect(Array.from(out)).toEqual([255, 0, 0]);
+    expect(out[0]).toBeCloseTo(0, 5);
+    expect(out[1]).toBeCloseTo(0, 5);
+    expect(out[2]).toBeCloseTo(255, 5);
   });
 
-  it('handles non-square input resized into a preset without error', () => {
+  it('normalises pixel bytes to ImageNet mean/std', () => {
+    // 128-grey is right in the middle — each channel normalises
+    // independently because the ImageNet means/stds differ slightly.
+    const img = makeImageData(1, 1, [128, 128, 128, 255]);
+    const out = toInputTensorData(img, [1, 1]);
+    expect(out[0]).toBeCloseTo(128, 5);
+    expect(out[1]).toBeCloseTo(128, 5);
+    expect(out[2]).toBeCloseTo(128, 5);
+  });
+
+  it('handles non-square input resized into a target shape', () => {
     const img = makeImageData(16, 9, [100, 150, 200, 255]);
-    const out = toInputTensorData(img, [48, 64]);
-    expect(out.length).toBe(48 * 64 * 3);
-    // Interior pixels should stay close to the constant fill (in BGR).
-    // Pick the centre pixel.
-    const cx = 32;
-    const cy = 24;
-    const o = (cy * 64 + cx) * 3;
-    expect(out[o]).toBeCloseTo(200, 0); // B
-    expect(out[o + 1]).toBeCloseTo(150, 0); // G
-    expect(out[o + 2]).toBeCloseTo(100, 0); // R
+    const dims = /** @type {[number, number]} */ ([24, 32]);
+    const [h, w] = dims;
+    const out = toInputTensorData(img, dims);
+    expect(out.length).toBe(3 * h * w);
+    const plane = h * w;
+    const cx = 16;
+    const cy = 12;
+    const off = cy * w + cx;
+    // Centre pixel is deep inside the constant fill, so bilinear
+    // interpolation should reproduce the source colour closely.
+    expect(out[off]).toBeCloseTo(100, 1);
+    expect(out[plane + off]).toBeCloseTo(150, 1);
+    expect(out[2 * plane + off]).toBeCloseTo(200, 1);
   });
 
-  it('preserves constant colour fields (bilinear of a constant is a constant)', () => {
+  it('preserves constant colour fields through resize', () => {
     const img = makeImageData(32, 32, [50, 60, 70, 255]);
-    const out = toInputTensorData(img, [48, 64]);
-    // Take inner pixels only (border clamping makes them identical anyway,
-    // but inner pixels are guaranteed to have all four neighbours in range).
-    for (let y = 1; y < 47; y++) {
-      for (let x = 1; x < 63; x++) {
-        const o = (y * 64 + x) * 3;
-        expect(out[o]).toBeCloseTo(70, 6); // B
-        expect(out[o + 1]).toBeCloseTo(60, 6); // G
-        expect(out[o + 2]).toBeCloseTo(50, 6); // R
+    const dims = /** @type {[number, number]} */ ([24, 32]);
+    const [h, w] = dims;
+    const out = toInputTensorData(img, dims);
+    const plane = h * w;
+    // With aspect-ratio-preserving resize, a 32×32 source into a 24×32
+    // target scales to 24×24 (preserving aspect) and pads left/right
+    // with 126. Check the centre of the non-padded region.
+    const scale = Math.min(h / 32, w / 32);
+    const scaledH = Math.round(32 * scale);
+    const scaledW = Math.round(32 * scale);
+    const padTop = Math.floor((h - scaledH) / 2);
+    const padLeft = Math.floor((w - scaledW) / 2);
+    for (let y = padTop + 1; y < padTop + scaledH - 1; y++) {
+      for (let x = padLeft + 1; x < padLeft + scaledW - 1; x++) {
+        const off = y * w + x;
+        expect(out[off]).toBeCloseTo(50, 5);
+        expect(out[plane + off]).toBeCloseTo(60, 5);
+        expect(out[2 * plane + off]).toBeCloseTo(70, 5);
       }
+    }
+  });
+
+  it('fast-paths a 1×1 degenerate source', () => {
+    const img = makeImageData(1, 1, [200, 100, 50, 255]);
+    const dims = /** @type {[number, number]} */ ([4, 4]);
+    const [h, w] = dims;
+    const out = toInputTensorData(img, dims);
+    const plane = h * w;
+    const expR = 200;
+    const expG = 100;
+    const expB = 50;
+    for (let i = 0; i < plane; i++) {
+      expect(out[i]).toBeCloseTo(expR, 5);
+      expect(out[plane + i]).toBeCloseTo(expG, 5);
+      expect(out[2 * plane + i]).toBeCloseTo(expB, 5);
     }
   });
 });

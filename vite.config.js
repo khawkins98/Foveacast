@@ -23,17 +23,25 @@ import { join, resolve } from 'node:path';
  *
  * Why this exists — two separate dev-server quirks, same fix:
  *
- *   1. `/models/*` — TensorFlow.js loads weight shards
- *      (group1-shard1of6, etc.) with no file extension. Vite's
- *      import-analysis plugin sees those files and attempts to parse
- *      them as JavaScript source, returning 500 on every shard.
+ *   1. `/models/*` — V1's TF.js weight shards (group1-shard1of6, etc.)
+ *      had no file extension, and Vite's import-analysis plugin 500'd
+ *      trying to parse them as JavaScript. V2 serves a single
+ *      `model.onnx` file under this prefix; the `.onnx` extension
+ *      avoids the parse attempt, but we keep the passthrough here
+ *      because (a) we also want to emit an accurate
+ *      `application/octet-stream` Content-Type and (b) the V1 pattern
+ *      was useful enough that restoring it for any future multi-file
+ *      model should be friction-free.
  *
  *   2. `/vendor/*` — Vite mutates the bytes of some vendored scripts
  *      before serving them (observed 9 KB heatmap.min.js becoming
  *      50 KB with a source-map stub). The mutation breaks the SRI
  *      `integrity=` hashes in index.html, which are computed from
  *      the bytes on disk. The browser then refuses to execute the
- *      script.
+ *      script. The V2 ORT Web vendor files (~12.5 MB wasm plus JS
+ *      glue) need the same guarantee — ORT's loader also reaches for
+ *      its own wasm/mjs siblings and expects the bytes to be what is
+ *      on disk.
  *
  * GitHub Pages (the production host) serves static files verbatim,
  * so both issues are dev-server-specific. This plugin pre-empts
@@ -71,12 +79,12 @@ function servePassthroughStatic() {
         if (!existsSync(filePath) || !statSync(filePath).isFile()) {
           // Respond with a real 404. If we `next()` here, Vite's
           // default handler serves something (often the SPA index
-          // fallback) with a 200 — `resolveModelUrl`'s HEAD probe
-          // would then think the local mirror exists, tf.js would
-          // fetch the fallback as JSON, and parsing would fail
-          // noisily. A 404 tells the client the resource is not
-          // there, so it can fall back (or, for /vendor/, surface a
-          // clear error).
+          // fallback) with a 200 — the loader would then think a
+          // missing model file exists, ORT would try to parse HTML
+          // as an ONNX graph, and the error would surface downstream
+          // of the real problem. A 404 tells the client the resource
+          // is not there (for `/vendor/`, it surfaces as an SRI /
+          // script-load error with a clear console message).
           res.statusCode = 404;
           res.setHeader('Content-Type', 'text/plain');
           res.end('Not Found');
@@ -108,9 +116,16 @@ function servePassthroughStatic() {
  */
 function pickContentType(filePath) {
   if (filePath.endsWith('.json')) return 'application/json';
-  if (filePath.endsWith('.js')) return 'text/javascript';
+  // `.mjs` MUST be text/javascript — browsers block ESM imports
+  // served with any other MIME type ("was blocked because of a
+  // disallowed MIME type"). ORT Web reaches for its own glue module
+  // (`ort-wasm-simd-threaded.mjs`) via a dynamic import from the
+  // browser side, so this is not optional.
+  if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) return 'text/javascript';
+  if (filePath.endsWith('.wasm')) return 'application/wasm';
   if (filePath.endsWith('.css')) return 'text/css';
   if (filePath.endsWith('.txt') || filePath.endsWith('.md')) return 'text/plain';
+  if (filePath.endsWith('.onnx')) return 'application/octet-stream';
   return 'application/octet-stream';
 }
 

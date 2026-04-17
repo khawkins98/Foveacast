@@ -1,28 +1,20 @@
-// Controls: opacity slider, view toggle, preset picker, download.
+// Controls: opacity slider, view toggle, download button.
 //
 // This module owns *only* the controls that live alongside the output
-// — the dropzone, status banner, and mobile guard are separate modules
-// glued together in main.js (Phase D). Every input element gets a
+// — the dropzone, status banner, and mobile guard are separate
+// modules glued together in main.js. Every input element gets a
 // proper <label for="…"> pairing so screen readers announce them
 // correctly, and every handler fires with a normalised value shape
 // so the caller never has to sniff event.target.
+//
+// The preset picker from V1 was removed in V2. V3's MSI-Net is a
+// single fixed-shape model (240×320) — there is no meaningful
+// speed/quality knob for a single-shape ONNX graph, and a picker
+// with one option is visual noise.
 
 /**
  * @typedef {'overlay'|'original'|'sidebyside'} ViewMode
  */
-
-/**
- * @typedef {'very_low'|'low'|'medium'|'high'|'very_high'} Preset
- */
-
-/** Human-readable preset labels, ordered fastest → slowest. */
-const PRESET_CHOICES = /** @type {const} */ ([
-  { value: 'very_low', label: 'Fast (very low)' },
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Standard' },
-  { value: 'high', label: 'High' },
-  { value: 'very_high', label: 'Very high (slowest)' },
-]);
 
 const VIEW_CHOICES = /** @type {const} */ ([
   { value: 'overlay', label: 'Heatmap overlay' },
@@ -41,14 +33,12 @@ let instanceCount = 0;
  * @typedef {Object} ControlsOptions
  * @property {(opacity: number) => void} [onOpacityChange]
  * @property {(view: ViewMode) => void} [onViewChange]
- * @property {(preset: Preset) => void} [onPresetChange]
  * @property {() => void} [onDownload]
  */
 
 /**
  * @typedef {Object} ControlsController
  * @property {HTMLElement} element
- * @property {(preset: Preset) => void} setPreset
  * @property {(view: ViewMode) => void} setView
  * @property {(value: number) => void} setOpacity
  * @property {(disabled: boolean) => void} setDisabled
@@ -58,22 +48,16 @@ let instanceCount = 0;
 /**
  * Build the controls panel.
  *
- * WHY this takes all four callbacks at once rather than exposing an
- * EventTarget: the caller (main.js) needs to coordinate changes —
- * e.g. a new preset invalidates the current inference result — and
+ * WHY this takes all callbacks at once rather than exposing an
+ * EventTarget: the caller (main.js) needs to coordinate changes, and
  * keeping the plumbing as plain function refs keeps the wiring in
- * Phase D's integration code visible in one place.
+ * one visible place.
  *
  * @param {ControlsOptions} [options]
  * @returns {ControlsController}
  */
 export function createControls(options = {}) {
-  const {
-    onOpacityChange,
-    onViewChange,
-    onPresetChange,
-    onDownload,
-  } = options;
+  const { onOpacityChange, onViewChange, onDownload } = options;
 
   const id = ++instanceCount;
   const prefix = `fc-ctl-${id}`;
@@ -168,35 +152,6 @@ export function createControls(options = {}) {
 
   root.appendChild(viewWrap);
 
-  // --- Preset picker -------------------------------------------------
-
-  const presetWrap = document.createElement('div');
-  presetWrap.className = 'fc-controls__field';
-
-  const presetLabel = document.createElement('label');
-  presetLabel.htmlFor = `${prefix}-preset`;
-  presetLabel.textContent = 'Model detail';
-  presetWrap.appendChild(presetLabel);
-
-  const presetSelect = document.createElement('select');
-  presetSelect.id = `${prefix}-preset`;
-  presetSelect.className = 'fc-controls__select';
-  for (const choice of PRESET_CHOICES) {
-    const opt = document.createElement('option');
-    opt.value = choice.value;
-    opt.textContent = choice.label;
-    presetSelect.appendChild(opt);
-  }
-  // Default to `medium` — "Standard" in the human label — matching
-  // the PRD's §Quality presets table.
-  presetSelect.value = 'medium';
-  presetSelect.addEventListener('change', () => {
-    if (onPresetChange) onPresetChange(/** @type {Preset} */ (presetSelect.value));
-  });
-  presetWrap.appendChild(presetSelect);
-
-  root.appendChild(presetWrap);
-
   // --- Download button ----------------------------------------------
 
   const downloadBtn = document.createElement('button');
@@ -210,13 +165,6 @@ export function createControls(options = {}) {
   root.appendChild(downloadBtn);
 
   // --- Controller API -----------------------------------------------
-
-  /** @param {Preset} preset */
-  function setPreset(preset) {
-    if (PRESET_CHOICES.some((c) => c.value === preset)) {
-      presetSelect.value = preset;
-    }
-  }
 
   /** @param {ViewMode} view */
   function setView(view) {
@@ -237,7 +185,6 @@ export function createControls(options = {}) {
   function setDisabled(disabled) {
     const d = !!disabled;
     opacityInput.disabled = d;
-    presetSelect.disabled = d;
     downloadBtn.disabled = d;
     for (const input of viewInputs) input.disabled = d;
     root.classList.toggle('fc-controls--disabled', d);
@@ -258,7 +205,6 @@ export function createControls(options = {}) {
 
   return {
     element: root,
-    setPreset,
     setView,
     setOpacity,
     setDisabled,

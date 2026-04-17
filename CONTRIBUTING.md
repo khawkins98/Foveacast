@@ -30,13 +30,7 @@ Playwright needs its browser bundle once:
 pnpm exec playwright install chromium
 ```
 
-If you have populated the local weight mirror with `pnpm weights`, the `pnpm test:e2e` command runs against that mirror. CI Playwright does not — it runs against a fresh clone with no mirror. To verify a change will pass CI before pushing, run the suite in the same state CI uses:
-
-```sh
-pnpm test:e2e:no-mirror
-```
-
-This moves `docs/models/` aside, runs the Playwright suite, and restores the folder afterwards (even on failure or Ctrl-C). If your change depends on the mirror being present, this will surface it here instead of on the PR.
+The UNISAL ONNX artefact is committed to the repo at `docs/models/unisal/model.onnx` (~12.5 MB). No `pnpm weights` step is needed, no fetch-at-deploy workflow — the file is part of the checkout. If you want to regenerate it from the PyTorch source, the recipe is at the top of `scripts/unisal-onnx-export.py`; that script is only run when bumping UNISAL, not on every dev setup.
 
 Foveacast is buildless on purpose — the `docs/` folder you edit is the folder GitHub Pages publishes, which is the folder a user unzips and opens. There is no bundler step between edit and publish. Vite is a dev-time convenience, not a dependency of the shipped artefact. If your change introduces a build step, please flag that in the PR description; the bar for reintroducing tooling is high.
 
@@ -46,12 +40,12 @@ Four layers. The boundary between them is load-bearing; changes that blur it wil
 
 | Layer | Location | What lives there |
 |---|---|---|
-| `model/` | `docs/src/model/` | Loads the Graph Model, runs inference. **The only place `@tensorflow/tfjs` is imported.** |
+| `model/` | `docs/src/model/` | Loads the UNISAL ONNX graph, runs inference. **The only place `onnxruntime-web` is imported.** |
 | `pipeline/` | `docs/src/pipeline/` | Pure functions: preprocess, postprocess, fixation centroid. No framework imports. |
 | `render/` | `docs/src/render/` | heatmap.js wrapper + Canvas compositor + PNG download. |
 | `ui/` | `docs/src/ui/` | DOM: drop zone, controls, status banner, mobile guard. |
 
-If you need TF.js in the `ui/` or `render/` layer, you almost certainly don't — reach through `model/inference.js` instead.
+If you need ORT (or `ort.Tensor`) in the `ui/` or `render/` layer, you almost certainly don't — reach through `model/inference.js` instead.
 
 ## What goes into a change
 
@@ -122,7 +116,7 @@ Minimum bar:
 
 - Every exported function has a JSDoc block: one-line purpose, `@param` types with short descriptions, `@returns`.
 - Every non-obvious branch has an inline comment explaining the decision. "Non-obvious" means: a reader who understands JavaScript but not this codebase would ask why.
-- Every module header explains what lives there and why — particularly the load-bearing invariants (e.g. "nothing outside `model/` imports `@tensorflow/tfjs`").
+- Every module header explains what lives there and why — particularly the load-bearing invariants (e.g. "nothing outside `model/` imports `onnxruntime-web`").
 - Workarounds for external library quirks (heatmap.js private fields, TF.js backend selection, jsdom gaps) get a comment naming the library and the problem, so a future maintainer can tell whether the workaround is still needed.
 
 What comments are NOT for:
@@ -146,7 +140,7 @@ Specifics:
 
 The `model / pipeline / render / ui` layer boundary is load-bearing. Specifically:
 
-- **Nothing outside `model/` imports `@tensorflow/tfjs`.** If you need tensor operations elsewhere, the fix is almost always to add a contract-level function in `model/` and call that. The grep test is `grep -r "@tensorflow/tfjs" docs/src/ | grep -v 'docs/src/model/'` — this should return nothing.
+- **Nothing outside `model/` imports the inference runtime.** Under V2 that is `onnxruntime-web` / the `ort` global. If you need tensor operations elsewhere, the fix is almost always to add a contract-level function in `model/` and call that. The grep test is `grep -rn "\\bort\\b\\|onnxruntime-web" docs/src/ | grep -v 'docs/src/model/'` — nothing meaningful should match.
 - **Nothing outside `render/` imports `heatmap.js`.** Same rule.
 - **`pipeline/` is pure.** No DOM, no browser APIs, no library dependencies. Functions take arrays and numbers, return arrays and numbers. This makes it trivially testable.
 - **`ui/` is allowed to depend on the DOM and on `pipeline/` / `render/` / `model/` — but should not reach "through" those layers to their dependencies.** E.g. the UI layer should not call `tf.tensor` directly even if `model/` happens to re-export `tf`.
@@ -202,7 +196,7 @@ Every commit should build green, pass tests, and do one conceptual thing. A PR w
 ## Destructive and shared-state actions
 
 - Do not force-push to `main`. Do not rewrite published history on a branch someone else is reviewing.
-- Do not commit model weights or large binaries. `.gitignore` has patterns for `*.pb`, `*.onnx`, and `*.bin`; if your artefact has a different extension, flag it in the PR.
+- Do not commit model weights or large binaries. `.gitignore` has patterns for `*.pb`, `*.onnx`, and `*.bin`; the one committed exception is `docs/models/unisal/*.onnx`, which is negated because GitHub Pages serves that file directly and there is no CDN alternative. Any other artefact over 1 MB should be flagged in the PR.
 - Do not skip git hooks (`--no-verify`). If a hook fails, fix the cause.
 
 ## Reviewing a PR

@@ -4,11 +4,12 @@
 // modules (status, dropzone, controls) together, loads the model, and
 // drives the end-to-end inference → render → composite pipeline.
 //
-// Architecture note: the UI layer never imports `@tensorflow/tfjs` or
-// `heatmap.js` directly. Both are loaded from CDN <script> tags in
-// `index.html` and reached through the `model/` and `render/` modules.
-// Keeping that isolation intact is what lets Phase 2 swap TF.js for
-// ONNX Runtime Web without touching anything below.
+// Architecture note: the UI layer never imports `onnxruntime-web` or
+// runtime directly. ORT Web is loaded from a vendored <script> tag in
+// `index.html` and reached through the `model/` module. The `render/`
+// layer handles saliency visualisation via a direct inferno colormap
+// renderer. The boundary between model, pipeline, and render layers
+// is what let V3 swap the model without touching the UI code.
 
 import { mountMobileGuard } from './ui/mobile-guard.js';
 import { createStatus } from './ui/status.js';
@@ -19,26 +20,11 @@ import { runInference } from './model/inference.js';
 import { downsampleIfLarge } from './pipeline/preprocess.js';
 import { postprocess } from './pipeline/postprocess.js';
 import { firstFixationCentroid } from './pipeline/fixation.js';
-import {
-  renderHeatmapCanvas,
-  compositeImageAndHeatmap,
-} from './render/heatmap.js';
+import { renderSaliencyCanvas, compositeImageAndHeatmap } from './render/saliency-canvas.js';
 import { downloadCompositeAsPng } from './render/download.js';
 import { isDemoModeRequested, runDemoMode } from './demo.js';
 import { installPageDrop } from './ui/page-drop.js';
 import { readHasRunSentinel, writeHasRunSentinel } from './ui/has-run-sentinel.js';
-
-/**
- * Human-readable preset codenames for the model-version footer line.
- * Matches the PRD copy (§Attribution) and mirrors the control labels.
- */
-const PRESET_CODE_NAMES = Object.freeze({
-  very_low: 'Fast (48×64)',
-  low: 'Low (72×96)',
-  medium: 'Standard (120×160)',
-  high: 'High (168×224)',
-  very_high: 'Very high (240×320)',
-});
 
 /**
  * Threshold (ms) above which we treat the first onProgress tick as a
@@ -53,22 +39,25 @@ const PRESET_CODE_NAMES = Object.freeze({
 const FIRST_RUN_THRESHOLD_MS = 800;
 
 /**
- * Application state. Kept in a plain object rather than a class to keep
- * this file boring — there is only one of it and it lives for the page's
- * entire lifetime.
+ * Application state. Kept in a plain object rather than a class to
+ * keep this file boring — there is only one of it and it lives for
+ * the page's entire lifetime.
+ *
+ * The V1 `preset` field was removed — V3 MSI-Net is a single
+ * fixed-shape model (240×320).
+ *
  * @type {{
- *   preset: import('./ui/controls.js').ControlsController extends any ? string : never,
- *   loadedModel: { model: any, inputDims: [number, number], preset: string } | null,
+ *   loadedModel: { session: any, inputDims: [number, number] } | null,
  *   lastImage: HTMLImageElement | ImageBitmap | HTMLCanvasElement | null,
  *   lastHeatmapCanvas: HTMLCanvasElement | null,
  *   lastFixation: { x: number, y: number } | null,
  *   lastOrigDims: [number, number] | null,
  *   opacity: number,
  *   view: 'overlay' | 'original' | 'sidebyside',
+ *   queuedFile: File | null,
  * }}
  */
 const state = {
-  preset: 'medium',
   loadedModel: null,
   lastImage: null,
   lastHeatmapCanvas: null,
@@ -166,14 +155,6 @@ function boot() {
       state.view = view;
       renderOutput();
     },
-    onPresetChange: (preset) => {
-      state.preset = preset;
-      // A new preset means new weights; teardown any previous state and
-      // reload. We leave the last image on screen while the new model
-      // downloads — swapping models does not invalidate the composite
-      // on display, only the next inference.
-      reloadModel().catch((err) => surfaceModelError(err));
-    },
     onDownload: () => {
       const compositeCanvas = outputCanvasWrap.querySelector('canvas');
       if (!compositeCanvas) return;
@@ -251,8 +232,8 @@ function boot() {
   // --- Exposed helpers (closures over `state`) --------------------------
 
   /**
-   * Load the model for `state.preset` with a first-run-vs-cache banner
-   * heuristic (see FIRST_RUN_THRESHOLD_MS).
+   * Load the saliency model with a first-run-vs-cache banner heuristic
+   * (see `FIRST_RUN_THRESHOLD_MS`).
    *
    * `silent` suppresses the cache-load / first-run / ready banners so
    * the demo-mode background load does not stomp the demo banner. The
@@ -287,56 +268,52 @@ function boot() {
       }
     }
 
-    try {
-      const loaded = await loadModel(state.preset, (progress) => {
-        if (silent) return;
-        const elapsed = performance.now() - startedAt;
-        if (!firstRunShown && elapsed > FIRST_RUN_THRESHOLD_MS && progress.fraction < 0.95) {
-          firstRunShown = true;
-        }
-        if (firstRunShown) {
-          status.showFirstRun(progress);
-        }
-      });
-      state.loadedModel = loaded;
-      writeHasRunSentinel(); // Flip the bit after a successful load.
-      dropzone.setEnabled(true);
-      controls.setDisabled(false);
-      if (!silent) status.showReady();
-      renderFooter();
-
-      // Drain any file the user dropped while we were still loading.
-      // This is the second half of the demo-mode queued-drop flow.
-      if (state.queuedFile) {
-        const pending = state.queuedFile;
-        state.queuedFile = null;
-        status.element.removeAttribute('data-foveacast-queued');
-        // Don't await — same reason the dropzone onFile doesn't await:
-        // we want the caller to return promptly.
-        handleFile(pending).catch((err) => {
-          console.error('Foveacast: queued-file inference failed.', err);
-          status.showError({
-            code: 'INFERENCE_FAILED',
-            onRetry: () => status.clear(),
-          });
-        });
+    const loaded = await loadModel((progress) => {
+      if (silent) return;
+      const elapsed = performance.now() - startedAt;
+      if (!firstRunShown && elapsed > FIRST_RUN_THRESHOLD_MS && progress.fraction < 0.95) {
+        firstRunShown = true;
       }
-    } catch (err) {
-      // Re-throw so the outer catch can choose the right error code.
-      throw err;
+      if (firstRunShown) {
+        status.showFirstRun(progress);
+      }
+    });
+    state.loadedModel = loaded;
+    writeHasRunSentinel(); // Flip the bit after a successful load.
+    dropzone.setEnabled(true);
+    controls.setDisabled(false);
+    if (!silent) status.showReady();
+    renderFooter();
+
+    // Drain any file the user dropped while we were still loading.
+    // This is the second half of the demo-mode queued-drop flow.
+    if (state.queuedFile) {
+      const pending = state.queuedFile;
+      state.queuedFile = null;
+      status.element.removeAttribute('data-foveacast-queued');
+      // Don't await — same reason the dropzone onFile doesn't await:
+      // we want the caller to return promptly.
+      handleFile(pending).catch((err) => {
+        console.error('Foveacast: queued-file inference failed.', err);
+        status.showError({
+          code: 'INFERENCE_FAILED',
+          onRetry: () => status.clear(),
+        });
+      });
     }
   }
 
   /**
-   * Route a model-loading failure to the right PRD error code. The
-   * classification work happens inside `loader.js` now — errors
-   * thrown from `loadModel` carry a structured `code` of either
-   * `MODEL_DOWNLOAD_FAILED` or `MODEL_LOAD_FAILED`. Sniffing strings
-   * out of TF.js error messages (which is what this function used to
-   * do) was a well-known tripwire for TF.js minor bumps.
+   * Route a model-loading failure to the right PRD error code.
    *
-   * For anything not from our loader (shouldn't happen in normal
-   * flow, but defensive), fall back to MODEL_LOAD_FAILED.
+   * Errors thrown from `loadModel` carry a structured `code` of either
+   * `MODEL_DOWNLOAD_FAILED` or `MODEL_LOAD_FAILED`. For anything not
+   * from our loader (shouldn't happen in normal flow, but defensive),
+   * fall back to `MODEL_LOAD_FAILED`.
+   *
+   * V2 simplified the retry: ORT Web caches the `.onnx` bytes in the
+   * browser's ordinary HTTP cache, so "clear cached data and retry"
+   * is just a hard reload. No IndexedDB housekeeping to chase.
    *
    * @param {unknown} err
    */
@@ -351,22 +328,6 @@ function boot() {
       code,
       onRetry: () => {
         if (code === 'MODEL_LOAD_FAILED') {
-          // PRD §Error States: "Clear cached data and retry" should
-          // clear the cached weights. tf.js caches inside IndexedDB
-          // under the URL key when IndexedDBLoader is used; the simple
-          // HTTP cache path (what we use) is cleared by a hard reload.
-          // We surface both: reload will re-fetch; tf.io removal is a
-          // best-effort extra.
-          try {
-            const tf = /** @type {any} */ (globalThis).tf;
-            if (tf && tf.io && typeof tf.io.removeModel === 'function') {
-              // Best-effort — ignore failures, this API is only used
-              // when models were saved via tf.io.
-              tf.io.removeModel(`indexeddb://${state.preset}`).catch(() => {});
-            }
-          } catch {
-            /* ignore */
-          }
           window.location.reload();
           return;
         }
@@ -424,7 +385,7 @@ function boot() {
       // Run inference. `runInference` internally calls the preprocessing
       // pipeline and returns the raw model output plus the model's
       // native input dims (which post-processing needs).
-      const { saliency, inputDims } = await runInference(workCanvas, state.loadedModel);
+      const { saliency, inputDims, sourceDims } = await runInference(workCanvas, state.loadedModel);
 
       // Upsample + blur + normalise to the work canvas's dims so the
       // heatmap aligns pixel-for-pixel with the image we're going to
@@ -433,12 +394,33 @@ function boot() {
 
       const fixation = firstFixationCentroid(processed, origW, origH);
 
-      const heatmapCanvas = renderHeatmapCanvas(processed, origW, origH);
+      const heatmapCanvas = renderSaliencyCanvas(processed, origW, origH);
+
+      // Diagnostic: compute saliency stats for the debug panel.
+      let salMin = Infinity, salMax = -Infinity, salSum = 0;
+      for (let i = 0; i < saliency.length; i++) {
+        if (saliency[i] < salMin) salMin = saliency[i];
+        if (saliency[i] > salMax) salMax = saliency[i];
+        salSum += saliency[i];
+      }
+      const peakIdx = saliency.indexOf(salMax);
+      const peakY = Math.floor(peakIdx / inputDims[1]);
+      const peakX = peakIdx % inputDims[1];
 
       state.lastImage = workCanvas;
       state.lastHeatmapCanvas = heatmapCanvas;
       state.lastFixation = fixation;
       state.lastOrigDims = [origH, origW];
+      state.lastDiagnostics = {
+        sourceWidth: origW,
+        sourceHeight: origH,
+        modelInputDims: inputDims,
+        saliencyLength: saliency.length,
+        saliencyMin: salMin.toFixed(4),
+        saliencyMax: salMax.toFixed(4),
+        saliencyMean: (salSum / saliency.length).toFixed(4),
+        peakLocation: `(${peakX}, ${peakY})`,
+      };
 
       renderOutput();
       // Reveal controls now that there is a real result to operate on
@@ -492,6 +474,39 @@ function boot() {
     outputCaption.textContent = describeHeatmap(state.lastFixation, state.lastOrigDims);
     outputCaption.hidden = false;
 
+    // Diagnostic panel — collapsible details below the caption showing
+    // what the pipeline actually did. Helps debug "is it using the right
+    // model / right image / right preprocessing" ambiguity.
+    let diagEl = document.getElementById('fc-diagnostics');
+    if (!diagEl) {
+      diagEl = document.createElement('details');
+      diagEl.id = 'fc-diagnostics';
+      diagEl.style.cssText = 'margin:0.5rem 0; font-size:0.75rem; color:#666; max-width:600px;';
+      const summary = document.createElement('summary');
+      summary.textContent = 'Diagnostics';
+      summary.style.cursor = 'pointer';
+      diagEl.appendChild(summary);
+      outputCaption.parentNode.insertBefore(diagEl, outputCaption.nextSibling);
+    }
+    if (state.lastDiagnostics) {
+      const d = state.lastDiagnostics;
+      const lines = [
+        `Source image: ${d.sourceWidth} × ${d.sourceHeight} px`,
+        `Model input: ${d.modelInputDims[0]} × ${d.modelInputDims[1]} (NCHW, RGB, 0–255)`,
+        `Model: MSI-Net fine-tuned on UEyes (v0.1.0, FP16)`,
+        `Saliency output: ${d.saliencyLength} values, range [${d.saliencyMin}, ${d.saliencyMax}], mean ${d.saliencyMean}`,
+        `Peak attention at: ${d.peakLocation} in model space`,
+        `Preprocessing: aspect-preserving bilinear resize + pad 126`,
+        `Postprocess: upsample to source dims → σ=5 Gaussian blur → normalise`,
+      ];
+      // Keep the <summary>, replace everything after it.
+      while (diagEl.childNodes.length > 1) diagEl.removeChild(diagEl.lastChild);
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'margin:0.3rem 0; white-space:pre-wrap; font-family:monospace; font-size:0.7rem; line-height:1.5;';
+      pre.textContent = lines.join('\n');
+      diagEl.appendChild(pre);
+    }
+
     if (state.view === 'original') {
       const plain = drawPlainImageCanvas(state.lastImage);
       plain.setAttribute(
@@ -542,8 +557,8 @@ function boot() {
 
   /**
    * Render (or refresh) the attribution footer. The footer carries:
-   *   - Model version indicator (updates when the preset changes).
-   *   - Credits for MSI-Net, TensorFlow.js, and heatmap.js.
+   *   - Model version indicator.
+   *   - Credits for MSI-Net, UEyes, ONNX Runtime Web, and foveacast-training.
    *   - Non-dismissible bias disclosure (PRD §Attribution).
    *   - A "Need more?" button that opens the commercial-alternatives
    *     modal, per PRD §Positioning and Alternatives.
@@ -555,8 +570,7 @@ function boot() {
 
     const modelLine = document.createElement('p');
     modelLine.className = 'fc-footer__line fc-footer__model';
-    const codeName = PRESET_CODE_NAMES[state.preset] || state.preset;
-    modelLine.textContent = `Model: MSI-Net · ${codeName}`;
+    modelLine.textContent = 'Model: MSI-Net · fine-tuned on UEyes (240×320)';
     footer.appendChild(modelLine);
 
     // Attribution lines are built as individual nodes rather than one
@@ -567,18 +581,34 @@ function boot() {
     credits.className = 'fc-footer__line';
     credits.appendChild(
       textAndLink(
-        'Attention prediction powered by ',
+        'Architecture: ',
         'MSI-Net',
-        'https://github.com/alexanderkroner/saliency',
-        ' by Alexander Kroner (MIT). ',
+        'https://doi.org/10.1016/j.neunet.2020.05.004',
+        ' (Kroner et al. 2020, MIT). ',
+      ),
+    );
+    credits.appendChild(
+      textAndLink(
+        'Fine-tuned on ',
+        'UEyes',
+        'https://doi.org/10.1145/3544548.3581096',
+        ' (Jiang et al. 2023, CC BY 4.0). ',
+      ),
+    );
+    credits.appendChild(
+      textAndLink(
+        'Training pipeline: ',
+        'foveacast-training',
+        'https://github.com/khawkins98/foveacast-training',
+        '. ',
       ),
     );
     credits.appendChild(
       textAndLink(
         'Inference via ',
-        'TensorFlow.js',
-        'https://www.tensorflow.org/js',
-        ' (Apache 2.0). ',
+        'ONNX Runtime Web',
+        'https://onnxruntime.ai/docs/tutorials/web/',
+        ' (MIT). ',
       ),
     );
     credits.appendChild(

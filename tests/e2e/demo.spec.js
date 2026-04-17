@@ -84,16 +84,18 @@ test.describe('Foveacast — demo mode end-to-end', () => {
     // The console-error filter is intentionally lenient about
     // network- and backend-related noise that is expected in this
     // environment:
-    //   - TF.js emits "WebGL is not supported" in headless chromium
-    //     and falls back to CPU cleanly.
-    //   - The loader HEAD-probes `./models/{preset}/model.json` to
-    //     prefer the local mirror; that 404s in dev-without-mirror
-    //     (including CI), at which point the loader falls back to
-    //     GCS. Chromium auto-logs the 404 to the console as an
-    //     error, but the behaviour is correct.
+    //   - ORT Web can log SharedArrayBuffer / threading warnings when
+    //     `crossOriginIsolated` is false; these are expected on
+    //     GitHub Pages and in the Playwright dev-server, and ORT
+    //     falls back to single-threaded automatically.
+    //   - The silent background model load in demo mode will try to
+    //     fetch `./models/v3/model.onnx`. Playwright serves this
+    //     file correctly when present, but Chromium still logs any
+    //     transient fetch noise the wasm loader surfaces during
+    //     initialisation.
     const meaningfulErrors = consoleErrors.filter(
       (m) =>
-        !/WebGL|webgl|backend/i.test(m) &&
+        !/WebGL|webgl|SharedArrayBuffer|cross-origin|wasm/i.test(m) &&
         !(/404/.test(m) && /\/models\//.test(m)),
     );
     expect(meaningfulErrors).toEqual([]);
@@ -107,7 +109,7 @@ test.describe('Foveacast — demo mode end-to-end', () => {
     const banner = page.locator('.fc-status--demo');
     await expect(banner).toBeVisible({ timeout: 5_000 });
     await expect(banner).toContainText(/synthetic preview/i);
-    await expect(banner).toContainText(/real MSI-Net/i);
+    await expect(banner).toContainText(/real model prediction/i);
   });
 
   test('progressive disclosure: controls are hidden on a fresh load and revealed after the first render', async ({

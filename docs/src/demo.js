@@ -19,19 +19,15 @@
 
 import { postprocess } from './pipeline/postprocess.js';
 import { firstFixationCentroid } from './pipeline/fixation.js';
-import {
-  renderHeatmapCanvas,
-  compositeImageAndHeatmap,
-} from './render/heatmap.js';
+import { renderSaliencyCanvas, compositeImageAndHeatmap } from './render/saliency-canvas.js';
 import { downsampleIfLarge } from './pipeline/preprocess.js';
 
 /**
- * Native resolution of the synthetic saliency map, in `[H, W]`.
- * Chosen to match the `medium` preset's input dims so the postprocess
- * upsampling ratio matches what a real model run would produce on a
- * typical screenshot.
+ * Native resolution of the synthetic saliency map, in `[H, W]`. Matches
+ * V3 MSI-Net's export shape so the postprocess upsampling ratio matches
+ * what a real model run would produce.
  */
-const DEMO_SALIENCY_DIMS = /** @type {[number, number]} */ ([120, 160]);
+const DEMO_SALIENCY_DIMS = /** @type {[number, number]} */ ([240, 320]);
 
 /**
  * Path to the committed example screenshot. Relative to `index.html`.
@@ -65,12 +61,12 @@ export function isDemoModeRequested() {
 }
 
 /**
- * Generate a synthetic saliency map with two Gaussian blobs positioned
- * at plausible web-page "hotspots" — roughly the top-left rule-of-thirds
+ * Generate a synthetic saliency map with two "blob" peaks positioned
+ * at plausible web-page hotspots — roughly the top-left rule-of-thirds
  * intersection and a secondary call-to-action area mid-page right.
  *
- * Values are in `[0, 255]` to mirror the real model output range before
- * postprocess. The map is a plain row-major Float32Array.
+ * Output values are in `[0, 1]`, matching V3 MSI-Net's output range.
+ * The map is a plain row-major Float32Array.
  *
  * @param {[number, number]} dims - `[height, width]`.
  * @returns {Float32Array}
@@ -79,18 +75,17 @@ export function makeSyntheticSaliency(dims) {
   const [h, w] = dims;
   const out = new Float32Array(h * w);
 
-  // Blob configuration: each blob is a 2D isotropic Gaussian centred at
-  // (cx, cy) with standard deviation `sigma`, scaled by `peak`.
-  // Coordinates are given as fractions of width/height so the same
-  // configuration works at any resolution.
+  // Blob configuration: each blob is a 2D isotropic Gaussian centred
+  // at (cx, cy) with standard deviation `sigma` and a peak value.
+  // Background is 0; blobs add positive mass up to their peak.
   const blobs = [
-    { fx: 0.30, fy: 0.22, sigma: 0.12, peak: 220 },
-    { fx: 0.72, fy: 0.55, sigma: 0.09, peak: 150 },
+    { fx: 0.30, fy: 0.22, sigma: 0.12, peak: 1.0 },
+    { fx: 0.72, fy: 0.55, sigma: 0.09, peak: 0.7 },
   ];
 
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
-      let v = 0;
+      let value = 0;
       for (const blob of blobs) {
         const cx = blob.fx * w;
         const cy = blob.fy * h;
@@ -98,11 +93,10 @@ export function makeSyntheticSaliency(dims) {
         const sy = blob.sigma * h;
         const dx = (x - cx) / sx;
         const dy = (y - cy) / sy;
-        v += blob.peak * Math.exp(-0.5 * (dx * dx + dy * dy));
+        value += blob.peak * Math.exp(-0.5 * (dx * dx + dy * dy));
       }
-      // Clamp at 255 so the synthetic map stays in the same numeric
-      // range as a real MSI-Net output.
-      out[y * w + x] = Math.min(255, v);
+      // Clamp to [0, 1] — matches V3 model output range.
+      out[y * w + x] = Math.min(1, value);
     }
   }
 
@@ -166,7 +160,7 @@ export async function runDemoMode(mounts) {
   // and treats it as a model output.
   if (onBanner) {
     onBanner(
-      'Demo mode — this heatmap is a synthetic preview, not a real MSI-Net prediction. ' +
+      'Demo mode — this heatmap is a synthetic preview, not a real model prediction. ' +
         'Drop a screenshot or remove ?demo=1 from the URL to run real inference.',
     );
   }
@@ -190,7 +184,7 @@ export async function runDemoMode(mounts) {
   //    heatmap.js. This is the part that would have caught the
   //    detached-container bug had the test ever reached it.
   const fixation = firstFixationCentroid(processed, origW, origH);
-  const heatmapCanvas = renderHeatmapCanvas(processed, origW, origH);
+  const heatmapCanvas = renderSaliencyCanvas(processed, origW, origH);
 
   // 5. Composite and mount.
   // Demo output carries a diagonal watermark baked into the canvas

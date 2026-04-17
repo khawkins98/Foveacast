@@ -5,9 +5,9 @@
 // or the real-model path. A bug here is a user-visible bug.
 //
 // `makeSyntheticSaliency` generates the map the demo pipeline
-// renders. The shape / value-range contract matters: postprocess
-// expects 0–255 so it can normalise, and the row-major order is
-// what the rest of the pipeline assumes.
+// renders. V3's postprocess expects [0, 1] values (no log-prob
+// conversion). Row-major order is what the rest of the pipeline
+// assumes.
 //
 // `runDemoMode` is covered by Playwright (end-to-end) — it needs
 // the DOM, an image fetch, and the real render stack, and mocking
@@ -98,22 +98,25 @@ describe('makeSyntheticSaliency', () => {
     expect(map.length).toBe(24 * 32);
   });
 
-  it('produces values in the 0–255 range (mirrors real model output)', () => {
+  it('produces values in the [0, 1] range V3 MSI-Net outputs', () => {
     const map = makeSyntheticSaliency([60, 80]);
     for (let i = 0; i < map.length; i++) {
       expect(map[i]).toBeGreaterThanOrEqual(0);
-      expect(map[i]).toBeLessThanOrEqual(255);
+      expect(map[i]).toBeLessThanOrEqual(1);
     }
   });
 
-  it('has non-trivial energy — the demo should actually show something', () => {
-    // Every-pixel-zero would render an invisible heatmap. The
-    // synthetic blobs should contribute enough energy that the sum
-    // of the map is meaningfully above zero.
+  it('has a peak meaningfully above its background', () => {
+    // Every-pixel-identical would render a flat heatmap. The
+    // synthetic blobs should create visible contrast.
     const map = makeSyntheticSaliency([120, 160]);
-    let sum = 0;
-    for (let i = 0; i < map.length; i++) sum += map[i];
-    expect(sum).toBeGreaterThan(1000);
+    let min = map[0];
+    let max = map[0];
+    for (let i = 1; i < map.length; i++) {
+      if (map[i] < min) min = map[i];
+      if (map[i] > max) max = map[i];
+    }
+    expect(max - min).toBeGreaterThan(0.3);
   });
 
   it('has a peak somewhere near the top-left blob (rule-of-thirds position)', () => {
