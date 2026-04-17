@@ -613,10 +613,10 @@ function boot() {
     );
     credits.appendChild(
       textAndLink(
-        'Heatmap rendering by ',
-        'heatmap.js',
-        'https://www.patrick-wied.at/static/heatmapjs/',
-        ' by Patrick Wied (MIT).',
+        'Saliency colormap: inferno (matplotlib, ',
+        'BSD licensed',
+        'https://matplotlib.org/stable/users/project/license.html',
+        '). ',
       ),
     );
     footer.appendChild(credits);

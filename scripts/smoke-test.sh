@@ -104,7 +104,6 @@ required_markers=(
   'id="fc-output"'
   'src="./src/main.js"'
   'ort.wasm.min.js'
-  'heatmap.min.js'
 )
 
 for marker in "${required_markers[@]}"; do
