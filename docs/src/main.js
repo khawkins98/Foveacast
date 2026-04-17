@@ -20,10 +20,7 @@ import { runInference } from './model/inference.js';
 import { downsampleIfLarge } from './pipeline/preprocess.js';
 import { postprocess } from './pipeline/postprocess.js';
 import { firstFixationCentroid } from './pipeline/fixation.js';
-import {
-  renderHeatmapCanvas,
-  compositeImageAndHeatmap,
-} from './render/heatmap.js';
+import { renderSaliencyCanvas, compositeImageAndHeatmap } from './render/saliency-canvas.js';
 import { downloadCompositeAsPng } from './render/download.js';
 import { isDemoModeRequested, runDemoMode } from './demo.js';
 import { installPageDrop } from './ui/page-drop.js';
@@ -397,7 +394,7 @@ function boot() {
 
       const fixation = firstFixationCentroid(processed, origW, origH);
 
-      const heatmapCanvas = renderHeatmapCanvas(processed, origW, origH);
+      const heatmapCanvas = renderSaliencyCanvas(processed, origW, origH);
 
       // Diagnostic: compute saliency stats for the debug panel.
       let salMin = Infinity, salMax = -Infinity, salSum = 0;

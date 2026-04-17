@@ -19,10 +19,7 @@
 
 import { postprocess } from './pipeline/postprocess.js';
 import { firstFixationCentroid } from './pipeline/fixation.js';
-import {
-  renderHeatmapCanvas,
-  compositeImageAndHeatmap,
-} from './render/heatmap.js';
+import { renderSaliencyCanvas, compositeImageAndHeatmap } from './render/saliency-canvas.js';
 import { downsampleIfLarge } from './pipeline/preprocess.js';
 
 /**
@@ -197,7 +194,7 @@ export async function runDemoMode(mounts) {
   //    heatmap.js. This is the part that would have caught the
   //    detached-container bug had the test ever reached it.
   const fixation = firstFixationCentroid(processed, origW, origH);
-  const heatmapCanvas = renderHeatmapCanvas(processed, origW, origH);
+  const heatmapCanvas = renderSaliencyCanvas(processed, origW, origH);
 
   // 5. Composite and mount.
   // Demo output carries a diagonal watermark baked into the canvas
