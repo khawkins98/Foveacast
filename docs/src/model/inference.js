@@ -14,21 +14,21 @@ import { imageSourceToInputData } from '../pipeline/preprocess.js';
 /**
  * @typedef {Object} InferenceContext
  * @property {any} session - `ort.InferenceSession` instance from `loadModel`.
- * @property {[number, number]} inputDims - `[H, W]` for UNISAL's graph.
+ * @property {[number, number]} inputDims - `[H, W]` for the model graph.
  */
 
 /**
  * @typedef {Object} InferenceResult
  * @property {Float32Array} saliency - Raw model output, length `H * W`.
- *   UNISAL returns log-probabilities; the postprocess layer applies
- *   `exp()` before the visual normalisation path.
+ *   V3 MSI-Net returns values in [0, 1] (min-max normalised inside
+ *   the ONNX graph). No log-probability conversion needed.
  * @property {[number, number]} inputDims - Model input `[H, W]`.
  * @property {[number, number]} sourceDims - Source `[origH, origW]` for
  *   downstream upsampling back to the user's screenshot size.
  */
 
 /**
- * Run UNISAL inference on a `CanvasImageSource` or `ImageData`.
+ * Run saliency inference on a `CanvasImageSource` or `ImageData`.
  *
  * @param {CanvasImageSource | ImageData} source
  * @param {InferenceContext} context

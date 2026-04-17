@@ -1,25 +1,16 @@
 // Saliency-map post-processing.
 //
-// The raw output of UNISAL is a `[inputH × inputW]` Float32 tensor of
-// **log-probabilities**: one log-softmax value per input-resolution
-// pixel. Before this map is useful for an overlay, we apply four steps:
+// V3 MSI-Net outputs a [240 × 320] Float32 tensor already normalised to
+// [0, 1] inside the ONNX graph. Three steps make it overlay-ready:
 //
-//   1. Convert log-probabilities to probabilities via `exp`. The raw
-//      output range of about `[-23, -8]` is consistent with log-softmax
-//      over the 288×384 grid; applying `exp(y - y.max())` recovers the
-//      proper probability-like saliency map without numerical overflow.
-//      (V1's MSI-Net emitted 0–255 intensity directly and did not need
-//      this step — that is the only pipeline-math difference between
-//      V1 and V2.)
-//   2. Bilinearly upsample to the original screenshot's dimensions so
+//   1. Bilinearly upsample to the original screenshot's dimensions so
 //      each saliency value aligns with a real-world pixel on the user's
 //      canvas.
-//   3. Apply a Gaussian blur with σ ≈ 20–40 px at 1× resolution, which
-//      smooths out the staircase edges introduced by the upsample and
-//      produces visually-pleasant contour lines after the heatmap.js
-//      colour ramp is applied.
-//   4. Rescale to [0, 1] so the heatmap library's default colour ramp
-//      has consistent dynamic range regardless of the absolute values.
+//   2. Apply a light Gaussian blur (σ=5 at 1× resolution) to smooth
+//      out staircase edges from the upsample without washing out the
+//      attention peaks.
+//   3. Rescale to [0, 1] so the inferno colour ramp has consistent
+//      dynamic range regardless of the absolute values.
 //
 // All functions here are pure — they take and return typed arrays,
 // never touch a canvas — so they unit-test cleanly under jsdom or node.

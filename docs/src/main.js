@@ -5,11 +5,11 @@
 // drives the end-to-end inference → render → composite pipeline.
 //
 // Architecture note: the UI layer never imports `onnxruntime-web` or
-// `heatmap.js` directly. Both are loaded from vendored <script> tags
-// in `index.html` and reached through the `model/` and `render/`
-// modules. V2 proved the value of that boundary — swapping MSI-Net
-// through TensorFlow.js for UNISAL through ORT Web happened inside
-// `model/` and the surrounding layers never noticed.
+// runtime directly. ORT Web is loaded from a vendored <script> tag in
+// `index.html` and reached through the `model/` module. The `render/`
+// layer handles saliency visualisation via a direct inferno colormap
+// renderer. The boundary between model, pipeline, and render layers
+// is what let V3 swap the model without touching the UI code.
 
 import { mountMobileGuard } from './ui/mobile-guard.js';
 import { createStatus } from './ui/status.js';
@@ -43,8 +43,8 @@ const FIRST_RUN_THRESHOLD_MS = 800;
  * keep this file boring — there is only one of it and it lives for
  * the page's entire lifetime.
  *
- * V2 removed the `preset` field because UNISAL ships as a single
- * fixed-shape ONNX graph.
+ * The V1 `preset` field was removed — V3 MSI-Net is a single
+ * fixed-shape model (240×320).
  *
  * @type {{
  *   loadedModel: { session: any, inputDims: [number, number] } | null,
@@ -232,7 +232,7 @@ function boot() {
   // --- Exposed helpers (closures over `state`) --------------------------
 
   /**
-   * Load the UNISAL model with a first-run-vs-cache banner heuristic
+   * Load the saliency model with a first-run-vs-cache banner heuristic
    * (see `FIRST_RUN_THRESHOLD_MS`).
    *
    * `silent` suppresses the cache-load / first-run / ready banners so
@@ -558,7 +558,7 @@ function boot() {
   /**
    * Render (or refresh) the attribution footer. The footer carries:
    *   - Model version indicator.
-   *   - Credits for UNISAL, ONNX Runtime Web, and heatmap.js.
+   *   - Credits for MSI-Net, UEyes, ONNX Runtime Web, and foveacast-training.
    *   - Non-dismissible bias disclosure (PRD §Attribution).
    *   - A "Need more?" button that opens the commercial-alternatives
    *     modal, per PRD §Positioning and Alternatives.

@@ -34,7 +34,7 @@ export const MODEL_URL = './models/v3/model.onnx';
  * @property {number|undefined} loaded - Bytes loaded if known.
  * @property {number|undefined} total - Total bytes if known.
  *
- * UNISAL is a single artefact, so progress is a real percentage of
+ * The model is a single artefact, so progress is a real percentage of
  * bytes fetched rather than the fraction-of-shards TF.js exposed for
  * MSI-Net. Both `loaded` and `total` are populated for a served
  * response; either may be undefined if the server omits Content-Length.
@@ -43,7 +43,7 @@ export const MODEL_URL = './models/v3/model.onnx';
 /**
  * @typedef {Object} LoadedModel
  * @property {any} session - The `ort.InferenceSession` instance.
- * @property {[number, number]} inputDims - `[H, W]` for UNISAL's SALICON graph.
+ * @property {[number, number]} inputDims - `[H, W]` for the model graph.
  */
 
 /**
@@ -115,7 +115,7 @@ async function fetchModelBytes(url, onProgress) {
 }
 
 /**
- * Load the UNISAL ONNX graph into an onnxruntime-web InferenceSession.
+ * Load the V3 MSI-Net ONNX graph into an onnxruntime-web InferenceSession.
  *
  * Expects `ort` to be on `globalThis` (loaded via the vendored
  * `<script src="./vendor/ort.wasm.min.js">` in index.html). Throws a

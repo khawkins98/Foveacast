@@ -18,9 +18,9 @@
 /**
  * localStorage key used to detect whether this browser has completed
  * at least one model load before. The `v1` suffix means a future
- * model swap (V2 UNISAL) that changes weight size or download shape
- * can bump to `v2` and correctly treat every existing user as
- * first-time again for the new download.
+ * model swap that changes weight size or download shape can bump to
+ * `v2` and correctly treat every existing user as first-time again
+ * for the new download.
  */
 export const HAS_RUN_KEY = 'foveacast:has-run:v1';
 

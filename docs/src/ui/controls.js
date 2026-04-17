@@ -7,9 +7,8 @@
 // correctly, and every handler fires with a normalised value shape
 // so the caller never has to sniff event.target.
 //
-// V2 removed the preset picker. MSI-Net shipped five presets at
-// different input resolutions; UNISAL was exported at a single
-// native SALICON shape (`[288, 384]`). There is no meaningful
+// The preset picker from V1 was removed in V2. V3's MSI-Net is a
+// single fixed-shape model (240×320) — there is no meaningful
 // speed/quality knob for a single-shape ONNX graph, and a picker
 // with one option is visual noise.
 
