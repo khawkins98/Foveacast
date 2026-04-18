@@ -92,15 +92,20 @@ for i in "${indices_to_fetch[@]}"; do
   echo "→ Downloading $asset from $REPO release $RELEASE_TAG..."
   # why: gh release download handles auth + redirect + asset lookup in one
   # command. Falls back to curl for environments without gh.
+  # The `|| { ... continue; }` guard ensures a download failure for one
+  # model does not abort the entire script under `set -e` — the other
+  # models still get a chance to download.
   if command -v gh >/dev/null 2>&1; then
     gh release download "$RELEASE_TAG" \
       --repo "$REPO" \
       --pattern "$asset" \
       --output "$dest" \
-      --clobber
+      --clobber \
+    || { echo "✗ Download failed for $asset"; failures=$((failures + 1)); continue; }
   else
     url="https://github.com/$REPO/releases/download/$RELEASE_TAG/$asset"
-    curl -L --fail --retry 3 -o "$dest" "$url"
+    curl -L --fail --retry 3 -o "$dest" "$url" \
+    || { echo "✗ Download failed for $asset"; failures=$((failures + 1)); continue; }
   fi
 
   # Verify.

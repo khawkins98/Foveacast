@@ -12,9 +12,10 @@ The heatmap renderer is also replaced. heatmap.js added visual distortion (radiu
 
 ### Added
 
-- **V3 saliency model** — MSI-Net fine-tuned on UEyes, exported as a 57 MB FP16 ONNX artefact from [foveacast-training v0.1.0](https://github.com/khawkins98/foveacast-training/releases/tag/v0.1.0). Input: 240×320 RGB. Output: [0, 1] saliency map with mean subtraction baked into the graph.
+- **V3 saliency models** — MSI-Net fine-tuned on UEyes for three viewing durations (1s, 3s, 7s), each exported as a 57 MB FP16 ONNX artefact from [foveacast-training v0.2.0](https://github.com/khawkins98/foveacast-training/releases/tag/v0.2.0). Input: 240×320 RGB. Output: [0, 1] saliency map with mean subtraction baked into the graph.
+- **Viewing-duration picker** — radio-button control letting users switch between first-glance (1 s), quick-scan (3 s), and full-viewing (7 s) models. The selected model loads on demand; inference re-runs automatically on the current image.
 - **Direct inferno colormap renderer** (`docs/src/render/saliency-canvas.js`) — pixel-accurate, no external library, perceptually uniform and colour-blind safe. Replaces heatmap.js for the saliency overlay.
-- **Deploy-time model fetch** (`scripts/fetch-v3-model.sh`) — the 57 MB artefact is downloaded from the foveacast-training GitHub Release at deploy time rather than committed to the repo. SHA256-verified after download. For local dev: `bash scripts/fetch-v3-model.sh`.
+- **Deploy-time model fetch** (`scripts/fetch-v3-model.sh`) — the three 57 MB artefacts are downloaded from the foveacast-training GitHub Release at deploy time rather than committed to the repo. Each is SHA256-verified after download. For local dev: `bash scripts/fetch-v3-model.sh` (all) or `bash scripts/fetch-v3-model.sh 3s` (one).
 - **Diagnostics panel** — collapsible section below the heatmap output showing source dimensions, model identity, saliency stats, peak location, and preprocessing/postprocess details. Click "Diagnostics" to expand.
 - **Attribution footer** credits [MSI-Net](https://doi.org/10.1016/j.neunet.2020.05.004) (Kroner et al. 2020, MIT), [UEyes](https://doi.org/10.1145/3544548.3581096) (Jiang et al. 2023, CC BY 4.0), and [foveacast-training](https://github.com/khawkins98/foveacast-training).
 

@@ -30,9 +30,9 @@ export { MODEL_INPUT_DIMS };
  * Available viewing-duration windows. Each corresponds to a separate
  * ONNX model fine-tuned on the matching UEyes heatmap variant.
  *
- * - `1s` — first glance: headlines, faces, hero images, primary CTAs.
- * - `3s` — early exploration: what's noticed in a quick scan.
- * - `7s` — full viewing: secondary content, navigation, less-prominent targets.
+ * - `1s` — first glance: what grabs the eye first.
+ * - `3s` — quick scan: what's noticed in a few seconds.
+ * - `7s` — full viewing: what's eventually seen.
  *
  * @type {readonly ['1s', '3s', '7s']}
  */
@@ -44,9 +44,9 @@ export const DURATIONS = /** @type {const} */ (['1s', '3s', '7s']);
 
 /**
  * Human-readable labels for each duration, used in the controls UI.
- * @type {Record<Duration, string>}
+ * @type {Readonly<Record<Duration, string>>}
  */
-export const DURATION_LABELS = /** @type {const} */ ({
+export const DURATION_LABELS = Object.freeze({
   '1s': 'First glance (1 s)',
   '3s': 'Quick scan (3 s)',
   '7s': 'Full viewing (7 s)',
@@ -65,6 +65,11 @@ export const DEFAULT_DURATION = '3s';
  * @returns {string}
  */
 export function modelUrlForDuration(duration) {
+  if (!DURATIONS.includes(duration)) {
+    throw new Error(
+      `Invalid duration "${duration}". Expected one of: ${DURATIONS.join(', ')}`,
+    );
+  }
   return `./models/v3/${duration}/model.onnx`;
 }
 

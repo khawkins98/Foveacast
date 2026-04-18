@@ -275,6 +275,13 @@ function boot() {
    */
   async function reloadModel(options = {}) {
     const { silent = false, duration = state.activeDuration } = options;
+    // why: ORT sessions hold WASM heap memory for the graph (~57 MB).
+    // Without an explicit release, switching durations repeatedly would
+    // accumulate unreclaimable memory until GC collects the orphaned
+    // JS wrapper — and WASM linear memory is never returned to the OS.
+    if (state.loadedModel && state.loadedModel.session) {
+      try { state.loadedModel.session.release(); } catch { /* best-effort */ }
+    }
     state.loadedModel = null;
     state.activeDuration = duration;
     dropzone.setEnabled(false);
@@ -437,6 +444,13 @@ function boot() {
   async function runInferenceOnImage(workCanvas) {
     if (!state.loadedModel) return;
 
+    // Capture the duration at the start of inference so we can detect
+    // a stale result if the user switches duration while inference is
+    // running. Without this check, a slow inference on the old model
+    // would write its results into state and display them under the
+    // new duration's label.
+    const inferDuration = state.activeDuration;
+
     status.showInference();
     dropzone.setBusy(true);
     controls.setDisabled(true);
@@ -449,6 +463,11 @@ function boot() {
       // pipeline and returns the raw model output plus the model's
       // native input dims (which post-processing needs).
       const { saliency, inputDims, sourceDims } = await runInference(workCanvas, state.loadedModel);
+
+      // Stale: the user switched duration while inference was running.
+      // Discard these results — the new duration's inference will
+      // produce the correct output.
+      if (inferDuration !== state.activeDuration) return;
 
       // Upsample + blur + normalise to the work canvas's dims so the
       // heatmap aligns pixel-for-pixel with the image we're going to
