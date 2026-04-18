@@ -93,10 +93,11 @@ jobs:
       - name: Run tests
         run: pnpm test
 
-      # V3 model is NOT committed to the repo (57 MB FP16 ONNX would
-      # bloat the clone). Fetch it from the foveacast-training GitHub
-      # Release at deploy time. The script verifies SHA256 after download.
-      - name: Fetch V3 model from release
+      # V3 models are NOT committed to the repo (57 MB each, FP16 ONNX,
+      # would bloat the clone). Fetch all three duration variants (1s,
+      # 3s, 7s) from the foveacast-training GitHub Release at deploy
+      # time. The script verifies SHA256 per model after download.
+      - name: Fetch V3 models from release
         run: bash scripts/fetch-v3-model.sh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -104,7 +105,7 @@ jobs:
       # The Pages tooling expects a specific artifact format produced
       # by this action. Handing it `./docs` uploads the static-site
       # folder verbatim — no build invocation, no transformation.
-      # The V3 model was fetched above into docs/models/v3/model.onnx.
+      # The V3 models were fetched above into docs/models/v3/{1s,3s,7s}/.
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

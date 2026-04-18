@@ -17,7 +17,7 @@ import { createDropzone } from './ui/dropzone.js';
 import { createControls } from './ui/controls.js';
 import { mountFooter } from './ui/footer.js';
 import { renderOutput as renderOutputView } from './ui/output-view.js';
-import { loadModel } from './model/loader.js';
+import { loadModel, DEFAULT_DURATION } from './model/loader.js';
 import { runInference } from './model/inference.js';
 import { downsampleIfLarge } from './ui/image-resize.js';
 import { postprocess } from './pipeline/postprocess.js';
@@ -45,11 +45,9 @@ const FIRST_RUN_THRESHOLD_MS = 800;
  * keep this file boring — there is only one of it and it lives for
  * the page's entire lifetime.
  *
- * The V1 `preset` field was removed — V3 MSI-Net is a single
- * fixed-shape model (240×320).
- *
  * @type {{
- *   loadedModel: { session: any, inputDims: [number, number] } | null,
+ *   loadedModel: import('./model/loader.js').LoadedModel | null,
+ *   activeDuration: import('./model/loader.js').Duration,
  *   lastImage: HTMLImageElement | ImageBitmap | HTMLCanvasElement | null,
  *   lastHeatmapCanvas: HTMLCanvasElement | null,
  *   lastFixation: { x: number, y: number } | null,
@@ -66,12 +64,15 @@ const FIRST_RUN_THRESHOLD_MS = 800;
  *     saliencyMax: string,
  *     saliencyMean: string,
  *     peakLocation: string,
+ *     duration: string,
  *   } | null,
  *   lastCompositeCanvas: HTMLCanvasElement | null,
+ *   durationSwitchGeneration: number,
  * }}
  */
 const state = {
   loadedModel: null,
+  activeDuration: DEFAULT_DURATION,
   lastImage: null,
   lastHeatmapCanvas: null,
   lastFixation: null,
@@ -84,6 +85,12 @@ const state = {
   /** The most recently rendered composite canvas — used by the download handler.
    *  Null when the current view is 'original' (no composite is produced). */
   lastCompositeCanvas: null,
+  /** Monotonic counter incremented on every duration switch. A load that
+   *  started for a previous generation is stale and should be discarded
+   *  when it resolves — the user has already moved on to a different
+   *  duration. This prevents a slow 1s download from stomping a fast 3s
+   *  download that the user selected while the 1s was in flight. */
+  durationSwitchGeneration: 0,
 };
 
 /**
@@ -164,6 +171,9 @@ function boot() {
 
   // --- Controls ---------------------------------------------------------
   const controls = createControls({
+    onDurationChange: (duration) => {
+      switchDuration(duration);
+    },
     onOpacityChange: (value) => {
       state.opacity = value;
       recomposite();
@@ -261,11 +271,12 @@ function boot() {
    * dropzone enable / controls enable / error surfacing all still run
    * normally — only the chatty status transitions are skipped.
    *
-   * @param {{ silent?: boolean }} [options]
+   * @param {{ silent?: boolean, duration?: import('./model/loader.js').Duration }} [options]
    */
   async function reloadModel(options = {}) {
-    const { silent = false } = options;
+    const { silent = false, duration = state.activeDuration } = options;
     state.loadedModel = null;
+    state.activeDuration = duration;
     dropzone.setEnabled(false);
     controls.setDisabled(true);
 
@@ -289,20 +300,24 @@ function boot() {
       }
     }
 
-    const loaded = await loadModel((progress) => {
-      if (silent) return;
-      const elapsed = performance.now() - startedAt;
-      if (!firstRunShown && elapsed > FIRST_RUN_THRESHOLD_MS && progress.fraction < 0.95) {
-        firstRunShown = true;
-      }
-      if (firstRunShown) {
-        status.showFirstRun(progress);
-      }
+    const loaded = await loadModel({
+      duration,
+      onProgress: (progress) => {
+        if (silent) return;
+        const elapsed = performance.now() - startedAt;
+        if (!firstRunShown && elapsed > FIRST_RUN_THRESHOLD_MS && progress.fraction < 0.95) {
+          firstRunShown = true;
+        }
+        if (firstRunShown) {
+          status.showFirstRun(progress);
+        }
+      },
     });
     state.loadedModel = loaded;
     writeHasRunSentinel(); // Flip the bit after a successful load.
     dropzone.setEnabled(true);
     controls.setDisabled(false);
+    controls.setDurationLoading(false);
     if (!silent) status.showReady();
     // why: footer is static — no re-mount needed after model reload.
 
@@ -321,6 +336,61 @@ function boot() {
           onRetry: () => status.clear(),
         });
       });
+    }
+  }
+
+  /**
+   * Switch to a different viewing-duration model. Loads the new model
+   * and re-runs inference on the current image if one is loaded.
+   *
+   * Race protection: each call increments a generation counter. If the
+   * user switches duration again before the previous load finishes,
+   * the earlier load's results are discarded.
+   *
+   * @param {import('./model/loader.js').Duration} duration
+   */
+  async function switchDuration(duration) {
+    if (duration === state.activeDuration && state.loadedModel) return;
+
+    const generation = ++state.durationSwitchGeneration;
+    state.activeDuration = duration;
+    controls.setDurationLoading(true);
+
+    try {
+      // Load the new model. Use silent=false so the user sees progress
+      // if this is a first download, but suppress if user already has
+      // a result showing (the duration-loading hint is enough feedback).
+      const hasExistingResult = !!state.lastImage;
+      await reloadModel({
+        duration,
+        silent: hasExistingResult,
+      });
+    } catch (err) {
+      // Only surface the error if this is still the active generation.
+      if (generation === state.durationSwitchGeneration) {
+        controls.setDurationLoading(false);
+        surfaceModelError(err);
+      }
+      return;
+    }
+
+    // Stale: the user switched to yet another duration while we were
+    // loading this one. Discard — the newer load will handle it.
+    if (generation !== state.durationSwitchGeneration) return;
+
+    controls.setDurationLoading(false);
+
+    // Re-run inference on the current image with the new model.
+    if (state.lastImage) {
+      try {
+        await runInferenceOnImage(state.lastImage);
+      } catch (err) {
+        console.error('Foveacast: re-inference after duration switch failed.', err);
+        status.showError({
+          code: 'INFERENCE_FAILED',
+          onRetry: () => status.clear(),
+        });
+      }
     }
   }
 
@@ -358,48 +428,20 @@ function boot() {
   }
 
   /**
-   * Handle a user-dropped file through the full pipeline.
+   * Run inference on a prepared image source (already downsampled if
+   * needed) and update state + render output. Extracted so both
+   * `handleFile` and `switchDuration` can share the same pipeline.
    *
-   * In demo mode the dropzone goes live as soon as the synthetic
-   * preview renders, which may be well before the real model has
-   * finished downloading. A drop that arrives in that window gets
-   * queued: we show the first-run banner so the user knows why the
-   * wait, and `reloadModel()` picks up the queued file when it
-   * resolves. The user never sees a "model still loading, try again"
-   * dead end.
-   *
-   * @param {File} file
+   * @param {HTMLImageElement | ImageBitmap | HTMLCanvasElement} workCanvas
    */
-  async function handleFile(file) {
-    if (!state.loadedModel) {
-      state.queuedFile = file;
-      // Surface the real download/cache banner so the user sees that
-      // something is happening. The visible banner depends on whether
-      // the silent background load has passed the first-run threshold.
-      status.showFirstRun({ fraction: 0, loaded: undefined, total: undefined });
-      status.element.setAttribute('data-foveacast-queued', 'true');
-      return;
-    }
+  async function runInferenceOnImage(workCanvas) {
+    if (!state.loadedModel) return;
 
     status.showInference();
     dropzone.setBusy(true);
     controls.setDisabled(true);
 
     try {
-      // `createImageBitmap` is the right path — it decodes off the main
-      // thread when the browser supports it. Falling back to an
-      // HTMLImageElement keeps the flow alive on older engines.
-      let bitmap;
-      try {
-        bitmap = await createImageBitmap(file);
-      } catch {
-        bitmap = await loadFileAsImage(file);
-      }
-
-      // PRD §Memory: images wider than 2560px are downsampled before
-      // preprocessing to dodge OOM on retina screenshots.
-      const workCanvas = downsampleIfLarge(bitmap, 2560);
-
       const origW = workCanvas.width;
       const origH = workCanvas.height;
 
@@ -441,6 +483,7 @@ function boot() {
         saliencyMax: salMax.toFixed(4),
         saliencyMean: (salSum / saliency.length).toFixed(4),
         peakLocation: `(${peakX}, ${peakY})`,
+        duration: state.activeDuration,
       };
 
       renderOutput();
@@ -453,15 +496,58 @@ function boot() {
       // the output area so keyboard users aren't left at the top of
       // the page.
       outputSection.focus();
+    } finally {
+      dropzone.setBusy(false);
+      controls.setDisabled(false);
+    }
+  }
+
+  /**
+   * Handle a user-dropped file through the full pipeline.
+   *
+   * In demo mode the dropzone goes live as soon as the synthetic
+   * preview renders, which may be well before the real model has
+   * finished downloading. A drop that arrives in that window gets
+   * queued: we show the first-run banner so the user knows why the
+   * wait, and `reloadModel()` picks up the queued file when it
+   * resolves. The user never sees a "model still loading, try again"
+   * dead end.
+   *
+   * @param {File} file
+   */
+  async function handleFile(file) {
+    if (!state.loadedModel) {
+      state.queuedFile = file;
+      // Surface the real download/cache banner so the user sees that
+      // something is happening. The visible banner depends on whether
+      // the silent background load has passed the first-run threshold.
+      status.showFirstRun({ fraction: 0, loaded: undefined, total: undefined });
+      status.element.setAttribute('data-foveacast-queued', 'true');
+      return;
+    }
+
+    try {
+      // `createImageBitmap` is the right path — it decodes off the main
+      // thread when the browser supports it. Falling back to an
+      // HTMLImageElement keeps the flow alive on older engines.
+      let bitmap;
+      try {
+        bitmap = await createImageBitmap(file);
+      } catch {
+        bitmap = await loadFileAsImage(file);
+      }
+
+      // PRD §Memory: images wider than 2560px are downsampled before
+      // preprocessing to dodge OOM on retina screenshots.
+      const workCanvas = downsampleIfLarge(bitmap, 2560);
+
+      await runInferenceOnImage(workCanvas);
     } catch (err) {
       console.error('Foveacast: inference failed.', err);
       status.showError({
         code: 'INFERENCE_FAILED',
         onRetry: () => status.clear(),
       });
-    } finally {
-      dropzone.setBusy(false);
-      controls.setDisabled(false);
     }
   }
 

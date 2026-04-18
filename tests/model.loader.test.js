@@ -1,12 +1,15 @@
 // Loader tests. We stub `globalThis.ort.InferenceSession.create` and
 // `globalThis.fetch` so we can assert on download behaviour, progress
 // reporting, and error classification without depending on a real
-// ONNX Runtime Web bundle or the 12.5 MB artefact on disk.
+// ONNX Runtime Web bundle or the 57 MB artefact on disk.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   loadModel,
-  MODEL_URL,
+  modelUrlForDuration,
+  DURATIONS,
+  DURATION_LABELS,
+  DEFAULT_DURATION,
   MODEL_INPUT_DIMS,
 } from '../docs/src/model/loader.js';
 
@@ -52,11 +55,32 @@ function makeStreamingFetch(bytes, { contentLength = bytes.byteLength, ok = true
   });
 }
 
-describe('MODEL_URL + MODEL_INPUT_DIMS', () => {
-  it('points the app at the committed same-origin artefact', () => {
-    expect(MODEL_URL).toBe('./models/v3/model.onnx');
+describe('DURATIONS + DURATION_LABELS + DEFAULT_DURATION', () => {
+  it('lists three viewing-window durations', () => {
+    expect(Array.from(DURATIONS)).toEqual(['1s', '3s', '7s']);
   });
 
+  it('has a human-readable label for each duration', () => {
+    for (const dur of DURATIONS) {
+      expect(typeof DURATION_LABELS[dur]).toBe('string');
+      expect(DURATION_LABELS[dur].length).toBeGreaterThan(0);
+    }
+  });
+
+  it('defaults to 3s', () => {
+    expect(DEFAULT_DURATION).toBe('3s');
+  });
+});
+
+describe('modelUrlForDuration', () => {
+  it('returns the correct path for each duration', () => {
+    expect(modelUrlForDuration('1s')).toBe('./models/v3/1s/model.onnx');
+    expect(modelUrlForDuration('3s')).toBe('./models/v3/3s/model.onnx');
+    expect(modelUrlForDuration('7s')).toBe('./models/v3/7s/model.onnx');
+  });
+});
+
+describe('MODEL_INPUT_DIMS', () => {
   it('matches the SALICON export shape [240, 320]', () => {
     expect(Array.from(MODEL_INPUT_DIMS)).toEqual([240, 320]);
   });
@@ -107,22 +131,48 @@ describe('loadModel', () => {
     expect(result.session).toEqual({ fake: 'session' });
   });
 
-  it('fetches the committed same-origin artefact and hands its bytes to ort.InferenceSession.create', async () => {
+  it('defaults to the 3s model URL', async () => {
+    const create = installOrtMock();
+    globalThis.fetch = makeStreamingFetch(new Uint8Array([1, 2, 3]));
+
+    await loadModel();
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(modelUrlForDuration('3s'));
+  });
+
+  it('fetches the correct artefact when a duration is specified', async () => {
+    const create = installOrtMock();
+    globalThis.fetch = makeStreamingFetch(new Uint8Array([1, 2, 3]));
+
+    await loadModel({ duration: '1s' });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(modelUrlForDuration('1s'));
+  });
+
+  it('hands bytes to ort.InferenceSession.create with wasm EP', async () => {
     const bytes = new Uint8Array([1, 2, 3, 4, 5]);
     const create = installOrtMock();
     globalThis.fetch = makeStreamingFetch(bytes);
 
     const result = await loadModel();
 
-    expect(globalThis.fetch).toHaveBeenCalledWith(MODEL_URL);
     expect(create).toHaveBeenCalledTimes(1);
     const [passedBytes, opts] = create.mock.calls[0];
-    // Bytes are handed off as ArrayBuffer (or Uint8Array) — accept both
-    // so a future refactor of `fetchModelBytes` is not blocked by a
-    // too-specific assertion.
     expect(passedBytes).toBeTruthy();
     expect(opts.executionProviders).toContain('wasm');
-    expect(result).toEqual({ session: { fake: 'session' }, inputDims: MODEL_INPUT_DIMS });
+    expect(result).toEqual({
+      session: { fake: 'session' },
+      inputDims: MODEL_INPUT_DIMS,
+      duration: '3s',
+    });
+  });
+
+  it('returns the requested duration in the result', async () => {
+    installOrtMock();
+    globalThis.fetch = makeStreamingFetch(new Uint8Array(8));
+
+    const result = await loadModel({ duration: '7s' });
+    expect(result.duration).toBe('7s');
   });
 
   it('forces single-threaded WASM (no COEP on Pages)', async () => {
@@ -148,7 +198,7 @@ describe('loadModel', () => {
     globalThis.fetch = makeStreamingFetch(bytes);
 
     const events = [];
-    await loadModel((p) => events.push(p));
+    await loadModel({ onProgress: (p) => events.push(p) });
 
     expect(events.length).toBeGreaterThanOrEqual(1);
     const final = events[events.length - 1];
@@ -163,7 +213,7 @@ describe('loadModel', () => {
     globalThis.fetch = makeStreamingFetch(bytes, { contentLength: undefined });
 
     const events = [];
-    await loadModel((p) => events.push(p));
+    await loadModel({ onProgress: (p) => events.push(p) });
 
     const final = events[events.length - 1];
     expect(final.fraction).toBe(1);
@@ -197,7 +247,7 @@ describe('loadModel — structured error classification', () => {
       throw new Error('expected loadModel to reject');
     } catch (err) {
       expect(/** @type {any} */ (err).code).toBe('MODEL_DOWNLOAD_FAILED');
-      expect(/** @type {any} */ (err).url).toBe(MODEL_URL);
+      expect(/** @type {any} */ (err).url).toBe(modelUrlForDuration('3s'));
     }
   });
 

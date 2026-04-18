@@ -89,7 +89,7 @@ test.describe('Foveacast — demo mode end-to-end', () => {
     //     GitHub Pages and in the Playwright dev-server, and ORT
     //     falls back to single-threaded automatically.
     //   - The silent background model load in demo mode will try to
-    //     fetch `./models/v3/model.onnx`. Playwright serves this
+    //     fetch `./models/v3/3s/model.onnx`. Playwright serves this
     //     file correctly when present, but Chromium still logs any
     //     transient fetch noise the wasm loader surfaces during
     //     initialisation.
@@ -160,6 +160,11 @@ test.describe('Foveacast — demo mode end-to-end', () => {
       const val = await dropzone.getAttribute('aria-disabled');
       expect(val).not.toBe('true');
     });
+
+    // Duration picker operable (default 3s selected)
+    const duration3s = page.locator('input[type="radio"][value="3s"]');
+    await expect(duration3s).toBeEnabled();
+    await expect(duration3s).toBeChecked();
 
     // Opacity slider operable
     const slider = page.locator('input[type="range"]').first();

@@ -29,7 +29,7 @@ The heatmap renderer is also replaced. heatmap.js added visual distortion (radiu
 ### Removed
 
 - **heatmap.js dependency** — no longer imported by main.js or demo.js. The library file is retained in the repo for reference but unused at runtime.
-- **UNISAL model** at `docs/models/unisal/model.onnx` — replaced by the V3 model fetched at deploy time to `docs/models/v3/model.onnx`.
+- **UNISAL model** at `docs/models/unisal/model.onnx` — replaced by V3 duration-specific models fetched at deploy time to `docs/models/v3/{1s,3s,7s}/model.onnx`.
 
 ## [0.2.0] — 2026-04-16
 

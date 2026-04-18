@@ -13,10 +13,10 @@
 #     are fast.
 #   - Tests themselves run in ~10 s. Full job time (install + cached
 #     browser + tests) is typically under 60 s.
-#   - V3 model is fetched from a GitHub Release (~57 MB, ~10s). The
-#     model-load test exercises the real ORT-Web load path, not just
-#     demo mode. The fetch is SHA-verified and cached by GitHub's
-#     network proximity to the runner.
+#   - V3 models are fetched from a GitHub Release (~57 MB each × 3
+#     durations, ~30s total). The model-load test exercises the real
+#     ORT-Web load path, not just demo mode. Each fetch is SHA-verified
+#     and benefits from GitHub's network proximity to the runner.
 #
 # When the suite is red, a render-layer change is probably the cause.
 # Open the Playwright trace from the job artefacts for the failing
@@ -32,7 +32,7 @@ jobs:
   e2e:
     name: playwright (chromium)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -87,10 +87,11 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: pnpm exec playwright install-deps chromium
 
-      # V3 model is not committed to the repo (57 MB). Fetch from the
-      # foveacast-training release so model-load E2E tests have the
-      # artefact available. The script is idempotent and SHA-verified.
-      - name: Fetch V3 model
+      # V3 models are not committed to the repo (57 MB each). Fetch all
+      # three duration variants (1s, 3s, 7s) from the foveacast-training
+      # release so model-load E2E tests have the artefacts available.
+      # The script is idempotent and SHA-verified per model.
+      - name: Fetch V3 models
         run: bash scripts/fetch-v3-model.sh
         env:
           GH_TOKEN: ${{ github.token }}
