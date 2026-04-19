@@ -1003,7 +1003,74 @@ body.fc-page-dragover .fc-dropzone {
   outline-offset: 3px;
 }
 
-/* -- Responsive: narrow desktop / tablet (< 900 px) --------------------- */
+/* -- Busy overlay -------------------------------------------------------- */
+/*
+ * Full-workspace overlay shown while a model load or inference run is
+ * in progress. Sits at z-index 95 — above the sidebar (90) so it
+ * covers the content area, but below the topnav (100) which remains
+ * visible. Uses visibility rather than `hidden` so the 200 ms
+ * fade-in/out transition fires correctly.
+ */
+.fc-busy-overlay {
+  position: fixed;
+  top: var(--fc-topnav-h);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 95;
+  /* --fc-base (#070e1d) at 90% — dark enough to read the spinner,
+     transparent enough to hint at the page beneath. */
+  background: rgba(7, 14, 29, 0.90);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  /* Fade out: opacity over 200ms, then hide visibility with 200ms delay. */
+  transition: opacity 200ms ease, visibility 0ms linear 200ms;
+}
+
+.fc-busy-overlay--active {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  /* Fade in: show visibility immediately, then opacity over 200ms. */
+  transition: opacity 200ms ease, visibility 0ms linear 0ms;
+}
+
+.fc-busy-overlay__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+/* Two-tone spinner ring: --fc-surface-high track, --fc-primary arc. */
+.fc-busy-overlay__spinner {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 4px solid var(--fc-surface-high);
+  border-top-color: var(--fc-primary);
+  animation: fc-overlay-spin 0.75s linear infinite;
+}
+
+@keyframes fc-overlay-spin {
+  to { transform: rotate(360deg); }
+}
+
+.fc-busy-overlay__label {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--fc-on-surface);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+/* -- Responsive: narrow desktop / tablet (< 900 px) --------------------- */ */
 /*
  * Below 900 px the sidebar leaves fixed positioning and stacks below
  * the main workspace in normal document flow. Since <aside> follows
@@ -1066,6 +1133,13 @@ body.fc-page-dragover .fc-dropzone {
   .fc-status__indicator--spin {
     animation: none;
     border-top-color: transparent;
+    border-color: var(--fc-primary);
+  }
+
+  /* Spinner frozen at rest — show as a solid ring rather than a
+     mid-spin arc, which looks broken. */
+  .fc-busy-overlay__spinner {
+    animation: none;
     border-color: var(--fc-primary);
   }
 }

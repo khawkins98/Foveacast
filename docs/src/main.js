@@ -250,13 +250,23 @@ function boot() {
   }
 
   /**
-   * Toggle the topnav loading bar during model loads and inference runs.
-   * Purely visual — the status banner carries the accessible announcement.
+   * Toggle the busy overlay during model loads and inference runs.
+   * The topnav loading bar stays as a secondary indicator; this overlay
+   * makes the blocked state unmistakable.
    *
    * @param {boolean} busy
+   * @param {string} [label] - Text shown inside the overlay card.
    */
-  function setAppBusy(busy) {
+  function setAppBusy(busy, label = 'Analysing…') {
     document.querySelector('.fc-topnav')?.classList.toggle('fc-topnav--busy', busy);
+    const overlay = document.getElementById('fc-busy-overlay');
+    if (overlay) {
+      if (busy) {
+        const lbl = document.getElementById('fc-busy-overlay-label');
+        if (lbl) lbl.textContent = label;
+      }
+      overlay.classList.toggle('fc-busy-overlay--active', busy);
+    }
   }
 
   // --- Demo mode short-circuit ------------------------------------------
@@ -359,7 +369,7 @@ function boot() {
       }
     }
 
-    setAppBusy(true);
+    setAppBusy(true, 'Loading model\u2026');
     let loaded;
     try {
       loaded = await loadModel({
@@ -514,10 +524,9 @@ function boot() {
     status.showInference();
     dropzone.setBusy(true);
     controls.setDisabled(true);
-    setAppBusy(true);
+    setAppBusy(true, 'Analysing image\u2026');
 
     try {
-      const origW = workCanvas.width;
       const origH = workCanvas.height;
 
       // Run inference. `runInference` internally calls the preprocessing
