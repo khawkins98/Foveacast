@@ -527,6 +527,7 @@ function boot() {
     setAppBusy(true, 'Analysing image\u2026');
 
     try {
+      const origW = workCanvas.width;
       const origH = workCanvas.height;
 
       // Run inference. `runInference` internally calls the preprocessing
