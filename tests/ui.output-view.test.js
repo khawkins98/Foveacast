@@ -40,6 +40,22 @@ describe('describeHeatmap', () => {
     const result = describeHeatmap({ x: 10, y: 20 }, [600, 800]);
     expect(result).toContain('800 by 600');
   });
+
+  it('prefixes the result with durationLabel when provided', () => {
+    const result = describeHeatmap({ x: 10, y: 20 }, [600, 800], 'Quick scan (3 s)');
+    expect(result).toMatch(/^Quick scan \(3 s\) — /);
+  });
+
+  it('includes durationLabel in the fallback string when fixation or dims are null', () => {
+    const result = describeHeatmap(null, null, 'First glance (1 s)');
+    expect(result).toMatch(/^First glance \(1 s\) — /);
+  });
+
+  it('omits prefix when durationLabel is absent (backward compat)', () => {
+    const result = describeHeatmap({ x: 10, y: 20 }, [600, 800]);
+    expect(result).not.toMatch(/^ — /);
+    expect(result).toContain('800 by 600');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -127,6 +143,16 @@ describe('renderOutput', () => {
       domNodes(),
     );
     expect(outputCaption.textContent).toContain('50 pixels across');
+  });
+
+  it('includes duration label in caption when provided', () => {
+    renderOutput(
+      { image: fakeImage, heatmapCanvas: fakeHeatmap, view: 'overlay', opacity: 0.6,
+        fixation: fakeFixation, origDims: [100, 200],
+        duration: 'Quick scan (3 s)', diagnostics: null },
+      domNodes(),
+    );
+    expect(outputCaption.textContent).toMatch(/^Quick scan \(3 s\) — /);
   });
 
   it('overlay view — appends one canvas and returns it', () => {

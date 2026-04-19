@@ -334,8 +334,9 @@ function boot() {
    * background durations.
    *
    * @param {number} fraction - Fill level in [0, 1].
+   * @param {string} [currentLabel] - Human-readable label of the duration currently loading.
    */
-  function showBgProgress(fraction) {
+  function showBgProgress(fraction, currentLabel) {
     const bar = document.getElementById('fc-bg-progress');
     if (!bar) return;
     bar.hidden = false;
@@ -343,9 +344,14 @@ function boot() {
     if (fill) fill.style.width = `${Math.round(fraction * 100)}%`;
     const label = /** @type {HTMLElement | null} */ (bar.querySelector('.fc-bg-progress__label'));
     if (label) {
-      label.textContent = fraction >= 0.99
-        ? 'All durations ready'
-        : `Loading other durations\u2026 ${Math.round(fraction * 100)}\u00a0%`;
+      if (fraction >= 0.99) {
+        label.textContent = 'All durations ready';
+      } else {
+        const pct = `${Math.round(fraction * 100)}\u00a0%`;
+        label.textContent = currentLabel
+          ? `Loading ${currentLabel}\u2026 ${pct}`
+          : `Loading\u2026 ${pct}`;
+      }
     }
   }
 
@@ -402,7 +408,7 @@ function boot() {
     const BG_DURATIONS = /** @type {const} */ (['1s', '7s']);
     const total = BG_DURATIONS.length;
 
-    showBgProgress(0);
+    showBgProgress(0, DURATION_LABELS[BG_DURATIONS[0]]);
 
     try {
       for (let i = 0; i < BG_DURATIONS.length; i++) {
@@ -422,7 +428,7 @@ function boot() {
             onProgress: (p) => {
               if (state.bgGenId !== genId) return; // stale: skip UI update
               // Map this model's download progress to [i/total, (i+0.8)/total].
-              showBgProgress((i + p.fraction * 0.8) / total);
+              showBgProgress((i + p.fraction * 0.8) / total, DURATION_LABELS[dur]);
             },
           });
         } catch (err) {
@@ -446,7 +452,7 @@ function boot() {
         let result = null;
         try {
           // Paint the progress bar at ~80% of this slot before WASM blocks.
-          showBgProgress((i + 0.8) / total);
+          showBgProgress((i + 0.8) / total, DURATION_LABELS[dur]);
           // Double-rAF: ensure the browser paints the updated progress bar
           // before session.run() blocks the main thread synchronously.
           await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -513,7 +519,9 @@ function boot() {
         if (result && state.bgGenId === genId) {
           state.durationResults[dur] = result;
           controls.setDurationStatus(dur, 'ready');
-          showBgProgress((i + 1) / total);
+          // Announce the next duration loading, or 100% if this was the last.
+          const nextLabel = i + 1 < BG_DURATIONS.length ? DURATION_LABELS[BG_DURATIONS[i + 1]] : undefined;
+          showBgProgress((i + 1) / total, nextLabel);
 
           // If the user clicked this duration while it was loading, display
           // the result now that it has arrived.
@@ -1011,6 +1019,16 @@ function boot() {
       },
       { outputSection, outputCanvasWrap, outputCaption },
     );
+
+    // Update the workspace heading with the active viewing duration so
+    // the user always knows which result is on screen without looking at
+    // the sidebar selector.
+    const durationBadge = document.getElementById('fc-duration-label');
+    if (durationBadge) {
+      const label = DURATION_LABELS[state.displayedDuration];
+      durationBadge.textContent = label ?? '';
+      durationBadge.hidden = !label;
+    }
   }
 
 }

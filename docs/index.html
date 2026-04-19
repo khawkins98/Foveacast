@@ -112,6 +112,8 @@
           <div class="fc-workspace-header__title-wrap">
             <p class="fc-workspace-header__eyebrow">Analysis Workspace</p>
             <h1 class="fc-workspace-header__title">Predicted Attention</h1>
+            <!-- Updated by renderOutput() to show the active viewing duration. Hidden until first inference. -->
+            <p class="fc-workspace-header__duration-label" id="fc-duration-label" hidden></p>
             <!--
               Compact new-image entry point: revealed by showControls() once
               the first inference result is displayed, replacing the full
