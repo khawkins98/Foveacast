@@ -273,6 +273,7 @@ function boot() {
   mountFooter(document.querySelector('.fc-footer'));
 
   // --- HUD stats panel -------------------------------------------------
+  const hud = createHud(hudMount);
 
   /**
    * Reveal the controls panel and hide the sidebar's empty-state intro.
