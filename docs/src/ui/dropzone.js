@@ -213,5 +213,16 @@ export function createDropzone({ onFile, onError }) {
     }
   }
 
-  return { element, setEnabled, setBusy };
+  /**
+   * Programmatically open the file picker — used by the "New Image"
+   * button that replaces the full dropzone after first inference.
+   * No-ops when the dropzone is disabled or busy so it cannot start
+   * a second pipeline while one is already running.
+   */
+  function openPicker() {
+    if (!enabled || busy) return;
+    input.click();
+  }
+
+  return { element, setEnabled, setBusy, openPicker };
 }

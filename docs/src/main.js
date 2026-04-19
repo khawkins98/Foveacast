@@ -164,6 +164,13 @@ function boot() {
   dropzone.setEnabled(false); // Disabled until the model finishes loading.
   dropzoneMount.appendChild(dropzone.element);
 
+  // "New Image" button — visible after first inference in place of the
+  // full dropzone. Delegates to the dropzone's file picker so the same
+  // validation / callback path is used, and the dropzone's enabled/busy
+  // guards prevent firing during an active inference run.
+  document.getElementById('fc-new-upload-btn')
+    ?.addEventListener('click', () => dropzone.openPicker());
+
   // Accept a file dropped anywhere on the page. Before this, dropping
   // one pixel outside the drop-zone element navigated the browser away
   // from Foveacast and opened the file in the tab — the worst failure
@@ -247,6 +254,13 @@ function boot() {
     controls.setVisible(true);
     const intro = document.getElementById('fc-sidebar-intro');
     if (intro) intro.hidden = true;
+    // Swap out the full dropzone for the compact new-image button.
+    // Drag-anywhere and clipboard paste remain active via page-drop.js
+    // regardless of whether the dropzone element is visible.
+    const dropRow = document.querySelector('.fc-drop-row');
+    if (dropRow) dropRow.hidden = true;
+    const newUploadRow = document.getElementById('fc-new-upload-row');
+    if (newUploadRow) newUploadRow.hidden = false;
   }
 
   /**
@@ -267,6 +281,10 @@ function boot() {
       }
       overlay.classList.toggle('fc-busy-overlay--active', busy);
     }
+    // Mirror busy state onto the new-image button so it cannot be used
+    // while a model load or inference run is already in progress.
+    const newUploadBtn = document.getElementById('fc-new-upload-btn');
+    if (newUploadBtn) newUploadBtn.disabled = busy;
   }
 
   // --- Demo mode short-circuit ------------------------------------------

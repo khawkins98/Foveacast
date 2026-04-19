@@ -128,6 +128,22 @@
           <div class="fc-workspace-header__title-wrap">
             <p class="fc-workspace-header__eyebrow">Analysis Workspace</p>
             <h1 class="fc-workspace-header__title">Predicted Attention</h1>
+            <!--
+              Compact new-image entry point: revealed by showControls() once
+              the first inference result is displayed, replacing the full
+              dropzone below. Drag/paste still work anywhere on the page.
+            -->
+            <div class="fc-new-upload-row" hidden id="fc-new-upload-row">
+              <button class="fc-new-upload-btn" type="button" id="fc-new-upload-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                     width="16" height="16" fill="currentColor"
+                     aria-hidden="true" focusable="false">
+                  <path d="M5 20h14v-2H5v2zm0-10h4v6h6v-6h4l-7-7-7 7z"/>
+                </svg>
+                New Image
+              </button>
+              <p class="fc-new-upload-hint">or drag, drop, or paste anywhere</p>
+            </div>
           </div>
           <!--
             HUD stats panel — created and populated by ui/hud.js via
@@ -247,6 +263,20 @@
           </a>
         </nav>
       </aside>
+    </div>
+
+    <!--
+      Busy overlay — covers the full workspace below the topnav while a
+      model load or inference run is in progress. Shown by toggling
+      fc-busy-overlay--active from setAppBusy() in main.js.
+      Uses visibility (not the `hidden` attribute) so the CSS fade
+      transition can fire without being overridden by display:none.
+    -->
+    <div class="fc-busy-overlay" id="fc-busy-overlay" role="status" aria-atomic="true">
+      <div class="fc-busy-overlay__card">
+        <div class="fc-busy-overlay__spinner" aria-hidden="true"></div>
+        <p class="fc-busy-overlay__label" id="fc-busy-overlay-label">Analysing…</p>
+      </div>
     </div>
 
     <!--

@@ -444,7 +444,59 @@ a:hover {
   margin: 0;
 }
 
-/* -- HUD stats panel ----------------------------------------------------- */
+/* -- New Image button (post-inference upload entry point) ---------------- */
+
+/* Row that holds the button + hint; sits below the h1 in the title-wrap. */
+.fc-new-upload-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.875rem;
+}
+
+.fc-new-upload-btn {
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.5rem 0.9rem;
+  background: transparent;
+  color: var(--fc-primary);
+  border: 1.5px solid var(--fc-primary);
+  border-radius: var(--fc-radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition:
+    background var(--fc-dur-fast) var(--fc-ease),
+    color var(--fc-dur-fast) var(--fc-ease),
+    border-color var(--fc-dur-fast) var(--fc-ease);
+}
+
+.fc-new-upload-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fc-primary) 12%, transparent);
+}
+
+.fc-new-upload-btn:focus-visible {
+  outline: 3px solid var(--fc-focus);
+  outline-offset: 2px;
+}
+
+.fc-new-upload-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.fc-new-upload-hint {
+  font-size: 0.72rem;
+  color: var(--fc-on-surface-muted, color-mix(in srgb, var(--fc-on-surface) 55%, transparent));
+  margin: 0;
+}
+
+
 
 .fc-hud {
   display: flex;
