@@ -48,6 +48,7 @@ let instanceCount = 0;
  * @property {(disabled: boolean) => void} setDisabled
  * @property {(visible: boolean) => void} setVisible
  * @property {(loading: boolean) => void} setDurationLoading
+ * @property {(duration: Duration, status: 'idle' | 'loading' | 'ready' | 'failed') => void} setDurationStatus
  */
 
 /**
@@ -91,11 +92,16 @@ export function createControls(options = {}) {
 
   /** @type {HTMLInputElement[]} */
   const durationInputs = [];
+  /** @type {Map<string, HTMLElement>} */
+  const durationOptionEls = new Map();
   const durationGroupName = `${prefix}-duration`;
 
   for (const dur of DURATIONS) {
     const option = document.createElement('label');
     option.className = 'fc-controls__radio';
+    // Store a reference to each duration label so setDurationStatus can
+    // add a data-status attribute for the loading/ready/failed indicators.
+    durationOptionEls.set(dur, option);
 
     const radio = document.createElement('input');
     radio.type = 'radio';
@@ -298,6 +304,22 @@ export function createControls(options = {}) {
     durationLoadingHint.textContent = loading ? 'Loading model…' : '';
   }
 
+  /**
+   * Set the status indicator for a specific duration option.
+   * Used by the background-loading path to signal which durations have
+   * cached results available without a model reload.
+   *
+   * @param {Duration} duration
+   * @param {'idle' | 'loading' | 'ready' | 'failed'} statusValue
+   */
+  function setDurationStatus(duration, statusValue) {
+    const el = durationOptionEls.get(duration);
+    if (!el) return;
+    // Setting via dataset lets CSS use [data-status="…"] attribute selectors
+    // to show/hide the spinner or checkmark pseudo-element.
+    el.dataset.status = statusValue;
+  }
+
   return {
     element: root,
     setDuration,
@@ -306,5 +328,6 @@ export function createControls(options = {}) {
     setDisabled,
     setVisible,
     setDurationLoading,
+    setDurationStatus,
   };
 }

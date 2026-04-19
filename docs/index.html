@@ -157,6 +157,20 @@
         <div id="fc-status-mount" class="fc-mount fc-mount--status"></div>
 
         <!--
+          Background-duration progress bar — shown during automatic
+          background loading of the 1 s and 7 s models after the
+          primary 3 s inference completes. Hidden at rest.
+          aria-hidden because the progress update is not screen-reader
+          critical: the HUD and duration buttons carry that narrative.
+        -->
+        <div id="fc-bg-progress" class="fc-bg-progress" aria-hidden="true" hidden>
+          <div class="fc-bg-progress__track">
+            <div class="fc-bg-progress__fill"></div>
+          </div>
+          <p class="fc-bg-progress__label">Loading other durations…</p>
+        </div>
+
+        <!--
           Drop zone.
           The "What this does" helper from the previous design moves into
           the sidebar (see .fc-sidebar__intro below) so the main canvas
@@ -178,6 +192,16 @@
           tabindex="-1"
           hidden
         >
+          <!--
+            Waiting overlay — shown via .fc-output--waiting on this section
+            when the user clicks a duration that is still loading in the
+            background. Lives as a sibling of the canvas-wrap (not inside
+            it) because renderOutputView() clears the canvas-wrap via
+            textContent = '' on every render, which would destroy it.
+          -->
+          <div class="fc-output__waiting-overlay" aria-hidden="true">
+            <div class="fc-output__waiting-spinner"></div>
+          </div>
           <div class="fc-output__canvas-wrap" id="fc-output-canvas-wrap" hidden>
             <!-- main.js appends the composited canvas here. -->
           </div>

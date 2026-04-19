@@ -496,6 +496,39 @@ a:hover {
   margin: 0;
 }
 
+/* -- Background-duration progress bar ------------------------------------ */
+/*
+ * Thin strip shown below the status banner while the 1 s and 7 s models
+ * are loading automatically after the primary 3 s inference. Hidden at
+ * rest (main.js sets `hidden` attribute). The fill width is driven
+ * from JS via `showBgProgress(fraction)`.
+ */
+
+.fc-bg-progress {
+  padding: 0.5rem var(--fc-main-px, 2rem);
+}
+
+.fc-bg-progress__track {
+  height: 4px;
+  background: var(--fc-surface-mid);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.fc-bg-progress__fill {
+  height: 100%;
+  width: 0%;
+  background: var(--fc-primary);
+  border-radius: 2px;
+  transition: width 0.35s ease;
+}
+
+.fc-bg-progress__label {
+  margin: 0.3rem 0 0;
+  font-size: 0.72rem;
+  color: var(--fc-on-surface-dim);
+}
+
 
 
 .fc-hud {
@@ -823,6 +856,38 @@ body.fc-page-dragover .fc-dropzone {
   font-style: italic;
 }
 
+/*
+ * Per-duration status indicators — set via `data-status` on the <label>
+ * element by controls.setDurationStatus(). Shown only after the first
+ * inference (the attribute is never set before that point).
+ */
+
+.fc-controls__radio[data-status="loading"]::after {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--fc-primary) 30%, transparent);
+  border-top-color: var(--fc-primary);
+  animation: fc-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.fc-controls__radio[data-status="ready"]::after {
+  content: '✓';
+  color: var(--fc-success);
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+
+.fc-controls__radio[data-status="failed"]::after {
+  content: '✕';
+  color: var(--fc-danger);
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+
 /* Export / download button — full-width CTA in the sidebar. */
 .fc-controls__download {
   margin: 0.75rem 1.25rem;
@@ -863,6 +928,8 @@ body.fc-page-dragover .fc-dropzone {
   padding: 1.5rem;
   min-height: 240px;
   box-shadow: var(--fc-shadow-ambient);
+  /* Needed so the waiting overlay can be positioned absolutely within. */
+  position: relative;
 }
 
 .fc-output:focus-visible {
@@ -872,6 +939,39 @@ body.fc-page-dragover .fc-dropzone {
 
 .fc-output__canvas-wrap {
   width: 100%;
+  /* Pointer cursor signals that clicking cycles through duration results. */
+  cursor: pointer;
+}
+
+/*
+ * Waiting overlay — shown via `.fc-output--waiting` on the parent section
+ * while the user-selected duration is still loading in the background.
+ * Sits as a sibling of the canvas-wrap so renderOutputView's
+ * `textContent = ''` pass cannot delete it.
+ */
+
+.fc-output__waiting-overlay {
+  display: none;
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 14, 29, 0.75);
+  border-radius: var(--fc-radius);
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.fc-output--waiting .fc-output__waiting-overlay {
+  display: flex;
+}
+
+.fc-output__waiting-spinner {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--fc-primary) 25%, transparent);
+  border-top-color: var(--fc-primary);
+  animation: fc-spin 0.8s linear infinite;
 }
 
 .fc-output__caption {
