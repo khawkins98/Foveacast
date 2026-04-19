@@ -3,7 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="light dark" />
+    <!--
+      No light/dark meta — this design is dark-only. color-scheme tells
+      the browser to use dark scrollbars and form controls to match.
+    -->
+    <meta name="color-scheme" content="dark" />
     <meta
       name="description"
       content="Foveacast predicts where people will look on a screenshot. Free, open source, runs entirely in your browser — nothing leaves your machine."
@@ -37,6 +41,13 @@
       integrity="sha384-1SBQgvQsxJRGAOAJ6K2nPaLO1SKelZwoF+biXgv2/D9fPspYLhvG4WIMDb/BUoJC"
       crossorigin="anonymous"
     ></script>
+
+    <!--
+      Inter variable font — vendored at docs/vendor/inter/ so the page
+      is typeset correctly offline. The CSS loads the single WOFF2 file
+      that covers weights 100–900 for the Latin subset.
+    -->
+    <link rel="stylesheet" href="./vendor/inter/inter.css" />
     <link rel="stylesheet" href="./styles.css" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
 
@@ -48,60 +59,93 @@
     <script type="module" src="./src/main.js"></script>
   </head>
   <body>
+    <!--
+      Skip link targets #fc-main. With the fixed topnav (64 px) the
+      anchor target uses scroll-margin-top in CSS so the heading is
+      not hidden under the bar.
+    -->
     <a class="fc-skiplink" href="#fc-main">Skip to content</a>
 
     <div id="fc-app">
-      <header class="fc-header" role="banner">
-        <h1 class="fc-header__title">Foveacast</h1>
-        <p class="fc-header__tag">
-          Predicted attention heatmaps, right in your browser.
-        </p>
-        <p class="fc-header__promise">
-          Free. No account. Nothing leaves your machine.
-        </p>
-      </header>
+      <!--
+        Top navigation bar (fixed, 64 px). Contains brand identity,
+        primary nav links, and the help trigger.
+        Role "banner" is on the topnav rather than the old <header> so
+        AT users find the landmark at the top of the visual hierarchy.
+      -->
+      <nav class="fc-topnav" role="banner" aria-label="Primary navigation">
+        <div class="fc-topnav__brand">
+          <span class="fc-topnav__wordmark" aria-label="Foveacast">Foveacast</span>
+        </div>
+        <div class="fc-topnav__links" role="list">
+          <a class="fc-topnav__link fc-topnav__link--active" href="#fc-main" role="listitem">
+            Analysis
+          </a>
+          <a class="fc-topnav__link" href="https://github.com/khawkins98/Foveacast"
+             rel="noopener noreferrer" role="listitem">
+            About
+          </a>
+          <a class="fc-topnav__link" href="https://github.com/khawkins98/Foveacast/blob/main/docs/PRD.md"
+             rel="noopener noreferrer" role="listitem">
+            Methodology
+          </a>
+        </div>
+        <div class="fc-topnav__actions">
+          <button class="fc-topnav__help" type="button"
+                  aria-label="Help — open commercial alternatives"
+                  id="fc-help-btn">
+            <!--
+              SVG icon inline to avoid any font/icon-font CDN dependency.
+              The aria-hidden is on the <svg> inside; the button itself
+              carries the accessible label above.
+            -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                 width="20" height="20" fill="currentColor"
+                 aria-hidden="true" focusable="false">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
+            </svg>
+          </button>
+        </div>
+      </nav>
 
+      <!--
+        Main workspace — comes before the sidebar in the DOM so keyboard
+        and AT users reach the primary action (the dropzone) before the
+        secondary controls (the sidebar). CSS positions the sidebar
+        visually to the left using `position: fixed`.
+      -->
       <main id="fc-main" class="fc-main" tabindex="-1">
-        <!-- Mount points: status banner, dropzone, controls, output canvas. -->
+        <!-- Workspace header: page title + HUD stats. -->
+        <header class="fc-workspace-header" role="presentation">
+          <div class="fc-workspace-header__title-wrap">
+            <p class="fc-workspace-header__eyebrow">Analysis Workspace</p>
+            <h1 class="fc-workspace-header__title">Predicted Attention</h1>
+          </div>
+          <!--
+            HUD stats panel — created and populated by ui/hud.js via
+            main.js. Remains hidden until first real inference so demo
+            users never see placeholder data.
+          -->
+          <div id="fc-hud-mount"></div>
+        </header>
+
+        <!-- Mount point: status banner (model loading, errors, etc.). -->
         <div id="fc-status-mount" class="fc-mount fc-mount--status"></div>
 
         <!--
-          The drop zone sits alongside a short helper block at wide
-          viewports. The helper absorbs some of the wandering attention
-          the rule-of-thirds-biased heatmap model otherwise spends on
-          empty page margins (observed by running Foveacast on its own
-          landing page — see LEARNINGS.md dated 2026-04-16).
-          Below the desktop breakpoint the helper stacks under the
-          drop zone so mobile-narrow viewports don't waste vertical
-          space on it.
+          Drop zone.
+          The "What this does" helper from the previous design moves into
+          the sidebar (see .fc-sidebar__intro below) so the main canvas
+          is not cluttered alongside the drop zone.
         -->
         <div class="fc-drop-row">
           <div id="fc-dropzone-mount" class="fc-mount fc-mount--dropzone"></div>
-          <aside class="fc-drop-helper" aria-labelledby="fc-drop-helper-heading">
-            <h2 id="fc-drop-helper-heading" class="fc-drop-helper__heading">
-              What this does
-            </h2>
-            <ul class="fc-drop-helper__list">
-              <li>Predicts where a typical viewer will look first on your screenshot.</li>
-              <li>Runs the model in your browser — your image never leaves this tab.</li>
-              <li>Drop a file, click to choose one, or paste a screenshot (Cmd-V / Ctrl-V).</li>
-              <li>Works on PNG or JPEG, up to 20&nbsp;MB, desktop Chrome or Firefox.</li>
-            </ul>
-            <p class="fc-drop-helper__caveat">
-              It's a prediction, not an eye-tracking study. Useful for a sanity check before publish.
-            </p>
-          </aside>
         </div>
 
-        <div id="fc-controls-mount" class="fc-mount fc-mount--controls"></div>
-
         <!--
-          `hidden` on first load — same progressive-disclosure
-          principle as the controls panel. There is nothing to show
-          before a screenshot has been dropped, and a reserved empty
-          box competes with the drop zone for attention. main.js
-          removes the hidden attribute when the first heatmap
-          renders (demo or real).
+          Heatmap output section. Hidden on first load (progressive
+          disclosure — no empty reserved box before any image is dropped).
+          main.js removes `hidden` when the first heatmap renders.
         -->
         <section
           id="fc-output"
@@ -121,16 +165,85 @@
             hidden
           ></p>
         </section>
+
+        <footer class="fc-footer" role="contentinfo">
+          <!-- main.js populates this on load and refreshes on preset changes. -->
+        </footer>
       </main>
 
-      <footer class="fc-footer" role="contentinfo">
-        <!-- main.js populates this on load and refreshes on preset changes. -->
-      </footer>
+      <!--
+        Sidebar (fixed, 256 px). Comes after <main> in DOM so keyboard
+        tab order reaches the dropzone first. CSS positions it on the
+        left via `position: fixed; left: 0`.
+
+        Contains:
+          - "Analysis Controls" section header
+          - The controls mount (opacity, duration, view mode, download).
+            Controls remain hidden until after first render via the same
+            progressive-disclosure mechanism as before; the sidebar
+            shows the intro text as an empty state instead.
+          - Footer links (documentation, legal, commercial alternatives).
+      -->
+      <aside class="fc-sidebar" aria-label="Analysis controls">
+        <div class="fc-sidebar__header">
+          <span class="fc-sidebar__title">Analysis Controls</span>
+          <span class="fc-sidebar__subtitle">MSI-Net · Neural Model</span>
+        </div>
+
+        <!--
+          Intro text — visible before first inference as an empty-state
+          guide. Surfaced here because the helper text that was previously
+          in the main-canvas "fc-drop-helper" aside fits naturally in the
+          sidebar context.
+        -->
+        <div class="fc-sidebar__intro" id="fc-sidebar-intro" aria-label="Getting started">
+          <p class="fc-sidebar__intro-text">
+            Drop or paste a screenshot to generate a predicted
+            attention heatmap. Controls appear after the first analysis.
+          </p>
+          <ul class="fc-sidebar__intro-list">
+            <li>PNG or JPEG, up to 20&nbsp;MB</li>
+            <li>Your image never leaves this tab</li>
+            <li>Cmd-V / Ctrl-V to paste</li>
+          </ul>
+        </div>
+
+        <!--
+          Controls mount — main.js calls createControls() and appends
+          the element here. The progressive-disclosure setVisible(false)
+          call in main.js ensures this is hidden until after first render.
+          When it becomes visible, the sidebar intro is hidden.
+        -->
+        <div id="fc-controls-mount" class="fc-mount fc-mount--controls"></div>
+
+        <nav class="fc-sidebar__footer" aria-label="Secondary links">
+          <a class="fc-sidebar__footer-link"
+             href="https://github.com/khawkins98/Foveacast"
+             rel="noopener noreferrer">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                 width="14" height="14" fill="currentColor"
+                 aria-hidden="true" focusable="false">
+              <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+            </svg>
+            Documentation
+          </a>
+          <a class="fc-sidebar__footer-link"
+             href="https://github.com/khawkins98/Foveacast/blob/main/LICENSE"
+             rel="noopener noreferrer">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                 width="14" height="14" fill="currentColor"
+                 aria-hidden="true" focusable="false">
+              <path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+            </svg>
+            Legal
+          </a>
+        </nav>
+      </aside>
     </div>
 
     <!--
       Commercial-alternatives modal. Rendered on page load but closed by
-      default; opened from the footer's "Need more?" button.
+      default; opened from the topnav help button or footer link.
       `<dialog>` gets native focus trap and Escape-to-close behaviour in
       all modern engines, which is what we want for keyboard users.
     -->

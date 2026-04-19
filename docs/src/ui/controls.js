@@ -8,6 +8,7 @@
 // so the caller never has to sniff event.target.
 
 import { DURATIONS, DURATION_LABELS, DEFAULT_DURATION } from '../model/loader.js';
+import { iconTimer, iconTune, iconLayers, iconDownload } from './icons.js';
 
 /**
  * @typedef {'overlay'|'original'|'sidebyside'} ViewMode
@@ -80,7 +81,12 @@ export function createControls(options = {}) {
   durationWrap.className = 'fc-controls__field fc-controls__field--group fc-controls__duration';
 
   const durationLegend = document.createElement('legend');
-  durationLegend.textContent = 'Viewing duration';
+  const durationIcon = document.createElement('span');
+  durationIcon.className = 'fc-controls__icon';
+  durationIcon.setAttribute('aria-hidden', 'true');
+  durationIcon.innerHTML = iconTimer;
+  durationLegend.appendChild(durationIcon);
+  durationLegend.appendChild(document.createTextNode('Viewing duration'));
   durationWrap.appendChild(durationLegend);
 
   /** @type {HTMLInputElement[]} */
@@ -134,10 +140,15 @@ export function createControls(options = {}) {
 
   const opacityLabel = document.createElement('label');
   opacityLabel.htmlFor = `${prefix}-opacity`;
+  const opacityIcon = document.createElement('span');
+  opacityIcon.className = 'fc-controls__icon';
+  opacityIcon.setAttribute('aria-hidden', 'true');
+  opacityIcon.innerHTML = iconTune;
+  opacityLabel.appendChild(opacityIcon);
   // Verb-first labels: the user is acting on the heatmap, not
   // contemplating a property. Nudges the controls from "settings
   // panel" feel toward "live controls" feel.
-  opacityLabel.textContent = 'Adjust overlay strength';
+  opacityLabel.appendChild(document.createTextNode('Adjust overlay strength'));
   opacityWrap.appendChild(opacityLabel);
 
   const opacityInput = document.createElement('input');
@@ -177,7 +188,12 @@ export function createControls(options = {}) {
   const viewWrap = document.createElement('fieldset');
   viewWrap.className = 'fc-controls__field fc-controls__field--group';
   const viewLegend = document.createElement('legend');
-  viewLegend.textContent = 'Show';
+  const viewIcon = document.createElement('span');
+  viewIcon.className = 'fc-controls__icon';
+  viewIcon.setAttribute('aria-hidden', 'true');
+  viewIcon.innerHTML = iconLayers;
+  viewLegend.appendChild(viewIcon);
+  viewLegend.appendChild(document.createTextNode('Show'));
   viewWrap.appendChild(viewLegend);
 
   /** @type {HTMLInputElement[]} */
@@ -213,8 +229,12 @@ export function createControls(options = {}) {
   const downloadBtn = document.createElement('button');
   downloadBtn.type = 'button';
   downloadBtn.className = 'fc-controls__download';
-  downloadBtn.textContent = 'Download PNG';
   downloadBtn.setAttribute('aria-label', 'Download heatmap as PNG');
+  const dlIcon = document.createElement('span');
+  dlIcon.setAttribute('aria-hidden', 'true');
+  dlIcon.innerHTML = iconDownload;
+  downloadBtn.appendChild(dlIcon);
+  downloadBtn.appendChild(document.createTextNode('Download PNG'));
   downloadBtn.addEventListener('click', () => {
     if (onDownload) onDownload();
   });

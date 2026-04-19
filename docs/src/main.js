@@ -27,6 +27,8 @@ import { downloadCompositeAsPng } from './render/download.js';
 import { isDemoModeRequested, runDemoMode } from './demo.js';
 import { installPageDrop } from './ui/page-drop.js';
 import { readHasRunSentinel, writeHasRunSentinel } from './ui/has-run-sentinel.js';
+import { computeSaliencyMetrics } from './pipeline/metrics.js';
+import { createHud, updateHud } from './ui/hud.js';
 
 /**
  * Threshold (ms) above which we treat the first onProgress tick as a
@@ -129,6 +131,7 @@ function boot() {
   const outputSection = mustGet('fc-output');
   const outputCanvasWrap = mustGet('fc-output-canvas-wrap');
   const outputCaption = mustGet('fc-output-caption');
+  const hudMount = mustGet('fc-hud-mount');
 
   // --- Status banner ----------------------------------------------------
   const status = createStatus();
@@ -207,6 +210,31 @@ function boot() {
     /** @type {HTMLDialogElement | null} */ (document.getElementById('fc-alternatives-modal')),
   );
 
+  // --- HUD stats panel -------------------------------------------------
+  const hud = createHud();
+  hudMount.appendChild(hud);
+
+  // Wire the topnav help button to open the same alternatives modal as
+  // the footer's "Need more?" link. footer.js handles the footer
+  // trigger; we handle the topnav trigger here because main.js has
+  // direct access to both elements.
+  const helpBtn = document.getElementById('fc-help-btn');
+  const altModal = /** @type {HTMLDialogElement | null} */ (document.getElementById('fc-alternatives-modal'));
+  if (helpBtn && altModal) {
+    helpBtn.addEventListener('click', () => altModal.showModal());
+  }
+
+  /**
+   * Reveal the controls panel and hide the sidebar's empty-state intro.
+   * Called from both the demo path and the real-inference path so both
+   * share the same reveal behaviour.
+   */
+  function showControls() {
+    controls.setVisible(true);
+    const intro = document.getElementById('fc-sidebar-intro');
+    if (intro) intro.hidden = true;
+  }
+
   // --- Demo mode short-circuit ------------------------------------------
   // When `?demo=1` is present, skip the model download entirely and run
   // a synthetic saliency map through the render pipeline. Normal flow
@@ -230,7 +258,7 @@ function boot() {
         // ready, the drop is queued and auto-runs once load resolves.
         dropzone.setEnabled(true);
         controls.setDisabled(false);
-        controls.setVisible(true);
+        showControls();
       })
       .catch((err) => {
         console.error('Foveacast: demo mode failed.', err);
@@ -462,7 +490,9 @@ function boot() {
       // Run inference. `runInference` internally calls the preprocessing
       // pipeline and returns the raw model output plus the model's
       // native input dims (which post-processing needs).
+      const inferStart = performance.now();
       const { saliency, inputDims, sourceDims } = await runInference(workCanvas, state.loadedModel);
+      const inferenceMs = Math.round(performance.now() - inferStart);
 
       // Stale: the user switched duration while inference was running.
       // Discard these results — the new duration's inference will
@@ -473,6 +503,15 @@ function boot() {
       // heatmap aligns pixel-for-pixel with the image we're going to
       // composite it over.
       const processed = postprocess(saliency, inputDims, [origH, origW]);
+
+      const metrics = computeSaliencyMetrics(processed);
+      updateHud(hud, {
+        inferenceMs,
+        duration: state.activeDuration,
+        spreadLevel: metrics.spreadLevel,
+        width: origW,
+        height: origH,
+      });
 
       const fixation = firstFixationCentroid(processed, origW, origH);
 
@@ -508,7 +547,7 @@ function boot() {
       renderOutput();
       // Reveal controls now that there is a real result to operate on
       // (non-demo path). Safe to call repeatedly — no-op after first.
-      controls.setVisible(true);
+      showControls();
       status.clear();
 
       // PRD §Accessibility: after inference completes, move focus to
