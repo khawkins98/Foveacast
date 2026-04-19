@@ -1,4 +1,4 @@
-// Controls: opacity slider, view toggle, download button.
+// Controls: duration picker, opacity slider, view toggle, download button.
 //
 // This module owns *only* the controls that live alongside the output
 // — the dropzone, status banner, and mobile guard are separate
@@ -6,14 +6,15 @@
 // proper <label for="…"> pairing so screen readers announce them
 // correctly, and every handler fires with a normalised value shape
 // so the caller never has to sniff event.target.
-//
-// The preset picker from V1 was removed in V2. V3's MSI-Net is a
-// single fixed-shape model (240×320) — there is no meaningful
-// speed/quality knob for a single-shape ONNX graph, and a picker
-// with one option is visual noise.
+
+import { DURATIONS, DURATION_LABELS, DEFAULT_DURATION } from '../model/loader.js';
 
 /**
  * @typedef {'overlay'|'original'|'sidebyside'} ViewMode
+ */
+
+/**
+ * @typedef {import('../model/loader.js').Duration} Duration
  */
 
 const VIEW_CHOICES = /** @type {const} */ ([
@@ -31,6 +32,7 @@ let instanceCount = 0;
 
 /**
  * @typedef {Object} ControlsOptions
+ * @property {(duration: Duration) => void} [onDurationChange]
  * @property {(opacity: number) => void} [onOpacityChange]
  * @property {(view: ViewMode) => void} [onViewChange]
  * @property {() => void} [onDownload]
@@ -39,10 +41,12 @@ let instanceCount = 0;
 /**
  * @typedef {Object} ControlsController
  * @property {HTMLElement} element
+ * @property {(duration: Duration) => void} setDuration
  * @property {(view: ViewMode) => void} setView
  * @property {(value: number) => void} setOpacity
  * @property {(disabled: boolean) => void} setDisabled
  * @property {(visible: boolean) => void} setVisible
+ * @property {(loading: boolean) => void} setDurationLoading
  */
 
 /**
@@ -57,7 +61,7 @@ let instanceCount = 0;
  * @returns {ControlsController}
  */
 export function createControls(options = {}) {
-  const { onOpacityChange, onViewChange, onDownload } = options;
+  const { onDurationChange, onOpacityChange, onViewChange, onDownload } = options;
 
   const id = ++instanceCount;
   const prefix = `fc-ctl-${id}`;
@@ -65,6 +69,58 @@ export function createControls(options = {}) {
   const root = document.createElement('section');
   root.className = 'fc-controls';
   root.setAttribute('aria-label', 'Heatmap controls');
+
+  // --- Duration picker -------------------------------------------------
+  //
+  // Three viewing-window options. Radio buttons (not a select) because
+  // the user will likely compare results across durations and keeping
+  // all options visible reduces the click cost of switching.
+
+  const durationWrap = document.createElement('fieldset');
+  durationWrap.className = 'fc-controls__field fc-controls__field--group fc-controls__duration';
+
+  const durationLegend = document.createElement('legend');
+  durationLegend.textContent = 'Viewing duration';
+  durationWrap.appendChild(durationLegend);
+
+  /** @type {HTMLInputElement[]} */
+  const durationInputs = [];
+  const durationGroupName = `${prefix}-duration`;
+
+  for (const dur of DURATIONS) {
+    const option = document.createElement('label');
+    option.className = 'fc-controls__radio';
+
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = durationGroupName;
+    radio.value = dur;
+    radio.id = `${prefix}-dur-${dur}`;
+    if (dur === DEFAULT_DURATION) radio.checked = true;
+    radio.addEventListener('change', () => {
+      if (radio.checked && onDurationChange) {
+        onDurationChange(/** @type {Duration} */ (radio.value));
+      }
+    });
+    durationInputs.push(radio);
+
+    option.appendChild(radio);
+    option.appendChild(document.createTextNode(` ${DURATION_LABELS[dur]}`));
+    durationWrap.appendChild(option);
+  }
+
+  // Loading indicator shown while a new model is downloading.
+  // why: we toggle textContent rather than the hidden attribute so the
+  // element stays in the accessibility tree — screen readers only
+  // announce aria-live changes on elements they can see, and hidden
+  // removes the element entirely.
+  const durationLoadingHint = document.createElement('span');
+  durationLoadingHint.className = 'fc-controls__duration-loading';
+  durationLoadingHint.textContent = '';
+  durationLoadingHint.setAttribute('aria-live', 'polite');
+  durationWrap.appendChild(durationLoadingHint);
+
+  root.appendChild(durationWrap);
 
   // --- Opacity slider ------------------------------------------------
   //
@@ -166,6 +222,13 @@ export function createControls(options = {}) {
 
   // --- Controller API -----------------------------------------------
 
+  /** @param {Duration} duration */
+  function setDuration(duration) {
+    for (const input of durationInputs) {
+      input.checked = input.value === duration;
+    }
+  }
+
   /** @param {ViewMode} view */
   function setView(view) {
     for (const input of viewInputs) {
@@ -187,6 +250,7 @@ export function createControls(options = {}) {
     opacityInput.disabled = d;
     downloadBtn.disabled = d;
     for (const input of viewInputs) input.disabled = d;
+    for (const input of durationInputs) input.disabled = d;
     root.classList.toggle('fc-controls--disabled', d);
   }
 
@@ -203,11 +267,24 @@ export function createControls(options = {}) {
     root.hidden = !visible;
   }
 
+  /**
+   * Show or hide the "Loading model…" hint next to the duration picker.
+   * Communicates that a model switch is in progress without disabling
+   * the entire controls panel.
+   *
+   * @param {boolean} loading
+   */
+  function setDurationLoading(loading) {
+    durationLoadingHint.textContent = loading ? 'Loading model…' : '';
+  }
+
   return {
     element: root,
+    setDuration,
     setView,
     setOpacity,
     setDisabled,
     setVisible,
+    setDurationLoading,
   };
 }

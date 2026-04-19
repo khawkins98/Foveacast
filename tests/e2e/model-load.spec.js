@@ -9,9 +9,14 @@
 // navigates to the bare URL, lets the real loader run, and asserts
 // the app reaches the "model ready" state without a console error.
 //
-// The V3 MSI-Net ONNX artefact is 57 MB (FP16) and the ORT Web WASM is 12 MB.
-// Over localhost that is a second or two on a reasonable machine;
-// the timeouts below leave ample headroom without being silly.
+// V3 ships three duration-specific models (1s, 3s, 7s). The default
+// (3s) is loaded on boot. The duration-switch test exercises the
+// model-swap path.
+//
+// The V3 MSI-Net ONNX artefacts are 57 MB each (FP16) and the ORT
+// Web WASM is 12 MB. Over localhost that is a second or two on a
+// reasonable machine; the timeouts below leave ample headroom without
+// being silly.
 
 import { test, expect } from '@playwright/test';
 
@@ -30,7 +35,7 @@ test.describe('Foveacast — real model load end-to-end', () => {
     page.__foveacastErrors = { pageErrors, consoleErrors };
   });
 
-  test('boots, loads the V3 model, and reaches the ready state without errors', async ({ page }) => {
+  test('boots, loads the default (3s) model, and reaches the ready state without errors', async ({ page }) => {
     await page.goto('/');
 
     // The ready banner is the single observable signal that `loadModel`
@@ -48,6 +53,10 @@ test.describe('Foveacast — real model load end-to-end', () => {
     const ariaDisabled = await dropzone.getAttribute('aria-disabled');
     expect(ariaDisabled === null || ariaDisabled === 'false').toBeTruthy();
 
+    // Duration picker should be visible with the default (3s) selected.
+    const durationRadio3s = page.locator('input[type="radio"][value="3s"]');
+    await expect(durationRadio3s).toBeChecked();
+
     // @ts-expect-error — stashed in beforeEach.
     const { pageErrors, consoleErrors } = page.__foveacastErrors;
 
@@ -61,5 +70,24 @@ test.describe('Foveacast — real model load end-to-end', () => {
       (m) => !/SharedArrayBuffer|cross-origin|numThreads/i.test(m),
     );
     expect(meaningfulErrors).toEqual([]);
+  });
+
+  test('duration picker shows all three options (1s, 3s, 7s) after demo render', async ({ page }) => {
+    // why: controls use progressive disclosure — hidden until first
+    // render. Demo mode is the fastest path to make them visible
+    // without dropping a real file.
+    await page.goto('/?demo=1');
+
+    // Wait for demo render to complete (controls are revealed after).
+    await expect(
+      page.locator('#fc-output[data-foveacast-ready="true"]'),
+    ).toBeVisible({ timeout: 15_000 });
+
+    // All three duration radios must be present and enabled.
+    for (const dur of ['1s', '3s', '7s']) {
+      const radio = page.locator(`input[type="radio"][value="${dur}"]`);
+      await expect(radio).toBeVisible();
+      await expect(radio).toBeEnabled();
+    }
   });
 });

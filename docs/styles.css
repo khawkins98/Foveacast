@@ -506,6 +506,12 @@ body.fc-page-dragover .fc-dropzone {
   min-width: 180px;
 }
 
+.fc-controls__duration-loading {
+  font-size: 0.85rem;
+  color: var(--fc-text-muted);
+  font-style: italic;
+}
+
 .fc-controls__download {
   font: inherit;
   font-weight: 600;

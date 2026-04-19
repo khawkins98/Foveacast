@@ -1,11 +1,17 @@
-// ONNX Runtime Web loader for the V3 MSI-Net saliency model.
+// ONNX Runtime Web loader for the V3 MSI-Net saliency models.
 //
-// V3 uses MSI-Net fine-tuned on UEyes, exported from foveacast-training
-// (https://github.com/khawkins98/foveacast-training). The .onnx artefact
-// is fetched from a GitHub Release at deploy time (not committed to the
-// repo — at 57 MB it would bloat the clone). The deploy workflow in
-// .github/workflows/deploy.yml downloads it to docs/models/v3/model.onnx
-// before the Pages upload step.
+// V3 ships three duration-specific models (1s, 3s, 7s viewing windows),
+// each fine-tuned on the corresponding UEyes ground-truth heatmap. The
+// loader accepts a `duration` parameter and resolves the correct ONNX
+// artefact path. All three share the same input shape (240×320) and
+// preprocessing contract — the only difference is which viewing-window
+// ground truth they were trained against.
+//
+// The .onnx artefacts are fetched from a GitHub Release at deploy time
+// (not committed to the repo — at 57 MB each they would bloat the
+// clone). The deploy workflow in .github/workflows/deploy.yml downloads
+// them to docs/models/v3/{1s,3s,7s}/model.onnx before the Pages upload
+// step.
 //
 // `onnxruntime-web` is loaded from a vendored <script> tag in
 // index.html and attaches itself to `globalThis.ort`. Keeping it off
@@ -21,12 +27,51 @@ import { MODEL_INPUT_DIMS } from '../pipeline/preprocess.js';
 export { MODEL_INPUT_DIMS };
 
 /**
- * Same-origin path to the V3 ONNX artefact. Downloaded at deploy time
- * from the foveacast-training GitHub Release (not committed to the repo).
- * For local dev, run the fetch script first:
- *   scripts/fetch-v3-model.sh
+ * Available viewing-duration windows. Each corresponds to a separate
+ * ONNX model fine-tuned on the matching UEyes heatmap variant.
+ *
+ * - `1s` — first glance: what grabs the eye first.
+ * - `3s` — quick scan: what's noticed in a few seconds.
+ * - `7s` — full viewing: what's eventually seen.
+ *
+ * @type {readonly ['1s', '3s', '7s']}
  */
-export const MODEL_URL = './models/v3/model.onnx';
+export const DURATIONS = /** @type {const} */ (['1s', '3s', '7s']);
+
+/**
+ * @typedef {'1s' | '3s' | '7s'} Duration
+ */
+
+/**
+ * Human-readable labels for each duration, used in the controls UI.
+ * @type {Readonly<Record<Duration, string>>}
+ */
+export const DURATION_LABELS = Object.freeze({
+  '1s': 'First glance (1 s)',
+  '3s': 'Quick scan (3 s)',
+  '7s': 'Full viewing (7 s)',
+});
+
+/** @type {Duration} */
+export const DEFAULT_DURATION = '3s';
+
+/**
+ * Build the same-origin path to the ONNX artefact for the given duration.
+ * Downloaded at deploy time from the foveacast-training GitHub Release
+ * (not committed to the repo). For local dev, run the fetch script first:
+ *   scripts/fetch-v3-model.sh
+ *
+ * @param {Duration} duration
+ * @returns {string}
+ */
+export function modelUrlForDuration(duration) {
+  if (!DURATIONS.includes(duration)) {
+    throw new Error(
+      `Invalid duration "${duration}". Expected one of: ${DURATIONS.join(', ')}`,
+    );
+  }
+  return `./models/v3/${duration}/model.onnx`;
+}
 
 /**
  * @typedef {Object} LoadProgress
@@ -44,6 +89,7 @@ export const MODEL_URL = './models/v3/model.onnx';
  * @typedef {Object} LoadedModel
  * @property {any} session - The `ort.InferenceSession` instance.
  * @property {[number, number]} inputDims - `[H, W]` for the model graph.
+ * @property {Duration} duration - Which viewing window this model was trained on.
  */
 
 /**
@@ -52,7 +98,7 @@ export const MODEL_URL = './models/v3/model.onnx';
  * full response body as an `ArrayBuffer` once the stream finishes.
  *
  * ORT Web's `InferenceSession.create(url)` form fetches internally
- * with no progress hooks. For a 12.5 MB artefact on cold cache, a
+ * with no progress hooks. For a 57 MB artefact on cold cache, a
  * progress bar is worth the extra plumbing; we fetch ourselves and
  * hand the buffer to `InferenceSession.create(bytes)`.
  *
@@ -115,7 +161,8 @@ async function fetchModelBytes(url, onProgress) {
 }
 
 /**
- * Load the V3 MSI-Net ONNX graph into an onnxruntime-web InferenceSession.
+ * Load one of the V3 MSI-Net ONNX graphs into an onnxruntime-web
+ * InferenceSession.
  *
  * Expects `ort` to be on `globalThis` (loaded via the vendored
  * `<script src="./vendor/ort.wasm.min.js">` in index.html). Throws a
@@ -129,10 +176,15 @@ async function fetchModelBytes(url, onProgress) {
  * permanent state on GitHub Pages. WebGPU is out of scope for this
  * build; see docs/vendor/README.md for the reasoning.
  *
- * @param {(progress: LoadProgress) => void} [onProgress]
+ * @param {object} [options]
+ * @param {Duration} [options.duration] - Viewing window (default: '3s').
+ * @param {(progress: LoadProgress) => void} [options.onProgress]
  * @returns {Promise<LoadedModel>}
  */
-export async function loadModel(onProgress) {
+export async function loadModel(options = {}) {
+  const { duration = DEFAULT_DURATION, onProgress } = options;
+  const url = modelUrlForDuration(duration);
+
   const ort = /** @type {any} */ (globalThis).ort;
   // `ort.InferenceSession` is exposed as a class (typeof 'function'),
   // not a plain object. The earlier `typeof === 'object'` check was a
@@ -163,9 +215,9 @@ export async function loadModel(onProgress) {
 
   let bytes;
   try {
-    bytes = await fetchModelBytes(MODEL_URL, onProgress);
+    bytes = await fetchModelBytes(url, onProgress);
   } catch (err) {
-    throw decorateLoadError(err, MODEL_URL);
+    throw decorateLoadError(err, url);
   }
 
   let session;
@@ -175,18 +227,19 @@ export async function loadModel(onProgress) {
       graphOptimizationLevel: 'all',
     });
   } catch (err) {
-    const decorated = decorateLoadError(err, MODEL_URL);
+    const decorated = decorateLoadError(err, url);
     // An InferenceSession.create failure is usually not a network
     // problem by the time we get here (we already have the bytes);
     // override the code accordingly.
     decorated.code = 'MODEL_LOAD_FAILED';
-    decorated.message = `Model load failed after download (${MODEL_URL}): ${String((err && /** @type {Error} */ (err).message) || err)}`;
+    decorated.message = `Model load failed after download (${url}): ${String((err && /** @type {Error} */ (err).message) || err)}`;
     throw decorated;
   }
 
   return {
     session,
     inputDims: MODEL_INPUT_DIMS,
+    duration,
   };
 }
 
