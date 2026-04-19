@@ -91,6 +91,60 @@ If two developers run `pnpm smoke` simultaneously on the same machine (hi, CI ma
 
 ---
 
+## Saliency visualization ideas (2026-04-19 thought exploration)
+
+Features derivable from the existing pipeline without changing the model. All operate on the normalised `Float32Array` the postprocess step already produces.
+
+### P2 — Top-N fixation sequence via Inhibition of Return (IoR)
+
+Classic Itti & Koch (2001) technique: find the peak pixel → apply a Gaussian suppression mask → find the next peak → repeat for N fixations. Render as numbered circles (①②③) with connecting saccade lines on the composited canvas.
+
+`firstFixationCentroid` in `pipeline/fixation.js` already computes the first peak via weighted centroid; extending it to return top-N via IoR masking is a natural evolution. Document prominently that these are predicted population-average fixations under free-viewing, not a recording of any individual's scanpath.
+
+**Size:** ~50 lines of pure JS in `pipeline/fixation.js` plus a corresponding overlay render in `render/saliency-canvas.js`.
+
+### P2 — Multi-duration centroid trajectory
+
+Compute `firstFixationCentroid` for each of the 1s, 3s, and 7s saliency maps and draw a connecting arrow path on the heatmap overlay. Shows how the centre of attention shifts as viewing time increases — something no commercial saliency tool currently visualises this way, because our three-duration output is an unusual differentiator.
+
+**Size:** trivial to compute (centroid already runs per duration); needs a render path to draw the connecting path.
+
+### P2 — "Reading your results" documentation
+
+A plain-language guide covering: what the inferno colour scale means, how to read spread/concentration, what the three duration windows represent in practice (first glance → quick scan → full viewing), common attention patterns (centre bias, face and text magnets, F/Z reading layout patterns), and what not to conclude from saliency output. Targets designers and researchers who have not used a saliency tool before.
+
+**Size:** half a day (writing + a simple HTML page under `docs/`).
+
+### P2 — Scanpath animation
+
+Animate a dot traversing the IoR fixation sequence with saccade lines drawing in. More legible than static numbered markers in presentations and exports. Depends on the IoR fixation sequence item above.
+
+**Size:** ~1 day.
+
+### P2 — Attention zones / threshold contour overlay
+
+Concentric boundaries at the 10%, 25%, 50% saliency-mass thresholds — a topographic map of attention. More actionable than the diffuse heatmap for questions like "is this CTA inside the top-25% attention zone?". Threshold-filled semi-transparent regions are cheaper to implement than true contour lines.
+
+**Size:** half a day.
+
+### P2 — Rule-of-thirds grid breakdown
+
+Score each cell of a 3×3 overlay by total saliency mass ("top-right third captures 28% of predicted attention"). Low-cost to compute; useful for compositional analysis. May be redundant once multi-duration trajectory is implemented.
+
+**Size:** ~30 minutes.
+
+---
+
+## Housekeeping
+
+### P2 — ROADMAP.md needs a trim pass
+
+`docs/ROADMAP.md` still describes items that have shipped (V2 UNISAL) and a V3 path superseded by the UEyes fine-tune approach documented in LEARNINGS.md. Several forward-looking items have since migrated into TODO.md. The file is referenced from README.md and `docs/spikes/` so it cannot simply be deleted, but a 30-minute trim pass would remove the shipped items, correct the V3 description, and point readers at TODO.md for the near-term queue.
+
+**Size:** 30 minutes.
+
+---
+
 ## Items explicitly not going into this TODO
 
 - Anything the PRD's §Out of Scope lists (mobile support, URL input, webcam gaze tracking, video).

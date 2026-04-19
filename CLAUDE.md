@@ -12,7 +12,7 @@ Foveacast is a free, open-source, offline-capable predictive attention-heatmap t
 
 Read these before making substantive changes:
 
-- [docs/PRD.md](docs/PRD.md) — source of truth for scope, non-goals, architectural contracts.
+- [docs/methodology.md](docs/methodology.md) — user-facing science page covering the model, data, metrics, and limitations.
 - [README.md](README.md) — how the project runs and is tested.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — coding guide, testing tiers, documentation expectations.
 - [LEARNINGS.md](LEARNINGS.md) — prior decisions and dead ends. Check this before re-deriving something.

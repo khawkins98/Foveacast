@@ -17,7 +17,7 @@ import { createDropzone } from './ui/dropzone.js';
 import { createControls } from './ui/controls.js';
 import { mountFooter } from './ui/footer.js';
 import { renderOutput as renderOutputView } from './ui/output-view.js';
-import { loadModel, DEFAULT_DURATION } from './model/loader.js';
+import { loadModel, DEFAULT_DURATION, DURATION_LABELS } from './model/loader.js';
 import { runInference } from './model/inference.js';
 import { downsampleIfLarge } from './ui/image-resize.js';
 import { postprocess } from './pipeline/postprocess.js';
@@ -27,6 +27,8 @@ import { downloadCompositeAsPng } from './render/download.js';
 import { isDemoModeRequested, runDemoMode } from './demo.js';
 import { installPageDrop } from './ui/page-drop.js';
 import { readHasRunSentinel, writeHasRunSentinel } from './ui/has-run-sentinel.js';
+import { computeSaliencyMetrics } from './pipeline/metrics.js';
+import { createHud, updateHud } from './ui/hud.js';
 
 /**
  * Threshold (ms) above which we treat the first onProgress tick as a
@@ -41,6 +43,27 @@ import { readHasRunSentinel, writeHasRunSentinel } from './ui/has-run-sentinel.j
 const FIRST_RUN_THRESHOLD_MS = 800;
 
 /**
+ * @typedef {{
+ *   heatmapCanvas: HTMLCanvasElement,
+ *   fixation: { x: number, y: number } | null,
+ *   origDims: [number, number],
+ *   metrics: { spreadLevel: string },
+ *   inferenceMs: number,
+ *   diagnostics: {
+ *     sourceWidth: number,
+ *     sourceHeight: number,
+ *     modelInputDims: [number, number],
+ *     saliencyLength: number,
+ *     saliencyMin: string,
+ *     saliencyMax: string,
+ *     saliencyMean: string,
+ *     peakLocation: string,
+ *     duration: string,
+ *   },
+ * }} DurationResult
+ */
+
+/**
  * Application state. Kept in a plain object rather than a class to
  * keep this file boring — there is only one of it and it lives for
  * the page's entire lifetime.
@@ -48,11 +71,19 @@ const FIRST_RUN_THRESHOLD_MS = 800;
  * @type {{
  *   loadedModel: import('./model/loader.js').LoadedModel | null,
  *   activeDuration: import('./model/loader.js').Duration,
+ *   displayedDuration: import('./model/loader.js').Duration,
+ *   durationResults: {
+ *     '1s': DurationResult | 'loading' | 'failed' | null,
+ *     '3s': DurationResult | 'loading' | 'failed' | null,
+ *     '7s': DurationResult | 'loading' | 'failed' | null,
+ *   },
+ *   bgGenId: number,
  *   lastImage: HTMLImageElement | ImageBitmap | HTMLCanvasElement | null,
  *   lastHeatmapCanvas: HTMLCanvasElement | null,
  *   lastFixation: { x: number, y: number } | null,
  *   lastOrigDims: [number, number] | null,
  *   opacity: number,
+ *   blendMode: string,
  *   view: 'overlay' | 'original' | 'sidebyside',
  *   queuedFile: File | null,
  *   lastDiagnostics: {
@@ -73,11 +104,26 @@ const FIRST_RUN_THRESHOLD_MS = 800;
 const state = {
   loadedModel: null,
   activeDuration: DEFAULT_DURATION,
+  /** Which duration result is currently displayed (may differ from activeDuration
+   *  when the user cycles to a cached result without reloading the model). */
+  displayedDuration: DEFAULT_DURATION,
+  /** Per-duration cached inference results. null = not yet run, 'loading' = in
+   *  progress, 'failed' = error, or a full DurationResult object. */
+  durationResults: {
+    '1s': /** @type {DurationResult | 'loading' | 'failed' | null} */ (null),
+    '3s': /** @type {DurationResult | 'loading' | 'failed' | null} */ (null),
+    '7s': /** @type {DurationResult | 'loading' | 'failed' | null} */ (null),
+  },
+  /** Monotonic counter incremented whenever a new image starts inference.
+   *  Background loading workers compare against this to detect cancellation. */
+  bgGenId: 0,
   lastImage: null,
   lastHeatmapCanvas: null,
   lastFixation: null,
   lastOrigDims: null,
   opacity: 0.6,
+  /** Canvas 2D globalCompositeOperation for the heatmap overlay layer. */
+  blendMode: 'source-over',
   view: 'overlay',
   /** File dropped before the model finished loading (demo-mode race). */
   queuedFile: /** @type {File | null} */ (null),
@@ -129,6 +175,7 @@ function boot() {
   const outputSection = mustGet('fc-output');
   const outputCanvasWrap = mustGet('fc-output-canvas-wrap');
   const outputCaption = mustGet('fc-output-caption');
+  const hudMount = mustGet('fc-hud-mount');
 
   // --- Status banner ----------------------------------------------------
   const status = createStatus();
@@ -161,6 +208,13 @@ function boot() {
   dropzone.setEnabled(false); // Disabled until the model finishes loading.
   dropzoneMount.appendChild(dropzone.element);
 
+  // "New Image" button — visible after first inference in place of the
+  // full dropzone. Delegates to the dropzone's file picker so the same
+  // validation / callback path is used, and the dropzone's enabled/busy
+  // guards prevent firing during an active inference run.
+  document.getElementById('fc-new-upload-btn')
+    ?.addEventListener('click', () => dropzone.openPicker());
+
   // Accept a file dropped anywhere on the page. Before this, dropping
   // one pixel outside the drop-zone element navigated the browser away
   // from Foveacast and opened the file in the tab — the worst failure
@@ -182,6 +236,10 @@ function boot() {
       state.view = view;
       renderOutput();
     },
+    onBlendModeChange: (mode) => {
+      state.blendMode = mode;
+      recomposite();
+    },
     onDownload: () => {
       // why: state.lastCompositeCanvas is always the most recent composite,
       // even in side-by-side view where querySelector('canvas') would return
@@ -201,11 +259,283 @@ function boot() {
   controls.setVisible(false);
   controlsMount.appendChild(controls.element);
 
+  // Click the output canvas area to cycle 1 s → 3 s → 7 s → 1 s.
+  // Only active after an image has been processed; no-ops before first drop.
+  const CYCLE_DURATIONS = /** @type {const} */ (['1s', '3s', '7s']);
+  outputCanvasWrap.addEventListener('click', () => {
+    if (!state.lastImage) return; // No result yet; nothing to cycle.
+    const currentIdx = CYCLE_DURATIONS.indexOf(state.displayedDuration);
+    const next = CYCLE_DURATIONS[(currentIdx + 1) % CYCLE_DURATIONS.length];
+    switchDuration(next);
+  });
+
   // --- Footer (attribution) --------------------------------------------
-  mountFooter(
-    document.querySelector('.fc-footer'),
-    /** @type {HTMLDialogElement | null} */ (document.getElementById('fc-alternatives-modal')),
-  );
+  mountFooter(document.querySelector('.fc-footer'));
+
+  // --- HUD stats panel -------------------------------------------------
+  const hud = createHud(hudMount);
+
+  /**
+   * Reveal the controls panel and hide the sidebar's empty-state intro.
+   * Called from both the demo path and the real-inference path so both
+   * share the same reveal behaviour.
+   */
+  function showControls() {
+    controls.setVisible(true);
+    const intro = document.getElementById('fc-sidebar-intro');
+    if (intro) intro.hidden = true;
+    // Swap out the full dropzone for the compact new-image button.
+    // Drag-anywhere and clipboard paste remain active via page-drop.js
+    // regardless of whether the dropzone element is visible.
+    const dropRow = document.querySelector('.fc-drop-row');
+    if (dropRow) dropRow.hidden = true;
+    const newUploadRow = document.getElementById('fc-new-upload-row');
+    if (newUploadRow) newUploadRow.hidden = false;
+  }
+
+  /**
+   * Toggle the busy overlay during model loads and inference runs.
+   * The topnav loading bar stays as a secondary indicator; this overlay
+   * makes the blocked state unmistakable.
+   *
+   * @param {boolean} busy
+   * @param {string} [label] - Text shown inside the overlay card.
+   */
+  function setAppBusy(busy, label = 'Analysing…') {
+    document.querySelector('.fc-topnav')?.classList.toggle('fc-topnav--busy', busy);
+    const overlay = document.getElementById('fc-busy-overlay');
+    if (overlay) {
+      if (busy) {
+        const lbl = document.getElementById('fc-busy-overlay-label');
+        if (lbl) lbl.textContent = label;
+      }
+      overlay.classList.toggle('fc-busy-overlay--active', busy);
+    }
+    // Mirror busy state onto the new-image button so it cannot be used
+    // while a model load or inference run is already in progress.
+    const newUploadBtn = document.getElementById('fc-new-upload-btn');
+    if (newUploadBtn) newUploadBtn.disabled = busy;
+  }
+
+  /**
+   * Show or hide the waiting spinner on the output canvas area.
+   * Shown when the user selects a duration that is still loading in
+   * the background; cleared by applyDurationResult() when ready.
+   *
+   * @param {boolean} waiting
+   */
+  function setOutputWaiting(waiting) {
+    outputSection.classList.toggle('fc-output--waiting', waiting);
+  }
+
+  /**
+   * Show the background-loading progress bar at the given fill fraction.
+   * The fraction maps download + inference to [0, 1] across all
+   * background durations.
+   *
+   * @param {number} fraction - Fill level in [0, 1].
+   * @param {string} [currentLabel] - Human-readable label of the duration currently loading.
+   */
+  function showBgProgress(fraction, currentLabel) {
+    const bar = document.getElementById('fc-bg-progress');
+    if (!bar) return;
+    bar.hidden = false;
+    const fill = /** @type {HTMLElement | null} */ (bar.querySelector('.fc-bg-progress__fill'));
+    if (fill) fill.style.width = `${Math.round(fraction * 100)}%`;
+    const label = /** @type {HTMLElement | null} */ (bar.querySelector('.fc-bg-progress__label'));
+    if (label) {
+      if (fraction >= 0.99) {
+        label.textContent = 'All durations ready';
+      } else {
+        const pct = `${Math.round(fraction * 100)}\u00a0%`;
+        label.textContent = currentLabel
+          ? `Loading ${currentLabel}\u2026 ${pct}`
+          : `Loading\u2026 ${pct}`;
+      }
+    }
+  }
+
+  /** Hide the background-loading progress bar. */
+  function hideBgProgress() {
+    const bar = document.getElementById('fc-bg-progress');
+    if (bar) bar.hidden = true;
+  }
+
+  /**
+   * Apply a cached DurationResult to the display state and re-render.
+   * Called both by cycle/switch code (direct) and by loadBackgroundDurations
+   * when a waiting result finishes.
+   *
+   * @param {import('./model/loader.js').Duration} duration
+   */
+  function applyDurationResult(duration) {
+    const result = state.durationResults[duration];
+    if (!result || result === 'loading' || result === 'failed') return;
+
+    state.lastHeatmapCanvas = result.heatmapCanvas;
+    state.lastFixation = result.fixation;
+    state.lastOrigDims = result.origDims;
+    state.lastDiagnostics = result.diagnostics;
+    state.displayedDuration = duration;
+
+    const [origH, origW] = result.origDims;
+    updateHud(hud, {
+      inferenceMs: result.inferenceMs,
+      duration,
+      spreadLevel: result.metrics.spreadLevel,
+      width: origW,
+      height: origH,
+    });
+
+    controls.setDuration(duration);
+    setOutputWaiting(false);
+    renderOutput();
+  }
+
+  /**
+   * Background-load the 1 s and 7 s models, run inference on the
+   * provided work canvas, and cache results in state.durationResults.
+   *
+   * Sequential loading (1 s then 7 s) avoids holding two 57 MB WASM
+   * sessions in memory at once. Each iteration checks bgGenId at every
+   * async boundary so a new image drop immediately invalidates stale work.
+   * Sessions are always released in `finally` to prevent WASM heap leaks.
+   *
+   * @param {HTMLImageElement | ImageBitmap | HTMLCanvasElement} workCanvas
+   * @param {number} genId - The bgGenId value captured at kickoff time.
+   */
+  async function loadBackgroundDurations(workCanvas, genId) {
+    const BG_DURATIONS = /** @type {const} */ (['1s', '7s']);
+    const total = BG_DURATIONS.length;
+
+    showBgProgress(0, DURATION_LABELS[BG_DURATIONS[0]]);
+
+    try {
+      for (let i = 0; i < BG_DURATIONS.length; i++) {
+        const dur = BG_DURATIONS[i];
+
+        if (state.bgGenId !== genId) return; // stale: new image was dropped
+
+        state.durationResults[dur] = 'loading';
+        controls.setDurationStatus(dur, 'loading');
+
+        // --- Model download ------------------------------------------------
+
+        let bgModel = null;
+        try {
+          bgModel = await loadModel({
+            duration: dur,
+            onProgress: (p) => {
+              if (state.bgGenId !== genId) return; // stale: skip UI update
+              // Map this model's download progress to [i/total, (i+0.8)/total].
+              showBgProgress((i + p.fraction * 0.8) / total, DURATION_LABELS[dur]);
+            },
+          });
+        } catch (err) {
+          // Model download or parse failed; mark this duration and continue.
+          console.warn(`Foveacast: background model load failed for ${dur}.`, err);
+          if (state.bgGenId === genId) {
+            state.durationResults[dur] = 'failed';
+            controls.setDurationStatus(dur, 'failed');
+          }
+          continue;
+        }
+
+        // Stale-check after the async load; if stale, release and bail.
+        if (state.bgGenId !== genId) {
+          try { bgModel.session.release(); } catch { /* best-effort */ }
+          return;
+        }
+
+        // --- Inference (session always released in finally) ----------------
+
+        let result = null;
+        try {
+          // Paint the progress bar at ~80% of this slot before WASM blocks.
+          showBgProgress((i + 0.8) / total, DURATION_LABELS[dur]);
+          // Double-rAF: ensure the browser paints the updated progress bar
+          // before session.run() blocks the main thread synchronously.
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+          // Stale-check in the rAF gap: a file may have been queued during
+          // the model download and could be about to run. Bail now rather
+          // than stacking two WASM calls.
+          if (state.bgGenId !== genId) return;
+
+          const inferStart = performance.now();
+          const { saliency, inputDims } = await runInference(workCanvas, bgModel);
+          const inferenceMs = Math.round(performance.now() - inferStart);
+
+          const origW = workCanvas.width;
+          const origH = workCanvas.height;
+          const metrics = computeSaliencyMetrics(saliency);
+          const processed = postprocess(saliency, inputDims, [origH, origW]);
+          const heatmapCanvas = renderSaliencyCanvas(processed, origW, origH);
+          const fixation = firstFixationCentroid(processed, origW, origH);
+
+          let salMin = Infinity, salMax = -Infinity, salSum = 0;
+          for (let j = 0; j < saliency.length; j++) {
+            if (saliency[j] < salMin) salMin = saliency[j];
+            if (saliency[j] > salMax) salMax = saliency[j];
+            salSum += saliency[j];
+          }
+          const peakIdx = saliency.indexOf(salMax);
+          const peakY = Math.floor(peakIdx / inputDims[1]);
+          const peakX = peakIdx % inputDims[1];
+
+          result = {
+            heatmapCanvas,
+            fixation,
+            origDims: /** @type {[number, number]} */ ([origH, origW]),
+            metrics,
+            inferenceMs,
+            diagnostics: {
+              sourceWidth: origW,
+              sourceHeight: origH,
+              modelInputDims: inputDims,
+              saliencyLength: saliency.length,
+              saliencyMin: salMin.toFixed(4),
+              saliencyMax: salMax.toFixed(4),
+              saliencyMean: (salSum / saliency.length).toFixed(4),
+              peakLocation: `(${peakX}, ${peakY})`,
+              duration: dur,
+            },
+          };
+        } catch (err) {
+          // Inference failed — mark failed; session released in finally below.
+          console.warn(`Foveacast: background inference failed for ${dur}.`, err);
+          if (state.bgGenId === genId) {
+            state.durationResults[dur] = 'failed';
+            controls.setDurationStatus(dur, 'failed');
+          }
+        } finally {
+          // Always release the WASM session to return ~57 MB to the heap.
+          if (bgModel) {
+            try { bgModel.session.release(); } catch { /* best-effort */ }
+          }
+        }
+
+        // Commit only if the result was built and still valid.
+        if (result && state.bgGenId === genId) {
+          state.durationResults[dur] = result;
+          controls.setDurationStatus(dur, 'ready');
+          // Announce the next duration loading, or 100% if this was the last.
+          const nextLabel = i + 1 < BG_DURATIONS.length ? DURATION_LABELS[BG_DURATIONS[i + 1]] : undefined;
+          showBgProgress((i + 1) / total, nextLabel);
+
+          // If the user clicked this duration while it was loading, display
+          // the result now that it has arrived.
+          if (state.displayedDuration === dur) {
+            applyDurationResult(dur);
+          }
+        }
+      }
+    } finally {
+      // Always hide the progress bar — whether we completed, errored, or
+      // returned early due to a stale genId.
+      hideBgProgress();
+    }
+  }
 
   // --- Demo mode short-circuit ------------------------------------------
   // When `?demo=1` is present, skip the model download entirely and run
@@ -214,7 +544,6 @@ function boot() {
   // real model load in the background so a drop works immediately
   // after the demo renders).
   const demoMode = isDemoModeRequested();
-
   if (demoMode) {
     runDemoMode({
       outputCanvasWrap,
@@ -230,7 +559,7 @@ function boot() {
         // ready, the drop is queued and auto-runs once load resolves.
         dropzone.setEnabled(true);
         controls.setDisabled(false);
-        controls.setVisible(true);
+        showControls();
       })
       .catch((err) => {
         console.error('Foveacast: demo mode failed.', err);
@@ -307,25 +636,33 @@ function boot() {
       }
     }
 
-    const loaded = await loadModel({
-      duration,
-      onProgress: (progress) => {
-        if (silent) return;
-        const elapsed = performance.now() - startedAt;
-        if (!firstRunShown && elapsed > FIRST_RUN_THRESHOLD_MS && progress.fraction < 0.95) {
-          firstRunShown = true;
-        }
-        if (firstRunShown) {
-          status.showFirstRun(progress);
-        }
-      },
-    });
+    setAppBusy(true, 'Loading model\u2026');
+    let loaded;
+    try {
+      loaded = await loadModel({
+        duration,
+        onProgress: (progress) => {
+          if (silent) return;
+          const elapsed = performance.now() - startedAt;
+          if (!firstRunShown && elapsed > FIRST_RUN_THRESHOLD_MS && progress.fraction < 0.95) {
+            firstRunShown = true;
+          }
+          if (firstRunShown) {
+            status.showFirstRun(progress);
+          }
+        },
+      });
+    } catch (err) {
+      setAppBusy(false);
+      throw err;
+    }
     state.loadedModel = loaded;
     writeHasRunSentinel(); // Flip the bit after a successful load.
     dropzone.setEnabled(true);
     controls.setDisabled(false);
     controls.setDurationLoading(false);
     if (!silent) status.showReady();
+    setAppBusy(false);
     // why: footer is static — no re-mount needed after model reload.
 
     // Drain any file the user dropped while we were still loading.
@@ -357,6 +694,31 @@ function boot() {
    * @param {import('./model/loader.js').Duration} duration
    */
   async function switchDuration(duration) {
+    // Fast path: result already cached — display immediately without
+    // reloading the model or re-running inference.
+    const cached = state.durationResults[duration];
+    if (cached && cached !== 'loading' && cached !== 'failed') {
+      state.displayedDuration = duration;
+      controls.setDuration(duration);
+      applyDurationResult(duration);
+      return;
+    }
+
+    // Pending: background loading is in progress — show waiting state
+    // so the user gets feedback, and let loadBackgroundDurations auto-
+    // display the result when it arrives.
+    if (cached === 'loading') {
+      state.displayedDuration = duration;
+      controls.setDuration(duration);
+      setOutputWaiting(true);
+      return;
+    }
+
+    // Null or failed: fall through to the model-reload path below.
+    // Cancel any in-flight background loading first so we don't have
+    // competing WASM calls for the same or different durations.
+    state.bgGenId++;
+
     if (duration === state.activeDuration && state.loadedModel) return;
 
     const generation = ++state.durationSwitchGeneration;
@@ -444,6 +806,12 @@ function boot() {
   async function runInferenceOnImage(workCanvas) {
     if (!state.loadedModel) return;
 
+    // Cancel any in-flight background loading immediately. Without this,
+    // dropping a new image while background inference is blocking the
+    // thread would let the stale result land in durationResults between
+    // the WASM return and the new file being processed.
+    state.bgGenId++;
+
     // Capture the duration at the start of inference so we can detect
     // a stale result if the user switches duration while inference is
     // running. Without this check, a slow inference on the old model
@@ -454,6 +822,16 @@ function boot() {
     status.showInference();
     dropzone.setBusy(true);
     controls.setDisabled(true);
+    setAppBusy(true, 'Analysing image\u2026');
+    // Double-rAF: the single-rAF continuation runs during the rendering
+    // pipeline's own callback phase, so the browser never reaches the
+    // style/layout/paint step for that frame before we block the thread
+    // with synchronous WASM.  Scheduling a second rAF from inside the
+    // first causes the browser to complete one full paint cycle (showing
+    // the overlay) before our continuation fires and hands control to WASM.
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
 
     try {
       const origW = workCanvas.width;
@@ -462,7 +840,9 @@ function boot() {
       // Run inference. `runInference` internally calls the preprocessing
       // pipeline and returns the raw model output plus the model's
       // native input dims (which post-processing needs).
+      const inferStart = performance.now();
       const { saliency, inputDims, sourceDims } = await runInference(workCanvas, state.loadedModel);
+      const inferenceMs = Math.round(performance.now() - inferStart);
 
       // Stale: the user switched duration while inference was running.
       // Discard these results — the new duration's inference will
@@ -472,7 +852,18 @@ function boot() {
       // Upsample + blur + normalise to the work canvas's dims so the
       // heatmap aligns pixel-for-pixel with the image we're going to
       // composite it over.
+      // why: metrics computed on raw model output (smaller array) to avoid
+      // jank from sorting the full upsampled saliency (~2 M elements at HD).
+      const metrics = computeSaliencyMetrics(saliency);
       const processed = postprocess(saliency, inputDims, [origH, origW]);
+
+      updateHud(hud, {
+        inferenceMs,
+        duration: state.activeDuration,
+        spreadLevel: metrics.spreadLevel,
+        width: origW,
+        height: origH,
+      });
 
       const fixation = firstFixationCentroid(processed, origW, origH);
 
@@ -505,10 +896,36 @@ function boot() {
         duration: state.activeDuration,
       };
 
+      // Cache the primary 3 s result and reset the other two durations
+      // so loadBackgroundDurations starts fresh for this image.
+      state.durationResults[inferDuration] = {
+        heatmapCanvas,
+        fixation,
+        origDims: /** @type {[number, number]} */ ([origH, origW]),
+        metrics,
+        inferenceMs,
+        diagnostics: /** @type {any} */ (state.lastDiagnostics),
+      };
+      state.displayedDuration = inferDuration;
+      for (const dur of /** @type {const} */ (['1s', '3s', '7s'])) {
+        if (dur !== inferDuration) {
+          state.durationResults[dur] = null;
+          controls.setDurationStatus(dur, 'idle');
+        }
+      }
+      controls.setDurationStatus(inferDuration, 'ready');
+
+      // Kick off background loading of the other two durations.
+      // Fire-and-forget: errors are handled inside loadBackgroundDurations.
+      const kickGenId = state.bgGenId;
+      loadBackgroundDurations(workCanvas, kickGenId).catch((err) => {
+        console.warn('Foveacast: background duration loading threw unexpectedly.', err);
+      });
+
       renderOutput();
       // Reveal controls now that there is a real result to operate on
       // (non-demo path). Safe to call repeatedly — no-op after first.
-      controls.setVisible(true);
+      showControls();
       status.clear();
 
       // PRD §Accessibility: after inference completes, move focus to
@@ -518,6 +935,7 @@ function boot() {
     } finally {
       dropzone.setBusy(false);
       controls.setDisabled(false);
+      setAppBusy(false);
     }
   }
 
@@ -593,12 +1011,24 @@ function boot() {
         heatmapCanvas: state.lastHeatmapCanvas,
         view: state.view,
         opacity: state.opacity,
+        blendMode: state.blendMode,
         fixation: state.lastFixation,
         origDims: state.lastOrigDims,
+        duration: DURATION_LABELS[state.displayedDuration],
         diagnostics: state.lastDiagnostics,
       },
       { outputSection, outputCanvasWrap, outputCaption },
     );
+
+    // Update the workspace heading with the active viewing duration so
+    // the user always knows which result is on screen without looking at
+    // the sidebar selector.
+    const durationBadge = document.getElementById('fc-duration-label');
+    if (durationBadge) {
+      const label = DURATION_LABELS[state.displayedDuration];
+      durationBadge.textContent = label ?? '';
+      durationBadge.hidden = !label;
+    }
   }
 
 }

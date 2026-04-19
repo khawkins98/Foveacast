@@ -1,0 +1,25 @@
+/*
+ * Inter variable font — latin subset.
+ *
+ * Vendored from Google Fonts (v20, 2024-11) so the page works offline
+ * and the font bytes are pinned to a reviewed commit.
+ *
+ * Source URL:
+ *   https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7W0Q5nw.woff2
+ *
+ * Variable font: font-weight covers 100–900 in a single file (47 KB).
+ *
+ * unicode-range: Latin only. Non-Latin characters fall back to
+ * system-ui, which is fine for Foveacast's English-only UI.
+ */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./inter-v20-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}

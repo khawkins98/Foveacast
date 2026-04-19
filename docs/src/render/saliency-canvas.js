@@ -110,6 +110,7 @@ export function renderSaliencyCanvas(normalisedMap, width, height) {
  * @param {HTMLCanvasElement} heatmapCanvas
  * @param {{
  *   opacity?: number,
+ *   blendMode?: string,
  *   showFixation?: boolean,
  *   fixation?: { x: number, y: number } | null,
  *   watermark?: { text: string } | null,
@@ -117,7 +118,7 @@ export function renderSaliencyCanvas(normalisedMap, width, height) {
  * @returns {HTMLCanvasElement}
  */
 export function compositeImageAndHeatmap(imageSource, heatmapCanvas, options = {}) {
-  const { opacity = 0.6, showFixation = true, fixation = null, watermark = null } = options;
+  const { opacity = 0.6, blendMode = 'source-over', showFixation = true, fixation = null, watermark = null } = options;
 
   if (typeof document === 'undefined') {
     throw new Error('compositeImageAndHeatmap requires a DOM (document).');
@@ -144,11 +145,13 @@ export function compositeImageAndHeatmap(imageSource, heatmapCanvas, options = {
   // 1. Source image underneath.
   ctx.drawImage(imageSource, 0, 0, width, height);
 
-  // 2. Heatmap on top at user-controlled opacity. `source-over` is the
-  //    default but we set it explicitly to make intent obvious and to
-  //    document that the compositor does not rely on any obscure mode.
+  // 2. Heatmap on top at user-controlled opacity with user-chosen blend mode.
+  //    Canvas 2D globalCompositeOperation accepts all the standard CSS blend
+  //    modes (multiply, screen, overlay, etc.) as well as compositing modes.
+  //    We default to 'source-over' (normal) and let the caller opt into
+  //    creative modes via the blendMode option.
   ctx.save();
-  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalCompositeOperation = /** @type {GlobalCompositeOperation} */ (blendMode);
   ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
   ctx.drawImage(heatmapCanvas, 0, 0, width, height);
   ctx.restore();

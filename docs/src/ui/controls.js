@@ -8,6 +8,7 @@
 // so the caller never has to sniff event.target.
 
 import { DURATIONS, DURATION_LABELS, DEFAULT_DURATION } from '../model/loader.js';
+import { iconTimer, iconTune, iconLayers, iconDownload } from './icons.js';
 
 /**
  * @typedef {'overlay'|'original'|'sidebyside'} ViewMode
@@ -35,6 +36,7 @@ let instanceCount = 0;
  * @property {(duration: Duration) => void} [onDurationChange]
  * @property {(opacity: number) => void} [onOpacityChange]
  * @property {(view: ViewMode) => void} [onViewChange]
+ * @property {(blendMode: string) => void} [onBlendModeChange]
  * @property {() => void} [onDownload]
  */
 
@@ -44,9 +46,11 @@ let instanceCount = 0;
  * @property {(duration: Duration) => void} setDuration
  * @property {(view: ViewMode) => void} setView
  * @property {(value: number) => void} setOpacity
+ * @property {(mode: string) => void} setBlendMode
  * @property {(disabled: boolean) => void} setDisabled
  * @property {(visible: boolean) => void} setVisible
  * @property {(loading: boolean) => void} setDurationLoading
+ * @property {(duration: Duration, status: 'idle' | 'loading' | 'ready' | 'failed') => void} setDurationStatus
  */
 
 /**
@@ -61,7 +65,7 @@ let instanceCount = 0;
  * @returns {ControlsController}
  */
 export function createControls(options = {}) {
-  const { onDurationChange, onOpacityChange, onViewChange, onDownload } = options;
+  const { onDurationChange, onOpacityChange, onViewChange, onBlendModeChange, onDownload } = options;
 
   const id = ++instanceCount;
   const prefix = `fc-ctl-${id}`;
@@ -80,16 +84,26 @@ export function createControls(options = {}) {
   durationWrap.className = 'fc-controls__field fc-controls__field--group fc-controls__duration';
 
   const durationLegend = document.createElement('legend');
-  durationLegend.textContent = 'Viewing duration';
+  const durationIcon = document.createElement('span');
+  durationIcon.className = 'fc-controls__icon';
+  durationIcon.setAttribute('aria-hidden', 'true');
+  durationIcon.innerHTML = iconTimer;
+  durationLegend.appendChild(durationIcon);
+  durationLegend.appendChild(document.createTextNode('Viewing duration'));
   durationWrap.appendChild(durationLegend);
 
   /** @type {HTMLInputElement[]} */
   const durationInputs = [];
+  /** @type {Map<string, HTMLElement>} */
+  const durationOptionEls = new Map();
   const durationGroupName = `${prefix}-duration`;
 
   for (const dur of DURATIONS) {
     const option = document.createElement('label');
     option.className = 'fc-controls__radio';
+    // Store a reference to each duration label so setDurationStatus can
+    // add a data-status attribute for the loading/ready/failed indicators.
+    durationOptionEls.set(dur, option);
 
     const radio = document.createElement('input');
     radio.type = 'radio';
@@ -134,10 +148,15 @@ export function createControls(options = {}) {
 
   const opacityLabel = document.createElement('label');
   opacityLabel.htmlFor = `${prefix}-opacity`;
+  const opacityIcon = document.createElement('span');
+  opacityIcon.className = 'fc-controls__icon';
+  opacityIcon.setAttribute('aria-hidden', 'true');
+  opacityIcon.innerHTML = iconTune;
+  opacityLabel.appendChild(opacityIcon);
   // Verb-first labels: the user is acting on the heatmap, not
   // contemplating a property. Nudges the controls from "settings
   // panel" feel toward "live controls" feel.
-  opacityLabel.textContent = 'Adjust overlay strength';
+  opacityLabel.appendChild(document.createTextNode('Adjust overlay strength'));
   opacityWrap.appendChild(opacityLabel);
 
   const opacityInput = document.createElement('input');
@@ -177,7 +196,12 @@ export function createControls(options = {}) {
   const viewWrap = document.createElement('fieldset');
   viewWrap.className = 'fc-controls__field fc-controls__field--group';
   const viewLegend = document.createElement('legend');
-  viewLegend.textContent = 'Show';
+  const viewIcon = document.createElement('span');
+  viewIcon.className = 'fc-controls__icon';
+  viewIcon.setAttribute('aria-hidden', 'true');
+  viewIcon.innerHTML = iconLayers;
+  viewLegend.appendChild(viewIcon);
+  viewLegend.appendChild(document.createTextNode('Show'));
   viewWrap.appendChild(viewLegend);
 
   /** @type {HTMLInputElement[]} */
@@ -208,13 +232,60 @@ export function createControls(options = {}) {
 
   root.appendChild(viewWrap);
 
-  // --- Download button ----------------------------------------------
+  // --- Blend mode picker -------------------------------------------
+  //
+  // Canvas 2D supports CSS blend modes natively via
+  // globalCompositeOperation. Expose the most useful ones for creative
+  // exploration. 'Normal' is source-over (the default); the others let
+  // the heatmap interact with the underlying image in interesting ways.
+
+  const BLEND_CHOICES = /** @type {const} */ ([
+    { value: 'source-over', label: 'Normal' },
+    { value: 'multiply',    label: 'Multiply' },
+    { value: 'screen',      label: 'Screen' },
+    { value: 'overlay',     label: 'Overlay' },
+    { value: 'soft-light',  label: 'Soft light' },
+    { value: 'hard-light',  label: 'Hard light' },
+    { value: 'luminosity',  label: 'Luminosity' },
+  ]);
+
+  const blendWrap = document.createElement('div');
+  blendWrap.className = 'fc-controls__field';
+
+  const blendLabel = document.createElement('label');
+  blendLabel.htmlFor = `${prefix}-blend`;
+  blendLabel.className = 'fc-controls__label';
+  blendLabel.appendChild(document.createTextNode('Overlay blend'));
+  blendWrap.appendChild(blendLabel);
+
+  const blendSelect = document.createElement('select');
+  blendSelect.id = `${prefix}-blend`;
+  blendSelect.className = 'fc-controls__select';
+  blendSelect.setAttribute('aria-label', 'Heatmap blend mode');
+
+  for (const choice of BLEND_CHOICES) {
+    const opt = document.createElement('option');
+    opt.value = choice.value;
+    opt.textContent = choice.label;
+    blendSelect.appendChild(opt);
+  }
+
+  blendSelect.addEventListener('change', () => {
+    if (onBlendModeChange) onBlendModeChange(blendSelect.value);
+  });
+  blendWrap.appendChild(blendSelect);
+
+  root.appendChild(blendWrap);
 
   const downloadBtn = document.createElement('button');
   downloadBtn.type = 'button';
   downloadBtn.className = 'fc-controls__download';
-  downloadBtn.textContent = 'Download PNG';
   downloadBtn.setAttribute('aria-label', 'Download heatmap as PNG');
+  const dlIcon = document.createElement('span');
+  dlIcon.setAttribute('aria-hidden', 'true');
+  dlIcon.innerHTML = iconDownload;
+  downloadBtn.appendChild(dlIcon);
+  downloadBtn.appendChild(document.createTextNode('Download PNG'));
   downloadBtn.addEventListener('click', () => {
     if (onDownload) onDownload();
   });
@@ -244,11 +315,17 @@ export function createControls(options = {}) {
     opacityInput.setAttribute('aria-valuetext', `${pct}%`);
   }
 
+  /** @param {string} mode - CSS blend mode string, e.g. 'source-over'. */
+  function setBlendMode(mode) {
+    blendSelect.value = mode;
+  }
+
   /** @param {boolean} disabled */
   function setDisabled(disabled) {
     const d = !!disabled;
     opacityInput.disabled = d;
     downloadBtn.disabled = d;
+    blendSelect.disabled = d;
     for (const input of viewInputs) input.disabled = d;
     for (const input of durationInputs) input.disabled = d;
     root.classList.toggle('fc-controls--disabled', d);
@@ -278,13 +355,31 @@ export function createControls(options = {}) {
     durationLoadingHint.textContent = loading ? 'Loading model…' : '';
   }
 
+  /**
+   * Set the status indicator for a specific duration option.
+   * Used by the background-loading path to signal which durations have
+   * cached results available without a model reload.
+   *
+   * @param {Duration} duration
+   * @param {'idle' | 'loading' | 'ready' | 'failed'} statusValue
+   */
+  function setDurationStatus(duration, statusValue) {
+    const el = durationOptionEls.get(duration);
+    if (!el) return;
+    // Setting via dataset lets CSS use [data-status="…"] attribute selectors
+    // to show/hide the spinner or checkmark pseudo-element.
+    el.dataset.status = statusValue;
+  }
+
   return {
     element: root,
     setDuration,
     setView,
     setOpacity,
+    setBlendMode,
     setDisabled,
     setVisible,
     setDurationLoading,
+    setDurationStatus,
   };
 }

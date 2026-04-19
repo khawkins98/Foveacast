@@ -321,6 +321,40 @@ There is a potential workaround. Mamba includes a pure-PyTorch naive path reacha
 
 Recommended first step: a small spike that forces `use_fast_path=False` throughout the Mamba and VMamba stacks and checks whether `torch.onnx.export` produces a traceable graph on CPU. If yes, the browser path becomes feasible pending an ORT Web SIMD performance check. If no, the right move is to park V3 and revisit when the Mamba CPU-fallback story in upstream has matured — which it probably will, because the same blocker affects every Mamba-based vision model trying to reach the browser, so the community pressure to fix it is real.
 
+## 2026-04-19 — Import + mount without assignment: a wiring gap the linter won't catch
+
+Every call to `updateHud` crashed with `ReferenceError: hud is not defined` because the line `const hud = createHud(hudMount)` was simply never written. The import existed (`createHud` was imported from `./ui/hud.js`), the mount was correctly retrieved (`hudMount = document.getElementById(...)`), but the assignment from import to instance was absent. A section comment indicated where it should go; the line itself didn't.
+
+This class of gap is invisible to linters — `createHud` appears in the import statement and linters don't track whether its return value is captured. It's also invisible to unit tests, because unit tests of the HUD module test the module in isolation, not the wiring in `main.js`. It only surfaces at runtime when the variable is first dereferenced.
+
+The pattern to watch for in `main.js`: every module that produces a stateful instance follows import → get-mount → **assign-instance** → use. Skipping the third step is easy because the first two look complete. When adding a new module to the wiring, write all three steps before writing any downstream call site.
+
+## 2026-04-19 — Optional parameters are a dead zone for test coverage
+
+`describeHeatmap` in `ui/output-view.js` gained a third `durationLabel` parameter that, when present, prepends the label to the caption string. The existing tests all called the two-argument form — they continued to pass, and the new parameter had zero coverage for several commits. It was only found during an explicit test coverage audit.
+
+The pattern: when a function gains an optional parameter, the existing tests remain green whether or not the new branch is correct. A green suite communicates "covered"; if the new branch isn't tested, the green is misleading.
+
+Rule to apply going forward: adding an optional parameter counts as a new branch, and that branch gets a test case immediately in the same commit. The omitted-parameter path should also be tested explicitly to document the backward-compatible default behaviour.
+
+## 2026-04-19 — What else can we show from a saliency map?
+
+After completing the precision-lens UI redesign, a thought exploration surfaced several visualizations derivable from the existing postprocessed saliency maps without any model changes. Worth recording here so the analysis doesn't have to be re-derived.
+
+**What the pipeline already produces** (for each of the three durations): a normalised `Float32Array` at full source resolution, a `firstFixationCentroid` (saliency-weighted centre of mass of the top 10% of pixels), a `concentration` score (% of attention mass in the top 10% of pixels), and a `spreadLevel` label.
+
+**What's feasible without changing the model:**
+
+*Inhibition of Return (IoR) fixation sequence.* The standard Itti & Koch (2001) technique: find peak → suppress with a Gaussian mask → find next peak → repeat. Gives fixation 1, 2, 3 as numbered markers with connecting saccade lines. `pipeline/fixation.js` already computes peak 1 via weighted centroid; extending it to N via IoR masking is the natural next step. Critical caveat: these are predicted population-average fixations under free-viewing. That needs prominent documentation alongside the feature — it is not a scanpath recording.
+
+*Multi-duration centroid trajectory.* Three centroid points connected by an arrow path (1s → 3s → 7s). Shows how the centre of attention shifts as viewing time increases — something no commercial tool currently offers, because multi-duration output is an unusual differentiator.
+
+*Threshold contour zones.* Concentric regions at 10%, 25%, 50% saliency mass. More spatially precise than the diffuse heatmap for "is this CTA inside the top-25% attention zone?" questions.
+
+**What requires a different model:** task-directed attention (where do users look when searching for the checkout button?) and time-to-first-fixation per region both depend on models trained on task-directed eye-tracking data, not free-viewing saliency. Setting this expectation in user-facing documentation is as important as building any feature.
+
+All three ideas are in TODO.md. The IoR sequence and centroid trajectory are the highest-leverage pair: they turn a heat cloud into a legible order-of-attention story.
+
 ## 2026-04-16 — Open questions picked up from the PRD
 
 Carried over from `docs/PRD.md` §Open Questions. These are live, not resolved.

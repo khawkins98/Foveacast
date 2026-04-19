@@ -20,8 +20,10 @@ import { compositeImageAndHeatmap } from '../render/saliency-canvas.js';
  *   heatmapCanvas: HTMLCanvasElement,
  *   view: 'overlay' | 'original' | 'sidebyside',
  *   opacity: number,
+ *   blendMode?: string,
  *   fixation: { x: number, y: number } | null,
  *   origDims: [number, number] | null,
+ *   duration?: string,
  *   diagnostics: {
  *     sourceWidth: number,
  *     sourceHeight: number,
@@ -53,7 +55,7 @@ import { compositeImageAndHeatmap } from '../render/saliency-canvas.js';
  *   view is 'original' (no composite is produced in that mode).
  */
 export function renderOutput(viewModel, { outputSection, outputCanvasWrap, outputCaption }) {
-  const { image, heatmapCanvas, view, opacity, fixation, origDims, diagnostics } = viewModel;
+  const { image, heatmapCanvas, view, opacity, blendMode, fixation, origDims, duration, diagnostics } = viewModel;
 
   // Reveal the output section — it's hidden on first load so the
   // pre-drop page isn't cluttered by a reserved empty box (same
@@ -67,7 +69,7 @@ export function renderOutput(viewModel, { outputSection, outputCanvasWrap, outpu
   // coordinates as plain text below the canvas. Screen readers
   // already get this via `aria-label`, but a visible caption helps
   // everyone compare runs without squinting at pixel positions.
-  outputCaption.textContent = describeHeatmap(fixation, origDims);
+  outputCaption.textContent = describeHeatmap(fixation, origDims, duration);
   outputCaption.hidden = false;
 
   // Diagnostic panel — collapsible details below the caption showing
@@ -116,10 +118,11 @@ export function renderOutput(viewModel, { outputSection, outputCanvasWrap, outpu
     plain.setAttribute('aria-label', 'Original screenshot.');
     const composite = compositeImageAndHeatmap(image, heatmapCanvas, {
       opacity,
+      blendMode,
       showFixation: true,
       fixation,
     });
-    composite.setAttribute('aria-label', describeHeatmap(fixation, origDims));
+    composite.setAttribute('aria-label', describeHeatmap(fixation, origDims, duration));
     outputCanvasWrap.appendChild(plain);
     outputCanvasWrap.appendChild(composite);
     return composite;
@@ -128,10 +131,11 @@ export function renderOutput(viewModel, { outputSection, outputCanvasWrap, outpu
   // Default overlay view.
   const composite = compositeImageAndHeatmap(image, heatmapCanvas, {
     opacity,
+    blendMode,
     showFixation: true,
     fixation,
   });
-  composite.setAttribute('aria-label', describeHeatmap(fixation, origDims));
+  composite.setAttribute('aria-label', describeHeatmap(fixation, origDims, duration));
   outputCanvasWrap.appendChild(composite);
   return composite;
 }
@@ -140,19 +144,22 @@ export function renderOutput(viewModel, { outputSection, outputCanvasWrap, outpu
  * Human-readable sentence describing the heatmap for screen reader
  * announcements and the visible caption. The fixation coordinates are
  * included as integers so the announcement is concrete and not just
- * "a heatmap".
+ * "a heatmap". An optional duration label prefixes the description so
+ * the user always knows which viewing window is displayed.
  *
  * @param {{ x: number, y: number } | null} fixation
  * @param {[number, number] | null} origDims - `[h, w]` from the pipeline.
+ * @param {string} [durationLabel] - Human label e.g. "Quick scan (3 s)".
  * @returns {string}
  */
-export function describeHeatmap(fixation, origDims) {
+export function describeHeatmap(fixation, origDims, durationLabel) {
+  const prefix = durationLabel ? `${durationLabel} — ` : '';
   if (!fixation || !origDims) {
-    return 'Predicted attention heatmap for uploaded screenshot.';
+    return `${prefix}Predicted attention heatmap for uploaded screenshot.`;
   }
   const [h, w] = origDims;
   return (
-    `Predicted attention heatmap for uploaded screenshot. ` +
+    `${prefix}Predicted attention heatmap for uploaded screenshot. ` +
     `First-fixation estimate is at ${fixation.x} pixels across and ${fixation.y} pixels down ` +
     `on a ${w} by ${h} pixel image.`
   );
