@@ -37,9 +37,19 @@ export function createHud() {
   el.setAttribute('aria-label', 'Analysis statistics');
   el.hidden = true; // shown only after first real inference
 
-  el.appendChild(makeCard('fc-hud__inference', 'Inference', '\u2014'));
+  el.appendChild(makeCard(
+    'fc-hud__inference',
+    'Inference',
+    '\u2014',
+    'Time taken to run the saliency model on your image, in milliseconds.',
+  ));
   el.appendChild(makeCard('fc-hud__duration',  'Duration',  '\u2014'));
-  el.appendChild(makeCard('fc-hud__spread',    'Attention Spread', '\u2014'));
+  el.appendChild(makeCard(
+    'fc-hud__spread',
+    'Attention Spread',
+    '\u2014',
+    'How widely distributed predicted attention is across the image. Low = focused on one spot; High = spread across many areas.',
+  ));
   el.appendChild(makeCard('fc-hud__resolution','Resolution', '\u2014'));
 
   return el;
@@ -71,11 +81,15 @@ export function updateHud(el, { inferenceMs, duration, spreadLevel, width, heigh
  * @param {string} extraClass
  * @param {string} labelText
  * @param {string} valueText
+ * @param {string} [tooltip]  - Optional tooltip shown on hover.
  * @returns {HTMLElement}
  */
-function makeCard(extraClass, labelText, valueText) {
+function makeCard(extraClass, labelText, valueText, tooltip) {
   const card = document.createElement('div');
   card.className = `fc-hud__card ${extraClass}`;
+  if (tooltip) {
+    card.dataset.tooltip = tooltip;
+  }
 
   const label = document.createElement('span');
   label.className = 'fc-hud__label';

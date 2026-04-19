@@ -36,6 +36,7 @@ let instanceCount = 0;
  * @property {(duration: Duration) => void} [onDurationChange]
  * @property {(opacity: number) => void} [onOpacityChange]
  * @property {(view: ViewMode) => void} [onViewChange]
+ * @property {(blendMode: string) => void} [onBlendModeChange]
  * @property {() => void} [onDownload]
  */
 
@@ -45,6 +46,7 @@ let instanceCount = 0;
  * @property {(duration: Duration) => void} setDuration
  * @property {(view: ViewMode) => void} setView
  * @property {(value: number) => void} setOpacity
+ * @property {(mode: string) => void} setBlendMode
  * @property {(disabled: boolean) => void} setDisabled
  * @property {(visible: boolean) => void} setVisible
  * @property {(loading: boolean) => void} setDurationLoading
@@ -63,7 +65,7 @@ let instanceCount = 0;
  * @returns {ControlsController}
  */
 export function createControls(options = {}) {
-  const { onDurationChange, onOpacityChange, onViewChange, onDownload } = options;
+  const { onDurationChange, onOpacityChange, onViewChange, onBlendModeChange, onDownload } = options;
 
   const id = ++instanceCount;
   const prefix = `fc-ctl-${id}`;
@@ -230,7 +232,50 @@ export function createControls(options = {}) {
 
   root.appendChild(viewWrap);
 
-  // --- Download button ----------------------------------------------
+  // --- Blend mode picker -------------------------------------------
+  //
+  // Canvas 2D supports CSS blend modes natively via
+  // globalCompositeOperation. Expose the most useful ones for creative
+  // exploration. 'Normal' is source-over (the default); the others let
+  // the heatmap interact with the underlying image in interesting ways.
+
+  const BLEND_CHOICES = /** @type {const} */ ([
+    { value: 'source-over', label: 'Normal' },
+    { value: 'multiply',    label: 'Multiply' },
+    { value: 'screen',      label: 'Screen' },
+    { value: 'overlay',     label: 'Overlay' },
+    { value: 'soft-light',  label: 'Soft light' },
+    { value: 'hard-light',  label: 'Hard light' },
+    { value: 'luminosity',  label: 'Luminosity' },
+  ]);
+
+  const blendWrap = document.createElement('div');
+  blendWrap.className = 'fc-controls__field';
+
+  const blendLabel = document.createElement('label');
+  blendLabel.htmlFor = `${prefix}-blend`;
+  blendLabel.className = 'fc-controls__label';
+  blendLabel.appendChild(document.createTextNode('Overlay blend'));
+  blendWrap.appendChild(blendLabel);
+
+  const blendSelect = document.createElement('select');
+  blendSelect.id = `${prefix}-blend`;
+  blendSelect.className = 'fc-controls__select';
+  blendSelect.setAttribute('aria-label', 'Heatmap blend mode');
+
+  for (const choice of BLEND_CHOICES) {
+    const opt = document.createElement('option');
+    opt.value = choice.value;
+    opt.textContent = choice.label;
+    blendSelect.appendChild(opt);
+  }
+
+  blendSelect.addEventListener('change', () => {
+    if (onBlendModeChange) onBlendModeChange(blendSelect.value);
+  });
+  blendWrap.appendChild(blendSelect);
+
+  root.appendChild(blendWrap);
 
   const downloadBtn = document.createElement('button');
   downloadBtn.type = 'button';
@@ -270,11 +315,17 @@ export function createControls(options = {}) {
     opacityInput.setAttribute('aria-valuetext', `${pct}%`);
   }
 
+  /** @param {string} mode - CSS blend mode string, e.g. 'source-over'. */
+  function setBlendMode(mode) {
+    blendSelect.value = mode;
+  }
+
   /** @param {boolean} disabled */
   function setDisabled(disabled) {
     const d = !!disabled;
     opacityInput.disabled = d;
     downloadBtn.disabled = d;
+    blendSelect.disabled = d;
     for (const input of viewInputs) input.disabled = d;
     for (const input of durationInputs) input.disabled = d;
     root.classList.toggle('fc-controls--disabled', d);
@@ -325,6 +376,7 @@ export function createControls(options = {}) {
     setDuration,
     setView,
     setOpacity,
+    setBlendMode,
     setDisabled,
     setVisible,
     setDurationLoading,

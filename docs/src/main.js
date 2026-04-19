@@ -17,7 +17,7 @@ import { createDropzone } from './ui/dropzone.js';
 import { createControls } from './ui/controls.js';
 import { mountFooter } from './ui/footer.js';
 import { renderOutput as renderOutputView } from './ui/output-view.js';
-import { loadModel, DEFAULT_DURATION } from './model/loader.js';
+import { loadModel, DEFAULT_DURATION, DURATION_LABELS } from './model/loader.js';
 import { runInference } from './model/inference.js';
 import { downsampleIfLarge } from './ui/image-resize.js';
 import { postprocess } from './pipeline/postprocess.js';
@@ -83,6 +83,7 @@ const FIRST_RUN_THRESHOLD_MS = 800;
  *   lastFixation: { x: number, y: number } | null,
  *   lastOrigDims: [number, number] | null,
  *   opacity: number,
+ *   blendMode: string,
  *   view: 'overlay' | 'original' | 'sidebyside',
  *   queuedFile: File | null,
  *   lastDiagnostics: {
@@ -121,6 +122,8 @@ const state = {
   lastFixation: null,
   lastOrigDims: null,
   opacity: 0.6,
+  /** Canvas 2D globalCompositeOperation for the heatmap overlay layer. */
+  blendMode: 'source-over',
   view: 'overlay',
   /** File dropped before the model finished loading (demo-mode race). */
   queuedFile: /** @type {File | null} */ (null),
@@ -233,6 +236,10 @@ function boot() {
       state.view = view;
       renderOutput();
     },
+    onBlendModeChange: (mode) => {
+      state.blendMode = mode;
+      recomposite();
+    },
     onDownload: () => {
       // why: state.lastCompositeCanvas is always the most recent composite,
       // even in side-by-side view where querySelector('canvas') would return
@@ -263,38 +270,9 @@ function boot() {
   });
 
   // --- Footer (attribution) --------------------------------------------
-  mountFooter(
-    document.querySelector('.fc-footer'),
-    /** @type {HTMLDialogElement | null} */ (document.getElementById('fc-alternatives-modal')),
-  );
+  mountFooter(document.querySelector('.fc-footer'));
 
   // --- HUD stats panel -------------------------------------------------
-  const hud = createHud();
-  hudMount.appendChild(hud);
-
-  // Wire the topnav help button to open the same alternatives modal as
-  // the footer's "Need more?" link. footer.js handles the footer
-  // trigger; we handle the topnav trigger here because main.js has
-  // direct access to both elements.
-  const helpBtn = document.getElementById('fc-help-btn');
-  const altModal = /** @type {HTMLDialogElement | null} */ (document.getElementById('fc-alternatives-modal'));
-  if (helpBtn && altModal) {
-    // Track whether this button opened the modal so the close handler
-    // only restores focus here (not when the footer link opened it).
-    let _triggeredByHelp = false;
-    helpBtn.addEventListener('click', () => {
-      _triggeredByHelp = true;
-      altModal.showModal();
-    });
-    // why: without this, Escape-to-close leaves keyboard focus on <body>,
-    // which is disorienting. The footer module handles its own trigger.
-    altModal.addEventListener('close', () => {
-      if (_triggeredByHelp) {
-        _triggeredByHelp = false;
-        helpBtn.focus();
-      }
-    });
-  }
 
   /**
    * Reveal the controls panel and hide the sidebar's empty-state intro.
@@ -1024,8 +1002,10 @@ function boot() {
         heatmapCanvas: state.lastHeatmapCanvas,
         view: state.view,
         opacity: state.opacity,
+        blendMode: state.blendMode,
         fixation: state.lastFixation,
         origDims: state.lastOrigDims,
+        duration: DURATION_LABELS[state.displayedDuration],
         diagnostics: state.lastDiagnostics,
       },
       { outputSection, outputCanvasWrap, outputCaption },

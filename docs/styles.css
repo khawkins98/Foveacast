@@ -565,6 +565,41 @@ a:hover {
   margin-top: 0.2rem;
 }
 
+/* HUD card tooltips — CSS-only, no JS, keyboard-accessible via focus-within */
+.fc-hud__card[data-tooltip] {
+  position: relative;
+  cursor: help;
+}
+
+.fc-hud__card[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--fc-surface-highest);
+  color: var(--fc-on-surface);
+  font-size: 0.7rem;
+  font-weight: 400;
+  line-height: 1.4;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--fc-radius-sm);
+  width: max-content;
+  max-width: 220px;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 100;
+  /* prevent the card from clipping the tooltip */
+  overflow: visible;
+}
+
+.fc-hud__card[data-tooltip]:hover::after,
+.fc-hud__card[data-tooltip]:focus-within::after {
+  opacity: 1;
+}
+
 /* -- Status banner ------------------------------------------------------- */
 
 .fc-status {
@@ -886,6 +921,25 @@ body.fc-page-dragover .fc-dropzone {
   color: var(--fc-danger);
   font-size: 0.7rem;
   flex-shrink: 0;
+}
+
+/* Blend mode select. */
+.fc-controls__select {
+  width: 100%;
+  font: inherit;
+  font-size: 0.8rem;
+  background: var(--fc-surface-high);
+  color: var(--fc-on-surface);
+  border: 1px solid var(--fc-outline-variant);
+  border-radius: var(--fc-radius-sm);
+  padding: 0.35rem 0.55rem;
+  cursor: pointer;
+  accent-color: var(--fc-primary);
+}
+
+.fc-controls__select:focus {
+  outline: 2px solid var(--fc-primary);
+  outline-offset: 1px;
 }
 
 /* Export / download button — full-width CTA in the sidebar. */
