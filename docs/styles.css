@@ -1070,7 +1070,7 @@ body.fc-page-dragover .fc-dropzone {
   margin: 0;
 }
 
-/* -- Responsive: narrow desktop / tablet (< 900 px) --------------------- */ */
+/* -- Responsive: narrow desktop / tablet (< 900 px) ---------------------
 /*
  * Below 900 px the sidebar leaves fixed positioning and stacks below
  * the main workspace in normal document flow. Since <aside> follows

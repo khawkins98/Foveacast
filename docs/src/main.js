@@ -525,6 +525,9 @@ function boot() {
     dropzone.setBusy(true);
     controls.setDisabled(true);
     setAppBusy(true, 'Analysing image\u2026');
+    // Yield to the browser so the overlay can paint before WASM
+    // inference potentially monopolises the main thread.
+    await new Promise((resolve) => { requestAnimationFrame(resolve); });
 
     try {
       const origW = workCanvas.width;
