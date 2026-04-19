@@ -254,6 +254,47 @@ a:hover {
   background: var(--fc-surface-mid);
 }
 
+/* Thin indeterminate loading bar along the bottom edge of the topnav.
+   Activated by adding .fc-topnav--busy to the nav element from main.js
+   whenever a model load or inference run is in flight.
+   The sweep animation is automatically zeroed by prefers-reduced-motion. */
+.fc-topnav__loader {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.fc-topnav__loader::after {
+  content: '';
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 50%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--fc-primary) 40%,
+    var(--fc-primary-container) 60%,
+    transparent 100%
+  );
+  transform: translateX(-120%);
+}
+
+.fc-topnav--busy .fc-topnav__loader::after {
+  animation: fc-loader-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes fc-loader-sweep {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(280%); }
+}
+
 /* -- Sidebar ------------------------------------------------------------- */
 
 .fc-sidebar {
@@ -356,7 +397,6 @@ a:hover {
 
 .fc-main {
   margin-left: var(--fc-sidebar-w);
-  padding-top: var(--fc-topnav-h);
   /* scroll-margin-top ensures the #fc-main anchor (skip link target)
      is not hidden under the fixed topnav. */
   scroll-margin-top: var(--fc-topnav-h);
@@ -965,12 +1005,25 @@ body.fc-page-dragover .fc-dropzone {
 
 /* -- Responsive: narrow desktop / tablet (< 900 px) --------------------- */
 /*
- * Below 900 px the sidebar is hidden and the main workspace spans the
- * full viewport width. The topnav collapses its secondary links.
+ * Below 900 px the sidebar leaves fixed positioning and stacks below
+ * the main workspace in normal document flow. Since <aside> follows
+ * <main> in the DOM, controls remain reachable after inference completes
+ * without any JavaScript reparenting.
  */
 @media (max-width: 899px) {
   .fc-sidebar {
-    display: none;
+    position: static;
+    width: 100%;
+    height: auto;
+    box-shadow: none;
+    border-top: 1px solid var(--fc-outline-variant);
+    padding: 1.5rem 1.25rem 1rem;
+  }
+
+  /* margin-top: auto has no effect in normal block flow — replace with
+     explicit spacing so the footer links don't collapse into the controls. */
+  .fc-sidebar__footer {
+    margin-top: 1.5rem;
   }
 
   .fc-main {
@@ -982,11 +1035,6 @@ body.fc-page-dragover .fc-dropzone {
   .fc-topnav__links {
     display: none;
   }
-
-  /* On narrow viewports the controls mount is removed from the sidebar
-     (hidden), so the controls that main.js injects are also not visible.
-     This is an acceptable trade-off for the first responsive pass; a
-     future iteration could add a toggle to reveal a slide-in drawer. */
 }
 
 /* -- Reduced motion ------------------------------------------------------ */

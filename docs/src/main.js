@@ -221,7 +221,21 @@ function boot() {
   const helpBtn = document.getElementById('fc-help-btn');
   const altModal = /** @type {HTMLDialogElement | null} */ (document.getElementById('fc-alternatives-modal'));
   if (helpBtn && altModal) {
-    helpBtn.addEventListener('click', () => altModal.showModal());
+    // Track whether this button opened the modal so the close handler
+    // only restores focus here (not when the footer link opened it).
+    let _triggeredByHelp = false;
+    helpBtn.addEventListener('click', () => {
+      _triggeredByHelp = true;
+      altModal.showModal();
+    });
+    // why: without this, Escape-to-close leaves keyboard focus on <body>,
+    // which is disorienting. The footer module handles its own trigger.
+    altModal.addEventListener('close', () => {
+      if (_triggeredByHelp) {
+        _triggeredByHelp = false;
+        helpBtn.focus();
+      }
+    });
   }
 
   /**
@@ -233,6 +247,16 @@ function boot() {
     controls.setVisible(true);
     const intro = document.getElementById('fc-sidebar-intro');
     if (intro) intro.hidden = true;
+  }
+
+  /**
+   * Toggle the topnav loading bar during model loads and inference runs.
+   * Purely visual — the status banner carries the accessible announcement.
+   *
+   * @param {boolean} busy
+   */
+  function setAppBusy(busy) {
+    document.querySelector('.fc-topnav')?.classList.toggle('fc-topnav--busy', busy);
   }
 
   // --- Demo mode short-circuit ------------------------------------------
@@ -335,25 +359,33 @@ function boot() {
       }
     }
 
-    const loaded = await loadModel({
-      duration,
-      onProgress: (progress) => {
-        if (silent) return;
-        const elapsed = performance.now() - startedAt;
-        if (!firstRunShown && elapsed > FIRST_RUN_THRESHOLD_MS && progress.fraction < 0.95) {
-          firstRunShown = true;
-        }
-        if (firstRunShown) {
-          status.showFirstRun(progress);
-        }
-      },
-    });
+    setAppBusy(true);
+    let loaded;
+    try {
+      loaded = await loadModel({
+        duration,
+        onProgress: (progress) => {
+          if (silent) return;
+          const elapsed = performance.now() - startedAt;
+          if (!firstRunShown && elapsed > FIRST_RUN_THRESHOLD_MS && progress.fraction < 0.95) {
+            firstRunShown = true;
+          }
+          if (firstRunShown) {
+            status.showFirstRun(progress);
+          }
+        },
+      });
+    } catch (err) {
+      setAppBusy(false);
+      throw err;
+    }
     state.loadedModel = loaded;
     writeHasRunSentinel(); // Flip the bit after a successful load.
     dropzone.setEnabled(true);
     controls.setDisabled(false);
     controls.setDurationLoading(false);
     if (!silent) status.showReady();
+    setAppBusy(false);
     // why: footer is static — no re-mount needed after model reload.
 
     // Drain any file the user dropped while we were still loading.
@@ -482,6 +514,7 @@ function boot() {
     status.showInference();
     dropzone.setBusy(true);
     controls.setDisabled(true);
+    setAppBusy(true);
 
     try {
       const origW = workCanvas.width;
@@ -502,9 +535,11 @@ function boot() {
       // Upsample + blur + normalise to the work canvas's dims so the
       // heatmap aligns pixel-for-pixel with the image we're going to
       // composite it over.
+      // why: metrics computed on raw model output (smaller array) to avoid
+      // jank from sorting the full upsampled saliency (~2 M elements at HD).
+      const metrics = computeSaliencyMetrics(saliency);
       const processed = postprocess(saliency, inputDims, [origH, origW]);
 
-      const metrics = computeSaliencyMetrics(processed);
       updateHud(hud, {
         inferenceMs,
         duration: state.activeDuration,
@@ -557,6 +592,7 @@ function boot() {
     } finally {
       dropzone.setBusy(false);
       controls.setDisabled(false);
+      setAppBusy(false);
     }
   }
 

@@ -73,7 +73,7 @@
         Role "banner" is on the topnav rather than the old <header> so
         AT users find the landmark at the top of the visual hierarchy.
       -->
-      <nav class="fc-topnav" role="banner" aria-label="Primary navigation">
+      <nav class="fc-topnav" aria-label="Primary navigation">
         <div class="fc-topnav__brand">
           <span class="fc-topnav__wordmark" aria-label="Foveacast">Foveacast</span>
         </div>
@@ -106,6 +106,14 @@
             </svg>
           </button>
         </div>
+        <!--
+          Thin loading bar along the bottom edge of the topnav.
+          Toggled via the fc-topnav--busy class from main.js during
+          model loads and inference runs. Invisible at rest; no
+          accessible role needed since the status banner carries the
+          announcement.
+        -->
+        <div class="fc-topnav__loader" aria-hidden="true"></div>
       </nav>
 
       <!--
@@ -116,7 +124,7 @@
       -->
       <main id="fc-main" class="fc-main" tabindex="-1">
         <!-- Workspace header: page title + HUD stats. -->
-        <header class="fc-workspace-header" role="presentation">
+        <header class="fc-workspace-header">
           <div class="fc-workspace-header__title-wrap">
             <p class="fc-workspace-header__eyebrow">Analysis Workspace</p>
             <h1 class="fc-workspace-header__title">Predicted Attention</h1>
@@ -166,7 +174,7 @@
           ></p>
         </section>
 
-        <footer class="fc-footer" role="contentinfo">
+        <footer class="fc-footer">
           <!-- main.js populates this on load and refreshes on preset changes. -->
         </footer>
       </main>
