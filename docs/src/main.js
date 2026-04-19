@@ -525,9 +525,15 @@ function boot() {
     dropzone.setBusy(true);
     controls.setDisabled(true);
     setAppBusy(true, 'Analysing image\u2026');
-    // Yield to the browser so the overlay can paint before WASM
-    // inference potentially monopolises the main thread.
-    await new Promise((resolve) => { requestAnimationFrame(resolve); });
+    // Double-rAF: the single-rAF continuation runs during the rendering
+    // pipeline's own callback phase, so the browser never reaches the
+    // style/layout/paint step for that frame before we block the thread
+    // with synchronous WASM.  Scheduling a second rAF from inside the
+    // first causes the browser to complete one full paint cycle (showing
+    // the overlay) before our continuation fires and hands control to WASM.
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
 
     try {
       const origW = workCanvas.width;
