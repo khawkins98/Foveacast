@@ -332,6 +332,14 @@ a:hover {
   color: var(--fc-on-surface-dim);
   margin-top: 0.2rem;
   letter-spacing: 0.02em;
+  text-decoration: none;
+}
+
+/* When the subtitle is an anchor, give it a hover state. */
+a.fc-sidebar__subtitle:hover {
+  color: var(--fc-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 /* Intro / empty state — visible before controls are revealed. */
@@ -1257,58 +1265,77 @@ body.fc-page-dragover .fc-dropzone {
   }
 }
 
-/* -- Footer -------------------------------------------------------------- */
+/* -- Sidebar credits panel ----------------------------------------------- */
+/* why: credits moved from workspace footer into sidebar so attribution
+   is visible alongside controls, not buried below the output canvas. */
 
-.fc-footer {
+.fc-sidebar__credits {
   border-top: 1px solid var(--fc-outline-variant);
-  padding-top: 1.25rem;
-  margin-top: auto;
+  padding: 0.75rem 1.25rem 1rem;
   color: var(--fc-on-surface-dim);
-  font-size: 0.8rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
+  font-size: 0.75rem;
 }
 
-.fc-footer a {
+.fc-sidebar__credits-summary {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--fc-on-surface-dim);
+  cursor: pointer;
+  padding: 0;
+  list-style: none; /* hide default marker; chevron added via ::before */
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  user-select: none;
+}
+
+.fc-sidebar__credits-summary::-webkit-details-marker { display: none; }
+
+/* Chevron that rotates open/closed. */
+.fc-sidebar__credits-summary::before {
+  content: '';
+  display: inline-block;
+  width: 0.4em;
+  height: 0.4em;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
+  transform: rotate(45deg);
+}
+
+.fc-sidebar__credits .fc-footer__line {
+  margin: 0.5rem 0 0;
+}
+
+.fc-sidebar__credits a {
   color: var(--fc-primary);
 }
 
-.fc-footer a:hover {
+.fc-sidebar__credits a:hover {
   color: var(--fc-on-surface);
 }
 
-.fc-footer__line {
-  margin: 0;
-}
-
-.fc-footer__bias {
+.fc-sidebar__credits .fc-footer__bias {
   background: var(--fc-surface-mid);
   border-radius: var(--fc-radius-sm);
-  padding: 0.5rem 0.75rem;
+  padding: 0.4rem 0.6rem;
   color: var(--fc-on-surface-variant);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
 }
 
-.fc-footer__model {
+.fc-sidebar__credits .fc-footer__model {
   font-variant-numeric: tabular-nums;
-  color: var(--fc-on-surface-dim);
 }
 
-.fc-footer__more {
-  background: none;
-  border: none;
-  color: var(--fc-primary);
-  font: inherit;
-  padding: 0;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.fc-footer__more:hover {
-  color: var(--fc-on-surface);
-}
+/* fc-footer__line and fc-footer__bias/model class names are kept on the
+   elements for backward-compatibility with existing tests. */
+.fc-footer__line { margin: 0; }
 
 /* -- Mobile guard -------------------------------------------------------- */
 
