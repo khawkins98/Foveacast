@@ -9,7 +9,7 @@
  * Exports:
  *   renderOutput(viewModel, domNodes) → HTMLCanvasElement | null
  *   describeHeatmap(fixation, origDims) → string   (also used for aria-label)
- *   attachFixationTooltip(canvas) → void
+ *   attachCanvasTooltips(canvas) → void
  */
 
 import { drawPlainImageCanvas } from '../render/plain-canvas.js';
@@ -155,7 +155,7 @@ export function renderOutput(viewModel, { outputSection, outputCanvasWrap, outpu
     composite.setAttribute('aria-label', describeHeatmap(fixation, origDims, duration, overlays));
     outputCanvasWrap.appendChild(plain);
     outputCanvasWrap.appendChild(composite);
-    attachFixationTooltip(composite);
+    attachCanvasTooltips(composite);
     return composite;
   }
 
@@ -169,7 +169,7 @@ export function renderOutput(viewModel, { outputSection, outputCanvasWrap, outpu
   });
   composite.setAttribute('aria-label', describeHeatmap(fixation, origDims, duration, overlays));
   outputCanvasWrap.appendChild(composite);
-  attachFixationTooltip(composite);
+  attachCanvasTooltips(composite);
   return composite;
 }
 
@@ -207,13 +207,12 @@ export function describeHeatmap(fixation, origDims, durationLabel, overlays) {
 }
 
 // ---------------------------------------------------------------------------
-// Canvas hover tooltip — fixation sequence markers
+// Canvas hover tooltips — fixation sequence + centroid trajectory markers
 // ---------------------------------------------------------------------------
 
 /**
  * Lazily creates a single floating tooltip element on document.body that
- * follows the cursor and shows the fixation ordinal when the user hovers
- * over a numbered circle on the composite canvas.
+ * follows the cursor over the composite canvas.
  *
  * The tooltip is `position: fixed` so it works regardless of scroll
  * position or the canvas element's layout context.
@@ -234,38 +233,51 @@ function getOrCreateCanvasTooltip() {
 }
 
 /**
- * Attach hover tooltip handlers to a composite canvas that has
- * `_fixationMarkers` set. When the cursor enters a marker's hit area,
- * a small tooltip appears near the cursor showing "Fixation N of M".
- * Does nothing when `_fixationMarkers` is absent (no sequence drawn).
+ * Attach hover tooltip handlers to a composite canvas. Handles two marker
+ * sets stored by the render layer:
+ *
+ *   canvas._fixationMarkers   — [{x,y,r,ordinal}] from drawFixationSequence
+ *   canvas._trajectoryMarkers — [{x,y,r,label}]   from drawCentroidTrajectory
+ *
+ * When the cursor enters a hit area a small tooltip appears near the cursor.
+ * Fixation markers show "Fixation N of M — …"; trajectory dots show the
+ * duration label (e.g. "First glance (1 second)").
+ * Does nothing when both sets are absent.
  *
  * @param {HTMLCanvasElement} canvas
  */
-export function attachFixationTooltip(canvas) {
-  const markers = /** @type {any} */ (canvas)._fixationMarkers;
-  if (!markers || markers.length === 0) return;
+export function attachCanvasTooltips(canvas) {
+  const fixMarkers  = /** @type {any} */ (canvas)._fixationMarkers  || [];
+  const trajMarkers = /** @type {any} */ (canvas)._trajectoryMarkers || [];
+  if (fixMarkers.length === 0 && trajMarkers.length === 0) return;
 
-  const tip = getOrCreateCanvasTooltip();
-  const total = markers.length;
+  const tip   = getOrCreateCanvasTooltip();
+  const total = fixMarkers.length;
 
   canvas.addEventListener('pointermove', (e) => {
     // Map CSS-pixel offset to canvas-pixel coordinates.
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
+    const rect   = canvas.getBoundingClientRect();
+    const scaleX = canvas.width  / rect.width;
     const scaleY = canvas.height / rect.height;
     const cx = e.offsetX * scaleX;
     const cy = e.offsetY * scaleY;
 
-    // Hit-test: find the first marker whose expanded hit area contains
-    // the cursor (50% extra radius so small markers are easier to hover).
-    const hit = markers.find(
-      /** @param {{x:number,y:number,r:number}} m */ (m) =>
-        Math.hypot(cx - m.x, cy - m.y) <= m.r * 1.5,
-    );
+    // Fixation markers take priority (they're larger and drawn on top).
+    // 50% bonus radius makes small markers easier to hover.
+    /** @param {{x:number,y:number,r:number}} m */
+    const inRadius = (m) => Math.hypot(cx - m.x, cy - m.y) <= m.r * 1.5;
+
+    const hit = fixMarkers.find(inRadius) || trajMarkers.find(inRadius);
 
     if (hit) {
-      const suffix = hit.ordinal === 1 ? ' — most likely first fixation' : '';
-      tip.textContent = `Fixation ${hit.ordinal} of ${total}${suffix}`;
+      if (hit.ordinal !== undefined) {
+        // Fixation sequence marker.
+        const suffix = hit.ordinal === 1 ? ' — most likely first fixation' : '';
+        tip.textContent = `Fixation ${hit.ordinal} of ${total}${suffix}`;
+      } else {
+        // Centroid trajectory dot — show the duration label.
+        tip.textContent = hit.label;
+      }
       // Position 12 px right, 40 px above cursor so it doesn't obscure
       // the marker itself and stays visible near the top edge.
       tip.style.left = `${e.clientX + 12}px`;
@@ -280,3 +292,6 @@ export function attachFixationTooltip(canvas) {
     tip.classList.remove('fc-canvas-tooltip--visible');
   });
 }
+
+/** @deprecated Use attachCanvasTooltips instead. */
+export const attachFixationTooltip = attachCanvasTooltips;

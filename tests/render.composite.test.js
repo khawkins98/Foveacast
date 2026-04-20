@@ -196,7 +196,7 @@ describe('compositeImageAndHeatmap', () => {
     const fakeHeatmap = { width: 100, height: 100 };
     const centroidTrajectory = [{ x: 30, y: 30 }, { x: 70, y: 60 }];
 
-    compositeImageAndHeatmap(fakeImage, fakeHeatmap, {
+    const canvas = compositeImageAndHeatmap(fakeImage, fakeHeatmap, {
       showFixation: false,
       centroidTrajectory,
       centroidLabels: ['1s', '3s'],
@@ -207,6 +207,11 @@ describe('compositeImageAndHeatmap', () => {
     expect(ctxStub.lineTo).toHaveBeenCalled();
     // Labels drawn via fillText.
     expect(ctxStub.fillText).toHaveBeenCalled();
+    // Hit-test data attached for tooltip handlers.
+    const markers = /** @type {any} */ (canvas)._trajectoryMarkers;
+    expect(markers).toHaveLength(2);
+    expect(markers[0]).toMatchObject({ label: '1s' });
+    expect(markers[1]).toMatchObject({ label: '3s' });
   });
 
   it('skips trajectory when fewer than 2 points', () => {

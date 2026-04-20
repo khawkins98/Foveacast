@@ -201,7 +201,8 @@ export function compositeImageAndHeatmap(imageSource, heatmapCanvas, options = {
   // 6. Centroid trajectory: a dotted line connecting centroids for each
   //    duration that has been processed, with duration labels.
   if (centroidTrajectory && centroidTrajectory.length >= 2) {
-    drawCentroidTrajectory(ctx, centroidTrajectory, centroidLabels || []);
+    const trajMarkers = drawCentroidTrajectory(ctx, centroidTrajectory, centroidLabels || []);
+    /** @type {any} */ (canvas)._trajectoryMarkers = trajMarkers;
   }
 
   // 7. Optional watermark. Only the demo path passes one in — normal
@@ -477,14 +478,17 @@ function drawFixationSequence(ctx, fixations) {
  * centroids. Used to show how predicted attention shifts with longer
  * viewing time.
  *
+ * Returns hit-test records for each dot so callers can add hover tooltips.
+ *
  * @param {CanvasRenderingContext2D} ctx
  * @param {Array<{x: number, y: number}>} trajectory - Ordered by
  *   duration (e.g. 1 s → 3 s → 7 s).
  * @param {string[]} labels - Duration labels parallel to `trajectory`
  *   (e.g. ['1s', '3s', '7s']).
+ * @returns {Array<{x: number, y: number, r: number, label: string}>}
  */
 function drawCentroidTrajectory(ctx, trajectory, labels) {
-  if (trajectory.length < 2) return;
+  if (trajectory.length < 2) return [];
   ctx.save();
 
   // Scale to canvas size so dots and labels are legible on large screenshots.
@@ -534,4 +538,12 @@ function drawCentroidTrajectory(ctx, trajectory, labels) {
   }
 
   ctx.restore();
+
+  // Return hit-test data so callers can show hover tooltips.
+  return trajectory.map((pt, i) => ({
+    x: pt.x,
+    y: pt.y,
+    r: dotR,
+    label: labels[i] || String(i + 1),
+  }));
 }
