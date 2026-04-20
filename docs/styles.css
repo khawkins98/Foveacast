@@ -609,6 +609,55 @@ a:hover {
   opacity: 1;
 }
 
+/*
+ * Rule-of-thirds breakdown — a collapsible <details> in the HUD.
+ * Each cell's background intensity is driven by --cell-heat (0–1).
+ */
+.fc-hud__thirds {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.fc-hud__thirds > summary {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fc-on-surface-dim);
+  cursor: pointer;
+  user-select: none;
+  padding: 0.25rem 0;
+}
+
+.fc-hud__thirds > summary:focus-visible {
+  outline: 2px solid var(--fc-primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.fc-hud__thirds-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  margin-top: 0.35rem;
+}
+
+.fc-hud__thirds-cell {
+  background: color-mix(
+    in srgb,
+    var(--fc-primary) calc(var(--cell-heat, 0) * 55%),
+    var(--fc-surface-low)
+  );
+  border-radius: 2px;
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-on-surface);
+  text-align: center;
+  padding: 0.25rem 0.1rem;
+  min-width: 0;
+  transition: background 0.3s ease;
+}
+
 /* -- Status banner ------------------------------------------------------- */
 
 .fc-status {
@@ -949,6 +998,34 @@ body.fc-page-dragover .fc-dropzone {
 .fc-controls__select:focus {
   outline: 2px solid var(--fc-primary);
   outline-offset: 1px;
+}
+
+/* Overlay toggles — checkbox group inside the sidebar. */
+.fc-controls__overlays {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.fc-controls__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--fc-on-surface-variant);
+  padding: 0.2rem 0;
+  cursor: pointer;
+}
+
+.fc-controls__checkbox input[type="checkbox"] {
+  accent-color: var(--fc-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.fc-controls__checkbox--disabled {
+  opacity: 0.45;
+  pointer-events: none;
 }
 
 /* Export / download button — full-width CTA in the sidebar. */

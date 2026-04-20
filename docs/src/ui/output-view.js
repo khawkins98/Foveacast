@@ -34,6 +34,11 @@ import { compositeImageAndHeatmap } from '../render/saliency-canvas.js';
  *     saliencyMean: string,
  *     peakLocation: string,
  *   } | null,
+ *   fixationSequence?: Array<{x: number, y: number}> | null,
+ *   attentionZoneCanvas?: HTMLCanvasElement | null,
+ *   centroidTrajectory?: Array<{x: number, y: number}> | null,
+ *   centroidLabels?: string[] | null,
+ *   overlays?: { fixationSequence: boolean, attentionZones: boolean, centroidTrajectory: boolean },
  * }} OutputViewModel
  */
 
@@ -55,7 +60,30 @@ import { compositeImageAndHeatmap } from '../render/saliency-canvas.js';
  *   view is 'original' (no composite is produced in that mode).
  */
 export function renderOutput(viewModel, { outputSection, outputCanvasWrap, outputCaption }) {
-  const { image, heatmapCanvas, view, opacity, blendMode, fixation, origDims, duration, diagnostics } = viewModel;
+  const {
+    image,
+    heatmapCanvas,
+    view,
+    opacity,
+    blendMode,
+    fixation,
+    origDims,
+    duration,
+    diagnostics,
+    fixationSequence,
+    attentionZoneCanvas,
+    centroidTrajectory,
+    centroidLabels,
+    overlays,
+  } = viewModel;
+
+  // Build the per-composite overlay options from the overlay toggles.
+  const overlayOpts = {
+    fixationSequence: overlays?.fixationSequence && fixationSequence?.length ? fixationSequence : null,
+    attentionZoneCanvas: overlays?.attentionZones && attentionZoneCanvas ? attentionZoneCanvas : null,
+    centroidTrajectory: overlays?.centroidTrajectory && centroidTrajectory?.length >= 2 ? centroidTrajectory : null,
+    centroidLabels: centroidLabels ?? null,
+  };
 
   // Reveal the output section — it's hidden on first load so the
   // pre-drop page isn't cluttered by a reserved empty box (same
@@ -121,8 +149,9 @@ export function renderOutput(viewModel, { outputSection, outputCanvasWrap, outpu
       blendMode,
       showFixation: true,
       fixation,
+      ...overlayOpts,
     });
-    composite.setAttribute('aria-label', describeHeatmap(fixation, origDims, duration));
+    composite.setAttribute('aria-label', describeHeatmap(fixation, origDims, duration, overlays));
     outputCanvasWrap.appendChild(plain);
     outputCanvasWrap.appendChild(composite);
     return composite;
@@ -134,8 +163,9 @@ export function renderOutput(viewModel, { outputSection, outputCanvasWrap, outpu
     blendMode,
     showFixation: true,
     fixation,
+    ...overlayOpts,
   });
-  composite.setAttribute('aria-label', describeHeatmap(fixation, origDims, duration));
+  composite.setAttribute('aria-label', describeHeatmap(fixation, origDims, duration, overlays));
   outputCanvasWrap.appendChild(composite);
   return composite;
 }
@@ -150,16 +180,24 @@ export function renderOutput(viewModel, { outputSection, outputCanvasWrap, outpu
  * @param {{ x: number, y: number } | null} fixation
  * @param {[number, number] | null} origDims - `[h, w]` from the pipeline.
  * @param {string} [durationLabel] - Human label e.g. "Quick scan (3 s)".
+ * @param {{ fixationSequence?: boolean, attentionZones?: boolean, centroidTrajectory?: boolean }} [overlays]
  * @returns {string}
  */
-export function describeHeatmap(fixation, origDims, durationLabel) {
+export function describeHeatmap(fixation, origDims, durationLabel, overlays) {
   const prefix = durationLabel ? `${durationLabel} — ` : '';
   if (!fixation || !origDims) {
     return `${prefix}Predicted attention heatmap for uploaded screenshot.`;
   }
   const [h, w] = origDims;
+  const activeOverlays = [];
+  if (overlays?.fixationSequence) activeOverlays.push('fixation sequence');
+  if (overlays?.attentionZones)   activeOverlays.push('attention zones');
+  if (overlays?.centroidTrajectory) activeOverlays.push('duration trajectory');
+  const overlayNote = activeOverlays.length
+    ? ` Showing: ${activeOverlays.join(', ')}.`
+    : '';
   return (
-    `${prefix}Predicted attention heatmap for uploaded screenshot. ` +
+    `${prefix}Predicted attention heatmap for uploaded screenshot.${overlayNote} ` +
     `First-fixation estimate is at ${fixation.x} pixels across and ${fixation.y} pixels down ` +
     `on a ${w} by ${h} pixel image.`
   );

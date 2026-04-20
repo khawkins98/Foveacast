@@ -73,3 +73,52 @@ describe('createControls — duration picker', () => {
     expect(hint.textContent).toBe('');
   });
 });
+
+describe('createControls — overlay toggles', () => {
+  it('renders 3 overlay checkboxes', () => {
+    const controls = createControls();
+    const checks = controls.element.querySelectorAll('.fc-controls__overlays input[type="checkbox"]');
+    expect(checks.length).toBe(3);
+  });
+
+  it('trajectory checkbox starts disabled', () => {
+    const controls = createControls();
+    const allChecks = Array.from(controls.element.querySelectorAll('.fc-controls__overlays input[type="checkbox"]'));
+    // The trajectory checkbox is the last one.
+    const trajectory = allChecks[allChecks.length - 1];
+    expect(/** @type {HTMLInputElement} */ (trajectory).disabled).toBe(true);
+  });
+
+  it('setTrajectoryAvailable(true) enables the trajectory checkbox', () => {
+    const controls = createControls();
+    controls.setTrajectoryAvailable(true);
+    const allChecks = Array.from(controls.element.querySelectorAll('.fc-controls__overlays input[type="checkbox"]'));
+    const trajectory = allChecks[allChecks.length - 1];
+    expect(/** @type {HTMLInputElement} */ (trajectory).disabled).toBe(false);
+  });
+
+  it('setTrajectoryAvailable(false) disables the trajectory checkbox', () => {
+    const controls = createControls();
+    controls.setTrajectoryAvailable(true);
+    controls.setTrajectoryAvailable(false);
+    const allChecks = Array.from(controls.element.querySelectorAll('.fc-controls__overlays input[type="checkbox"]'));
+    const trajectory = allChecks[allChecks.length - 1];
+    expect(/** @type {HTMLInputElement} */ (trajectory).disabled).toBe(true);
+  });
+
+  it('fires onOverlayChange with the current overlay state when a checkbox changes', () => {
+    let lastOverlays = null;
+    const controls = createControls({
+      onOverlayChange: (o) => { lastOverlays = o; },
+    });
+    const allChecks = Array.from(controls.element.querySelectorAll('.fc-controls__overlays input[type="checkbox"]'));
+    // Toggle the first checkbox (fixationSequence).
+    const first = /** @type {HTMLInputElement} */ (allChecks[0]);
+    first.checked = true;
+    first.dispatchEvent(new Event('change'));
+    expect(lastOverlays).not.toBeNull();
+    expect(lastOverlays.fixationSequence).toBe(true);
+    expect(lastOverlays.attentionZones).toBe(false);
+    expect(lastOverlays.centroidTrajectory).toBe(false);
+  });
+});
