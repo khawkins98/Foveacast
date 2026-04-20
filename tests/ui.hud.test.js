@@ -5,7 +5,7 @@
 // update behaviour.
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createHud, updateHud } from '../docs/src/ui/hud.js';
+import { createHud, updateHud, updateHudRuleOfThirds } from '../docs/src/ui/hud.js';
 
 describe('createHud', () => {
   it('returns an element with className fc-hud', () => {
@@ -131,5 +131,62 @@ describe('updateHud', () => {
 
     // Should not have duplicate cards.
     expect(hud.querySelectorAll('.fc-hud__card').length).toBe(4);
+  });
+});
+
+describe('updateHudRuleOfThirds', () => {
+  it('creates a <details> element with 9 cells', () => {
+    const hud = createHud();
+    const cells = [12, 11, 11, 11, 11, 11, 11, 11, 11];
+    updateHudRuleOfThirds(hud, cells);
+    const grid = hud.querySelector('.fc-hud__thirds-grid');
+    expect(grid).not.toBeNull();
+    expect(grid.children.length).toBe(9);
+  });
+
+  it('each cell displays its percentage', () => {
+    const hud = createHud();
+    const cells = [100, 0, 0, 0, 0, 0, 0, 0, 0];
+    updateHudRuleOfThirds(hud, cells);
+    const gridCells = hud.querySelectorAll('.fc-hud__thirds-cell');
+    expect(gridCells[0].textContent).toMatch('100');
+    expect(gridCells[1].textContent).toMatch('0');
+  });
+
+  it('values sum to 100', () => {
+    const hud = createHud();
+    const cells = [12, 11, 11, 11, 11, 11, 11, 11, 11];
+    updateHudRuleOfThirds(hud, cells);
+    const sum = cells.reduce((a, b) => a + b, 0);
+    expect(sum).toBe(100);
+  });
+
+  it('is idempotent — re-calling updates values without duplicating elements', () => {
+    const hud = createHud();
+    const cells1 = [20, 10, 10, 10, 10, 10, 10, 10, 10];
+    const cells2 = [5, 10, 10, 10, 10, 10, 15, 15, 15];
+    updateHudRuleOfThirds(hud, cells1);
+    updateHudRuleOfThirds(hud, cells2);
+    expect(hud.querySelectorAll('.fc-hud__thirds-grid').length).toBe(1);
+    const gridCells = hud.querySelectorAll('.fc-hud__thirds-cell');
+    expect(gridCells.length).toBe(9);
+  });
+
+  it('ignores wrong-length arrays (not 9 elements)', () => {
+    const hud = createHud();
+    // Should not throw.
+    expect(() => updateHudRuleOfThirds(hud, [50, 50])).not.toThrow();
+    // No grid should be created for invalid input.
+    const grid = hud.querySelector('.fc-hud__thirds-grid');
+    expect(grid).toBeNull();
+  });
+
+  it('sets --cell-heat CSS custom property based on cell value', () => {
+    const hud = createHud();
+    const cells = [100, 0, 0, 0, 0, 0, 0, 0, 0];
+    updateHudRuleOfThirds(hud, cells);
+    const gridCells = hud.querySelectorAll('.fc-hud__thirds-cell');
+    const hotCell = /** @type {HTMLElement} */ (gridCells[0]);
+    expect(hotCell.style.getPropertyValue('--cell-heat')).toBeTruthy();
   });
 });

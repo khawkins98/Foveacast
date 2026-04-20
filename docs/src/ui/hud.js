@@ -72,7 +72,70 @@ export function updateHud(el, { inferenceMs, duration, spreadLevel, width, heigh
   setCard(el, 'fc-hud__resolution', `${width}\u202F\u00D7\u202F${height}`);
 }
 
-// -- Helpers ------------------------------------------------------------------
+/**
+ * Build or update a rule-of-thirds grid display below the HUD cards.
+ *
+ * Renders a 3×3 table where each cell shows the percentage of predicted
+ * attention mass that falls in that grid region. Uses `<details>` +
+ * `<summary>` so it is opt-in and does not push the HUD to an unwieldy
+ * height. Re-calls are idempotent — the existing `<details>` element is
+ * updated in place if found.
+ *
+ * @param {HTMLElement} hudEl - The element returned by `createHud`.
+ * @param {number[]} cells    - Nine integers summing to 100, row-major
+ *   (top-left = cells[0], bottom-right = cells[8]).
+ */
+export function updateHudRuleOfThirds(hudEl, cells) {
+  if (!cells || cells.length !== 9) return;
+
+  let details = /** @type {HTMLDetailsElement|null} */ (
+    hudEl.querySelector('.fc-hud__thirds')
+  );
+
+  if (!details) {
+    details = /** @type {HTMLDetailsElement} */ (document.createElement('details'));
+    details.className = 'fc-hud__thirds';
+
+    const summary = document.createElement('summary');
+    summary.textContent = 'Rule of thirds';
+    details.appendChild(summary);
+
+    // 3×3 grid of cells.
+    const grid = document.createElement('div');
+    grid.className = 'fc-hud__thirds-grid';
+    grid.setAttribute('aria-label', 'Rule-of-thirds attention grid');
+    details.appendChild(grid);
+
+    hudEl.appendChild(details);
+  }
+
+  const grid = /** @type {HTMLElement} */ (details.querySelector('.fc-hud__thirds-grid'));
+
+  // Update or create the 9 cell divs.
+  for (let i = 0; i < 9; i++) {
+    let cell = /** @type {HTMLElement|null} */ (grid.children[i]);
+    if (!cell) {
+      cell = document.createElement('div');
+      cell.className = 'fc-hud__thirds-cell';
+      grid.appendChild(cell);
+    }
+
+    const pct = cells[i];
+    cell.textContent = `${pct}%`;
+    // Scale background opacity 0–1 proportional to cell value for a
+    // quick heat-at-a-glance. Max expected single-cell value ≈ 40 %.
+    const opacity = Math.min(1, pct / 35);
+    cell.style.setProperty('--cell-heat', String(opacity));
+    cell.setAttribute('aria-label', `${ROT_REGION_LABELS[i]}: ${pct}%`);
+  }
+}
+
+/** @type {string[]} Human-readable labels for the 9 rule-of-thirds regions. */
+const ROT_REGION_LABELS = [
+  'Top-left', 'Top-centre', 'Top-right',
+  'Middle-left', 'Centre', 'Middle-right',
+  'Bottom-left', 'Bottom-centre', 'Bottom-right',
+];
 
 /**
  * Build a single `<div class="fc-hud__card …">` with a label and a

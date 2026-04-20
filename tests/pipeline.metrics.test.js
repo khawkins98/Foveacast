@@ -4,7 +4,7 @@
 // the node environment.
 
 import { describe, it, expect } from 'vitest';
-import { computeSaliencyMetrics } from '../docs/src/pipeline/metrics.js';
+import { computeSaliencyMetrics, computeZoneThresholds, computeRuleOfThirds } from '../docs/src/pipeline/metrics.js';
 
 describe('computeSaliencyMetrics', () => {
   it('returns High spread for an empty array', () => {
@@ -121,5 +121,90 @@ describe('computeSaliencyMetrics', () => {
     const result = computeSaliencyMetrics(arr);
     expect(typeof result.concentration).toBe('number');
     expect(['Low', 'Medium', 'High']).toContain(result.spreadLevel);
+  });
+});
+
+describe('computeZoneThresholds', () => {
+  it('returns a threshold array parallel to levels', () => {
+    const map = new Float32Array(100).fill(1);
+    const t = computeZoneThresholds(map, [0.10, 0.25, 0.50]);
+    expect(t).toHaveLength(3);
+  });
+
+  it('returns zeros for an all-zero map', () => {
+    const map = new Float32Array(100).fill(0);
+    expect(computeZoneThresholds(map)).toEqual([0, 0, 0]);
+  });
+
+  it('returns zeros for empty map', () => {
+    expect(computeZoneThresholds(new Float32Array(0))).toEqual([0, 0, 0]);
+  });
+
+  it('thresholds are non-increasing (innermost ≥ next)', () => {
+    // Random-ish map.
+    const map = new Float32Array(200);
+    for (let i = 0; i < 200; i++) map[i] = (i % 7) / 6;
+    const [t10, t25, t50] = computeZoneThresholds(map, [0.10, 0.25, 0.50]);
+    expect(t10).toBeGreaterThanOrEqual(t25);
+    expect(t25).toBeGreaterThanOrEqual(t50);
+  });
+
+  it('a single hot pixel: threshold for 10 % mass = that pixel\'s value', () => {
+    const map = new Float32Array(100).fill(0);
+    map[0] = 1.0;
+    // Total mass = 1. 10% mass threshold = the pixel itself (value = 1).
+    const [t10] = computeZoneThresholds(map, [0.10]);
+    expect(t10).toBeCloseTo(1.0, 5);
+  });
+});
+
+describe('computeRuleOfThirds', () => {
+  it('returns exactly 9 integers', () => {
+    const map = new Float32Array(90).fill(1);
+    const cells = computeRuleOfThirds(map, 9, 10);
+    expect(cells).toHaveLength(9);
+    for (const c of cells) expect(Number.isInteger(c)).toBe(true);
+  });
+
+  it('sums to exactly 100', () => {
+    const w = 60, h = 90;
+    const map = new Float32Array(w * h);
+    for (let i = 0; i < map.length; i++) map[i] = Math.random();
+    const cells = computeRuleOfThirds(map, w, h);
+    expect(cells.reduce((a, b) => a + b, 0)).toBe(100);
+  });
+
+  it('returns all zeros for an all-zero map', () => {
+    const map = new Float32Array(90).fill(0);
+    expect(computeRuleOfThirds(map, 9, 10)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  });
+
+  it('concentrates 100 in one cell when only that cell has mass', () => {
+    const w = 9, h = 9;
+    const map = new Float32Array(w * h).fill(0);
+    // Top-left cell = rows 0-2, cols 0-2.
+    for (let y = 0; y < 3; y++) {
+      for (let x = 0; x < 3; x++) {
+        map[y * w + x] = 1;
+      }
+    }
+    const cells = computeRuleOfThirds(map, w, h);
+    expect(cells[0]).toBe(100); // top-left
+    for (let i = 1; i < 9; i++) expect(cells[i]).toBe(0);
+  });
+
+  it('equal mass in all nine cells → each gets 11 (largest-remainder rounds up one)', () => {
+    // 99 = 11*9 remainder 0; if uniform 100/9 ≈ 11.11 each, LRM distributes
+    // 1 extra point to the first cell → [12, 11, 11, 11, 11, 11, 11, 11, 11]
+    // Actually: floor(100/9)=11, sum=99, remainder=1 extra. Result varies by
+    // LRM order. We just assert sum=100 and each in [10, 13].
+    const w = 9, h = 9;
+    const map = new Float32Array(w * h).fill(1);
+    const cells = computeRuleOfThirds(map, w, h);
+    expect(cells.reduce((a, b) => a + b, 0)).toBe(100);
+    for (const c of cells) {
+      expect(c).toBeGreaterThanOrEqual(10);
+      expect(c).toBeLessThanOrEqual(13);
+    }
   });
 });

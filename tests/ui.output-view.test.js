@@ -93,6 +93,10 @@ describe('renderOutput', () => {
       fillText: vi.fn(),
       translate: vi.fn(),
       rotate: vi.fn(),
+      // setLineDash needed by fixation-sequence and trajectory draw functions.
+      setLineDash: vi.fn(),
+      // canvas back-reference needed for proportional marker sizing.
+      canvas: { width: 200, height: 100 },
       globalCompositeOperation: 'source-over',
       globalAlpha: 1,
       strokeStyle: '',
@@ -232,5 +236,27 @@ describe('renderOutput', () => {
       domNodes(),
     );
     expect(document.getElementById('fc-diagnostics')).toBeNull();
+  });
+
+  it('creates #fc-canvas-tooltip in body when fixationSequence overlay is rendered', () => {
+    renderOutput(
+      {
+        image: fakeImage, heatmapCanvas: fakeHeatmap, view: 'overlay', opacity: 0.6,
+        fixation: fakeFixation, origDims: [100, 200], diagnostics: null,
+        fixationSequence: [{ x: 50, y: 25 }, { x: 80, y: 60 }],
+        overlays: { fixationSequence: true, attentionZones: false, centroidTrajectory: false },
+      },
+      domNodes(),
+    );
+    expect(document.getElementById('fc-canvas-tooltip')).not.toBeNull();
+  });
+
+  it('does not create #fc-canvas-tooltip when no overlay markers are present', () => {
+    renderOutput(
+      { image: fakeImage, heatmapCanvas: fakeHeatmap, view: 'overlay', opacity: 0.6,
+        fixation: null, origDims: null, diagnostics: null },
+      domNodes(),
+    );
+    expect(document.getElementById('fc-canvas-tooltip')).toBeNull();
   });
 });

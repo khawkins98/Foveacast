@@ -321,6 +321,14 @@ There is a potential workaround. Mamba includes a pure-PyTorch naive path reacha
 
 Recommended first step: a small spike that forces `use_fast_path=False` throughout the Mamba and VMamba stacks and checks whether `torch.onnx.export` produces a traceable graph on CPU. If yes, the browser path becomes feasible pending an ORT Web SIMD performance check. If no, the right move is to park V3 and revisit when the Mamba CPU-fallback story in upstream has matured — which it probably will, because the same blocker affects every Mamba-based vision model trying to reach the browser, so the community pressure to fix it is real.
 
+## 2026-04-20 — TDZ crash from calling a function before its const declaration
+
+While implementing the saliency visualization overlays, `updateHudRuleOfThirds(hud, ruleOfThirds)` was placed ten lines above `const ruleOfThirds = computeRuleOfThirds(...)`. This threw `ReferenceError: can't access lexical declaration 'ruleOfThirds' before initialization` at runtime — JavaScript's temporal dead zone (TDZ) for `const`/`let`.
+
+Unlike `var`, a `const` binding is in scope from the start of its enclosing block but is in the TDZ (and throws on access) until the declaration is reached. The linter did not catch it because the variable *was* declared in the same scope — just later. The fix is trivial: move the call to after the `const`.
+
+The lesson for this codebase: when adding a call that uses a newly computed value, write the computation first, then the call that consumes it. Reading top-to-bottom in declaration order is the right mental model.
+
 ## 2026-04-19 — Import + mount without assignment: a wiring gap the linter won't catch
 
 Every call to `updateHud` crashed with `ReferenceError: hud is not defined` because the line `const hud = createHud(hudMount)` was simply never written. The import existed (`createHud` was imported from `./ui/hud.js`), the mount was correctly retrieved (`hudMount = document.getElementById(...)`), but the assignment from import to instance was absent. A section comment indicated where it should go; the line itself didn't.

@@ -47,9 +47,9 @@ export const DURATIONS = /** @type {const} */ (['1s', '3s', '7s']);
  * @type {Readonly<Record<Duration, string>>}
  */
 export const DURATION_LABELS = Object.freeze({
-  '1s': 'First glance (1 s)',
-  '3s': 'Quick scan (3 s)',
-  '7s': 'Full viewing (7 s)',
+  '1s': 'First glance (1 second)',
+  '3s': 'Quick scan (3 seconds)',
+  '7s': 'Full viewing (7 seconds)',
 });
 
 /** @type {Duration} */
