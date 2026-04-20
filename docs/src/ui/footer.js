@@ -3,21 +3,38 @@
  *
  * Mounts the attribution and disclosure footer. Called once at boot;
  * the footer content is static — model version, credits, and bias note.
+ *
+ * When the target element is a <details>, the function prepends a
+ * <summary> so the block is collapsible — used for the sidebar credits
+ * panel. For any other element type the summary is omitted and the
+ * content is rendered flat (backward-compatible with tests that use a
+ * plain <footer> as the target).
  */
 
 /**
- * Populate the footer element with model attribution and bias disclosure.
+ * Populate the target element with model attribution and bias disclosure.
  *
- * @param {Element | null} footerEl - The `.fc-footer` element.
+ * @param {Element | null} targetEl - Target element. Pass a `<details>`
+ *   element for the collapsible sidebar panel; any other element type
+ *   receives the content flat (legacy / test behaviour).
  */
-export function mountFooter(footerEl) {
-  if (!footerEl) return;
-  footerEl.textContent = '';
+export function mountFooter(targetEl) {
+  if (!targetEl) return;
+  targetEl.textContent = '';
+
+  // When the target is a <details> element, prepend a <summary> label
+  // so the credits block is collapsible in the sidebar.
+  if (targetEl.tagName === 'DETAILS') {
+    const summary = document.createElement('summary');
+    summary.className = 'fc-sidebar__credits-summary';
+    summary.textContent = 'About this model';
+    targetEl.appendChild(summary);
+  }
 
   const modelLine = document.createElement('p');
   modelLine.className = 'fc-footer__line fc-footer__model';
   modelLine.textContent = 'Model: MSI-Net · fine-tuned on UEyes (240×320)';
-  footerEl.appendChild(modelLine);
+  targetEl.appendChild(modelLine);
 
   // Attribution lines are built as individual nodes rather than one
   // innerHTML blob so the anchors carry real DOM event hooks (and a
@@ -64,13 +81,13 @@ export function mountFooter(footerEl) {
       '). ',
     ),
   );
-  footerEl.appendChild(credits);
+  targetEl.appendChild(credits);
 
   const bias = document.createElement('p');
   bias.className = 'fc-footer__line fc-footer__bias';
   bias.textContent =
     "Heatmap outputs reflect population-average gaze patterns from the model's training data. They are estimates, not measurements of any specific person's attention.";
-  footerEl.appendChild(bias);
+  targetEl.appendChild(bias);
 }
 
 /**

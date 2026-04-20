@@ -287,7 +287,7 @@ function boot() {
   });
 
   // --- Footer (attribution) --------------------------------------------
-  mountFooter(document.querySelector('.fc-footer'));
+  mountFooter(document.querySelector('#fc-sidebar-credits'));
 
   // --- HUD stats panel -------------------------------------------------
   const hud = createHud(hudMount);

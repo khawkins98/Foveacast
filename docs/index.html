@@ -203,10 +203,6 @@
             hidden
           ></p>
         </section>
-
-        <footer class="fc-footer">
-          <!-- main.js populates this on load and refreshes on preset changes. -->
-        </footer>
       </main>
 
       <!--
@@ -225,7 +221,14 @@
       <aside class="fc-sidebar" aria-label="Analysis controls">
         <div class="fc-sidebar__header">
           <span class="fc-sidebar__title">Analysis Controls</span>
-          <span class="fc-sidebar__subtitle">MSI-Net · Neural Model</span>
+          <!--
+            Subtitle links to the MSI-Net paper so curious users can
+            follow the reference without leaving the sidebar.
+          -->
+          <a class="fc-sidebar__subtitle"
+             href="https://doi.org/10.1016/j.neunet.2020.05.004"
+             rel="noopener noreferrer"
+             title="MSI-Net: Multi-scale self-attention for visual saliency (Kroner et al. 2020, MIT)">MSI-Net · saliency model</a>
         </div>
 
         <!--
@@ -253,6 +256,16 @@
           When it becomes visible, the sidebar intro is hidden.
         -->
         <div id="fc-controls-mount" class="fc-mount fc-mount--controls"></div>
+
+        <!--
+          Model credits and bias note — mounted by main.js via mountFooter.
+          Placed here rather than the workspace footer so the attribution
+          is visible alongside the analysis controls rather than buried
+          below the output canvas.
+        -->
+        <details class="fc-sidebar__credits" id="fc-sidebar-credits">
+          <!-- main.js populates this on load. -->
+        </details>
 
         <nav class="fc-sidebar__footer" aria-label="Secondary links">
           <a class="fc-sidebar__footer-link"
