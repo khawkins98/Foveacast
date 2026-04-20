@@ -570,7 +570,8 @@ a:hover {
 
 .fc-status {
   background: var(--fc-surface-mid);
-  border-left: 3px solid var(--fc-primary-container);
+  /* why: left-border card pattern is a generic AI-slop tell; tinted
+     backgrounds carry the semantic signal without the dated stripe. */
   border-radius: var(--fc-radius);
   padding: 0.9rem 1.1rem;
   display: flex;
@@ -580,16 +581,16 @@ a:hover {
 }
 
 .fc-status--error {
-  border-left-color: var(--fc-danger);
   background: color-mix(in srgb, var(--fc-danger) 8%, var(--fc-surface-mid));
 }
 
 .fc-status--ready {
-  border-left-color: var(--fc-success);
+  /* why: ready had no tint before — the left-border was the only visual
+     distinction. Add a subtle success tint now that the border is gone. */
+  background: color-mix(in srgb, var(--fc-success) 8%, var(--fc-surface-mid));
 }
 
 .fc-status--demo {
-  border-left-color: #c97b00;
   background: color-mix(in srgb, #c97b00 8%, var(--fc-surface-mid));
 }
 
