@@ -62,7 +62,8 @@
 
   /* Layout */
   --fc-topnav-h:           64px;
-  --fc-sidebar-w:          256px;
+  --fc-sidebar-w:          256px; /* retained as a reference; sidebar removed in single-column redesign */
+  --fc-toolbar-h:          80px;
 
   /* Shadows — tinted to background hue, not pure black. */
   --fc-shadow-ambient:     0 4px 24px rgba(7, 14, 29, 0.5);
@@ -293,124 +294,20 @@ a:hover {
   100% { transform: translateX(280%); }
 }
 
-/* -- Sidebar ------------------------------------------------------------- */
+/* -- Sidebar removed (single-column redesign) ----------------------------- */
+/* .fc-sidebar and related rules removed. The .fc-sidebar__credits /
+   .fc-sidebar__credits-summary class names are kept in the rules below
+   because footer.js still emits them — renaming would be churn with no
+   user-visible benefit. The <details> element now lives in .fc-page-footer
+   inside <main>. */
 
-.fc-sidebar {
-  position: fixed;
-  top: var(--fc-topnav-h);
-  left: 0;
-  width: var(--fc-sidebar-w);
-  height: calc(100vh - var(--fc-topnav-h));
-  z-index: 90;
-  background: var(--fc-surface-low);
-  /* Ambient shadow to separate sidebar from main canvas. */
-  box-shadow: 1px 0 0 var(--fc-outline-variant);
-
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  padding: 1.5rem 0 1rem;
-}
-
-.fc-sidebar__header {
-  padding: 0 1.25rem 1.25rem;
-  border-bottom: 1px solid var(--fc-outline-variant);
-  margin-bottom: 1rem;
-}
-
-.fc-sidebar__title {
-  display: block;
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: var(--fc-primary);
-}
-
-.fc-sidebar__subtitle {
-  display: block;
-  font-size: 0.65rem;
-  color: var(--fc-on-surface-dim);
-  margin-top: 0.2rem;
-  letter-spacing: 0.02em;
-  text-decoration: none;
-}
-
-/* When the subtitle is an anchor, give it a hover state. */
-a.fc-sidebar__subtitle:hover {
-  color: var(--fc-primary);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-/* Intro / empty state — visible before controls are revealed. */
-.fc-sidebar__intro {
-  padding: 0 1.25rem;
-  flex: 1;
-}
-
-/* Persistent privacy/trust note — shown at all times under the sidebar header. */
-.fc-sidebar__trust {
-  margin: 0;
-  padding: 0.5rem 1.25rem;
-  font-size: 0.7rem;
-  color: var(--fc-on-surface-dim);
-  line-height: 1.4;
-  border-bottom: 1px solid var(--fc-outline-variant);
-}
-
-.fc-sidebar__intro-text {
-  font-size: 0.8rem;
-  color: var(--fc-on-surface-variant);
-  line-height: 1.5;
-  margin: 0 0 0.75rem;
-}
-
-.fc-sidebar__intro-list {
-  margin: 0;
-  padding-left: 1rem;
-  font-size: 0.75rem;
-  color: var(--fc-on-surface-dim);
-  line-height: 1.6;
-}
-
-.fc-sidebar__intro-list li + li {
-  margin-top: 0.15rem;
-}
-
-/* Footer links at the bottom of the sidebar. */
-.fc-sidebar__footer {
-  padding: 1rem 1.25rem 0;
-  border-top: 1px solid var(--fc-outline-variant);
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.fc-sidebar__footer-link {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  text-decoration: none;
-  color: var(--fc-on-surface-dim);
-  padding: 0.45rem 0.5rem;
-  border-radius: var(--fc-radius-sm);
-  transition: color var(--fc-dur-fast) var(--fc-ease),
-              background var(--fc-dur-fast) var(--fc-ease);
-}
-
-.fc-sidebar__footer-link:hover {
-  color: var(--fc-primary);
-  background: var(--fc-surface-mid);
-}
-
-/* -- Main workspace ------------------------------------------------------ */
+/* -- Main workspace -------------------------------------------------------
 
 .fc-main {
-  margin-left: var(--fc-sidebar-w);
+  /* why: no sidebar offset in the single-column design; centred instead. */
+  max-width: 960px;
+  margin-left: auto;
+  margin-right: auto;
   /* scroll-margin-top ensures the #fc-main anchor (skip link target)
      is not hidden under the fixed topnav. */
   scroll-margin-top: var(--fc-topnav-h);
@@ -420,6 +317,15 @@ a.fc-sidebar__subtitle:hover {
   flex-direction: column;
   gap: 1.5rem;
   padding: calc(var(--fc-topnav-h) + 2rem) 2rem 2rem;
+}
+
+/*
+ * When the bottom toolbar is visible, add extra bottom padding so
+ * content at the end of the column is not obscured by the fixed bar.
+ * Added by showControls() in main.js once the toolbar becomes active.
+ */
+.fc-main--has-toolbar {
+  padding-bottom: calc(var(--fc-toolbar-h) + 2rem);
 }
 
 .fc-main:focus {
@@ -1488,31 +1394,14 @@ details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
   margin: 0;
 }
 
-/* -- Responsive: narrow desktop / tablet (< 900 px) ---------------------
+/* -- Responsive: narrow viewport (< 900 px) ------------------------------ */
 /*
- * Below 900 px the sidebar leaves fixed positioning and stacks below
- * the main workspace in normal document flow. Since <aside> follows
- * <main> in the DOM, controls remain reachable after inference completes
- * without any JavaScript reparenting.
+ * Tighten horizontal padding on narrower viewports and hide the
+ * topnav link list (navigation is available via in-page anchors and
+ * the bottom toolbar).
  */
 @media (max-width: 899px) {
-  .fc-sidebar {
-    position: static;
-    width: 100%;
-    height: auto;
-    box-shadow: none;
-    border-top: 1px solid var(--fc-outline-variant);
-    padding: 1.5rem 1.25rem 1rem;
-  }
-
-  /* margin-top: auto has no effect in normal block flow — replace with
-     explicit spacing so the footer links don't collapse into the controls. */
-  .fc-sidebar__footer {
-    margin-top: 1.5rem;
-  }
-
   .fc-main {
-    margin-left: 0;
     padding-left: 1.25rem;
     padding-right: 1.25rem;
   }
@@ -1520,6 +1409,216 @@ details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
   .fc-topnav__links {
     display: none;
   }
+}
+
+/* -- Empty-state intro (pre-inference, single-column) --------------------- */
+
+.fc-intro {
+  padding: 0.75rem 0;
+}
+
+.fc-intro__text {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--fc-on-surface-variant);
+  margin: 0 0 0.75rem;
+}
+
+.fc-intro__tips {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.8rem;
+  color: var(--fc-on-surface-dim);
+  line-height: 1.6;
+}
+
+.fc-intro__tips li + li {
+  margin-top: 0.15rem;
+}
+
+/* -- Page footer: trust note, credits, secondary nav --------------------- */
+/*
+ * Persistent at the bottom of the main column regardless of inference
+ * state. The trust note is here rather than inside #fc-intro so it
+ * stays visible after showControls() hides the intro.
+ */
+
+.fc-page-footer {
+  border-top: 1px solid var(--fc-outline-variant);
+  padding-top: 1.5rem;
+  margin-top: 0.5rem;
+}
+
+.fc-trust-note {
+  margin: 0 0 0.75rem;
+  font-size: 0.75rem;
+  color: var(--fc-on-surface-dim);
+  line-height: 1.4;
+}
+
+.fc-footer-nav {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.fc-footer-nav__link {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--fc-on-surface-dim);
+  text-decoration: none;
+  letter-spacing: 0.01em;
+  transition: color var(--fc-dur-fast) var(--fc-ease);
+}
+
+.fc-footer-nav__link:hover {
+  color: var(--fc-primary);
+}
+
+.fc-footer-nav__link:focus-visible {
+  outline: 2px solid var(--fc-focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* -- Bottom toolbar ------------------------------------------------------- */
+/*
+ * Revealed after the first inference to provide analysis controls.
+ * Fixed to the bottom of the viewport (mobile-app bar pattern).
+ *
+ * z-index 90 — same as the old sidebar, below the busy overlay at 95.
+ * overflow: visible (not clipped) so the Visualizations <details> popup
+ * can escape upward. Horizontal width is handled by max-width: 960px on
+ * the inner .fc-controls row, matching the main content column.
+ */
+.fc-toolbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 90;
+  background: var(--fc-surface-low);
+  border-top: 1px solid var(--fc-outline-variant);
+  box-shadow: 0 -2px 12px rgba(7, 14, 29, 0.3);
+  /* why: overflow must stay visible so upward popups are not clipped */
+  overflow: visible;
+}
+
+/* -- Toolbar controls layout --------------------------------------------- */
+/*
+ * Override the sidebar-era vertical column layout with a horizontal row.
+ * Each control group becomes an inline slot separated by a right border.
+ * max-width: 960px centres the row to match the main content column.
+ */
+
+.fc-toolbar .fc-controls {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  max-width: 960px;
+  margin: 0 auto;
+  /* why: reset sidebar padding so slots fill the bar flush */
+  padding: 0;
+  overflow: visible;
+}
+
+.fc-toolbar .fc-controls__field,
+.fc-toolbar .fc-controls__field--group {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  /* why: reset sidebar-era bottom border; right border is the divider */
+  padding: 0.45rem 0.75rem;
+  border-bottom: none;
+  border-right: 1px solid var(--fc-outline-variant);
+  margin: 0;
+  gap: 0.1rem;
+  white-space: nowrap;
+}
+
+/* Labels and legends: micro header for each toolbar slot */
+.fc-toolbar .fc-controls__field > label,
+.fc-toolbar .fc-controls__field > legend,
+.fc-toolbar .fc-controls__legend {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--fc-on-surface-dim);
+  padding: 0;
+  margin-bottom: 0.1rem;
+  /* why: legends need display:block inside flex containers */
+  display: block;
+  float: none;
+}
+
+.fc-toolbar .fc-controls__radio {
+  font-size: 0.68rem;
+  padding: 0.04rem 0;
+  white-space: nowrap;
+}
+
+.fc-toolbar .fc-controls__field--opacity {
+  min-width: 150px;
+}
+
+.fc-toolbar .fc-controls__slider {
+  width: 100%;
+}
+
+.fc-toolbar .fc-controls__select {
+  width: auto;
+  min-width: 100px;
+}
+
+/* Visualizations <details>: sits as an inline slot, opens upward */
+.fc-toolbar .fc-controls__overlays-details {
+  border-bottom: none;
+  border-right: 1px solid var(--fc-outline-variant);
+  /* why: popup uses position:absolute anchored to this element */
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.fc-toolbar .fc-controls__overlays-summary {
+  padding: 0.45rem 0.75rem;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+/* Remove the border that appears under the summary when open (not needed
+   in toolbar context where the popup floats above). */
+.fc-toolbar .fc-controls__overlays-details[open] .fc-controls__overlays-summary {
+  border-bottom: none;
+}
+
+/* Popup panel: positioned above the toolbar */
+.fc-toolbar .fc-controls__overlays-details[open] .fc-controls__overlays {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  min-width: 220px;
+  padding: 0.75rem 1rem;
+  background: var(--fc-surface-high);
+  border: 1px solid var(--fc-outline-variant);
+  border-bottom: none;
+  border-radius: var(--fc-radius-sm) var(--fc-radius-sm) 0 0;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+/* Download button: pushed to the trailing end of the toolbar row */
+.fc-toolbar .fc-controls__download {
+  /* why: reset sidebar's full-width calc; make it auto-sized */
+  margin: 0.4rem 0.75rem 0.4rem auto;
+  width: auto;
+  align-self: center;
+  flex-shrink: 0;
 }
 
 /* -- Reduced motion ------------------------------------------------------ */

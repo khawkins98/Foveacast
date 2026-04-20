@@ -191,6 +191,7 @@ function boot() {
   const outputCaption = mustGet('fc-output-caption');
   const hudMount = mustGet('fc-hud-mount');
   const reportMount = mustGet('fc-report-mount');
+  const toolbarEl = mustGet('fc-toolbar');
 
   // --- Status banner ----------------------------------------------------
   const status = createStatus();
@@ -298,13 +299,20 @@ function boot() {
   const report = createReport({ mountEl: reportMount });
 
   /**
-   * Reveal the controls panel and hide the sidebar's empty-state intro.
+   * Reveal the bottom toolbar and hide the pre-inference intro section.
    * Called from both the demo path and the real-inference path so both
    * share the same reveal behaviour.
    */
   function showControls() {
     controls.setVisible(true);
-    const intro = document.getElementById('fc-sidebar-intro');
+    // Reveal the bottom toolbar (was `hidden` in HTML).
+    toolbarEl.hidden = false;
+    // Add padding so content at the bottom of the column isn't obscured
+    // by the fixed toolbar bar.
+    document.getElementById('fc-main')?.classList.add('fc-main--has-toolbar');
+    // Hide the empty-state intro (renamed from fc-sidebar-intro in the
+    // single-column redesign).
+    const intro = document.getElementById('fc-intro');
     if (intro) intro.hidden = true;
     // Swap out the full dropzone for the compact new-image button.
     // Drag-anywhere and clipboard paste remain active via page-drop.js

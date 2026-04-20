@@ -245,4 +245,54 @@ test.describe('Foveacast — demo mode end-to-end', () => {
     });
     expect(hasColourSpread).toBe(true);
   });
+
+  test('toolbar is hidden on fresh load and revealed after demo renders', async ({
+    page,
+  }) => {
+    // The toolbar should start with [hidden] so it is invisible before
+    // any inference completes (single-column layout: controls live in
+    // the bottom toolbar, not in a sidebar).
+    await page.goto('/');
+    const toolbar = page.locator('#fc-toolbar');
+    await expect(toolbar).toBeHidden({ timeout: 5_000 });
+
+    // After demo renders, the toolbar must be visible.
+    await page.goto('/?demo=1');
+    await expect(page.locator('#fc-output[data-foveacast-ready="true"]')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(toolbar).toBeVisible();
+  });
+
+  test('visualizations popup opens above the toolbar and is not clipped', async ({
+    page,
+  }) => {
+    // The Visualizations <details> popup must appear above the fixed
+    // toolbar, not be clipped by it. We verify this by measuring the
+    // popup's top edge relative to the toolbar's top edge — if the
+    // popup is fully above the toolbar, its bottom edge should be at
+    // or above the toolbar's top edge.
+    await page.goto('/?demo=1');
+    await expect(page.locator('#fc-output[data-foveacast-ready="true"]')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Open the visualizations panel.
+    const summary = page.locator('.fc-controls__overlays-summary').first();
+    await summary.click();
+
+    const popup = page.locator('.fc-controls__overlays').first();
+    await expect(popup).toBeVisible({ timeout: 3_000 });
+
+    const [popupBox, toolbarBox] = await Promise.all([
+      popup.boundingBox(),
+      page.locator('#fc-toolbar').boundingBox(),
+    ]);
+
+    // Popup must be at least partially above the toolbar (not clipped below it).
+    expect(popupBox).not.toBeNull();
+    expect(toolbarBox).not.toBeNull();
+    // The popup's bottom edge should be at or above the toolbar's top edge.
+    expect(popupBox.y + popupBox.height).toBeLessThanOrEqual(toolbarBox.y + 2);
+  });
 });
