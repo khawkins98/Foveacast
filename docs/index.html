@@ -201,6 +201,13 @@
             aria-live="polite"
             hidden
           ></p>
+          <!--
+            Inline canvas controls: view-mode picker + opacity slider +
+            download button. Mounted here (next to the canvas) so they
+            are visually associated with the image they control. Hidden
+            until the first inference result is ready.
+          -->
+          <div id="fc-canvas-controls-mount" class="fc-canvas-controls-wrap"></div>
         </section>
 
         <!--
@@ -242,12 +249,11 @@
         bar pattern). overflow: visible (see CSS) so the Visualizations
         <details> popup can expand upward without clipping.
       -->
-      <div id="fc-toolbar" class="fc-toolbar" hidden aria-label="Analysis controls">
+      <div id="fc-toolbar" class="fc-toolbar" hidden aria-label="Loading indicator">
         <!--
           Background-duration progress bar — shown while the 1 s and 7 s
-          models load after the primary 3 s inference. Sits above the
-          controls row inside the fixed toolbar so it remains visible when
-          the user has scrolled down to read the report.
+          models load after the primary 3 s inference. Sits inside the fixed
+          toolbar so it remains visible when the user has scrolled the report.
           aria-hidden: the HUD and duration tab states carry the a11y narrative.
         -->
         <div id="fc-bg-progress" class="fc-bg-progress" aria-hidden="true" hidden>
@@ -256,7 +262,6 @@
           </div>
           <p class="fc-bg-progress__label">Loading other durations…</p>
         </div>
-        <div id="fc-controls-mount" class="fc-mount fc-mount--controls"></div>
       </div>
     </div>
 
