@@ -330,7 +330,9 @@ function boot() {
    */
   function updateReport() {
     if (!state.lastImage) return;
-    report.update({ image: state.lastImage, durationResults: state.durationResults, activeDuration: state.activeDuration });
+    // why: displayedDuration (not activeDuration) is what's visible on screen;
+    // the report hero and tab highlight must match the canvas, not the loaded model.
+    report.update({ image: state.lastImage, durationResults: state.durationResults, activeDuration: state.displayedDuration });
   }
 
   /**
@@ -436,7 +438,12 @@ function boot() {
     controls.setDuration(duration);
     setOutputWaiting(false);
     renderOutput();
-  }
+    // Sync the report hero and tab highlight to what's now displayed.
+    // why: applyDurationResult is the single place where #fc-output and
+    // state.displayedDuration are updated, so updateReport must be
+    // called here to keep the report in sync (tab click fast-path
+    // does not re-enter the inference flow).
+    updateReport();
 
   /**
    * Background-load the 1 s and 7 s models, run inference on the
