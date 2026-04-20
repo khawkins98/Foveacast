@@ -9,6 +9,7 @@
  * Exports:
  *   renderOutput(viewModel, domNodes) → HTMLCanvasElement | null
  *   describeHeatmap(fixation, origDims) → string   (also used for aria-label)
+ *   attachFixationTooltip(canvas) → void
  */
 
 import { drawPlainImageCanvas } from '../render/plain-canvas.js';
@@ -154,6 +155,7 @@ export function renderOutput(viewModel, { outputSection, outputCanvasWrap, outpu
     composite.setAttribute('aria-label', describeHeatmap(fixation, origDims, duration, overlays));
     outputCanvasWrap.appendChild(plain);
     outputCanvasWrap.appendChild(composite);
+    attachFixationTooltip(composite);
     return composite;
   }
 
@@ -167,6 +169,7 @@ export function renderOutput(viewModel, { outputSection, outputCanvasWrap, outpu
   });
   composite.setAttribute('aria-label', describeHeatmap(fixation, origDims, duration, overlays));
   outputCanvasWrap.appendChild(composite);
+  attachFixationTooltip(composite);
   return composite;
 }
 
@@ -201,4 +204,79 @@ export function describeHeatmap(fixation, origDims, durationLabel, overlays) {
     `First-fixation estimate is at ${fixation.x} pixels across and ${fixation.y} pixels down ` +
     `on a ${w} by ${h} pixel image.`
   );
+}
+
+// ---------------------------------------------------------------------------
+// Canvas hover tooltip — fixation sequence markers
+// ---------------------------------------------------------------------------
+
+/**
+ * Lazily creates a single floating tooltip element on document.body that
+ * follows the cursor and shows the fixation ordinal when the user hovers
+ * over a numbered circle on the composite canvas.
+ *
+ * The tooltip is `position: fixed` so it works regardless of scroll
+ * position or the canvas element's layout context.
+ *
+ * @returns {HTMLElement}
+ */
+function getOrCreateCanvasTooltip() {
+  let tip = document.getElementById('fc-canvas-tooltip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'fc-canvas-tooltip';
+    tip.setAttribute('role', 'tooltip');
+    tip.setAttribute('aria-live', 'polite');
+    tip.className = 'fc-canvas-tooltip';
+    document.body.appendChild(tip);
+  }
+  return tip;
+}
+
+/**
+ * Attach hover tooltip handlers to a composite canvas that has
+ * `_fixationMarkers` set. When the cursor enters a marker's hit area,
+ * a small tooltip appears near the cursor showing "Fixation N of M".
+ * Does nothing when `_fixationMarkers` is absent (no sequence drawn).
+ *
+ * @param {HTMLCanvasElement} canvas
+ */
+export function attachFixationTooltip(canvas) {
+  const markers = /** @type {any} */ (canvas)._fixationMarkers;
+  if (!markers || markers.length === 0) return;
+
+  const tip = getOrCreateCanvasTooltip();
+  const total = markers.length;
+
+  canvas.addEventListener('pointermove', (e) => {
+    // Map CSS-pixel offset to canvas-pixel coordinates.
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const cx = e.offsetX * scaleX;
+    const cy = e.offsetY * scaleY;
+
+    // Hit-test: find the first marker whose expanded hit area contains
+    // the cursor (50% extra radius so small markers are easier to hover).
+    const hit = markers.find(
+      /** @param {{x:number,y:number,r:number}} m */ (m) =>
+        Math.hypot(cx - m.x, cy - m.y) <= m.r * 1.5,
+    );
+
+    if (hit) {
+      const suffix = hit.ordinal === 1 ? ' — most likely first fixation' : '';
+      tip.textContent = `Fixation ${hit.ordinal} of ${total}${suffix}`;
+      // Position 12 px right, 40 px above cursor so it doesn't obscure
+      // the marker itself and stays visible near the top edge.
+      tip.style.left = `${e.clientX + 12}px`;
+      tip.style.top  = `${e.clientY - 40}px`;
+      tip.classList.add('fc-canvas-tooltip--visible');
+    } else {
+      tip.classList.remove('fc-canvas-tooltip--visible');
+    }
+  });
+
+  canvas.addEventListener('pointerleave', () => {
+    tip.classList.remove('fc-canvas-tooltip--visible');
+  });
 }

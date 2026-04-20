@@ -192,7 +192,10 @@ export function compositeImageAndHeatmap(imageSource, heatmapCanvas, options = {
   // 5. Fixation sequence: numbered circles with saccade lines.
   //    Only drawn when `fixationSequence` array has ≥ 2 entries.
   if (fixationSequence && fixationSequence.length >= 1) {
-    drawFixationSequence(ctx, fixationSequence);
+    const markers = drawFixationSequence(ctx, fixationSequence);
+    // Attach hit-test data to the canvas element so the UI layer can
+    // show hover tooltips without re-computing the rendered radius.
+    /** @type {any} */ (canvas)._fixationMarkers = markers;
   }
 
   // 6. Centroid trajectory: a dotted line connecting centroids for each
@@ -391,11 +394,15 @@ export function renderAttentionZoneCanvas(normalisedMap, width, height, threshol
  * its ordinal number so the sequence is conveyed without relying on
  * colour alone (WCAG 2.1 SC 1.4.1).
  *
+ * Returns an array of hit-test records for each marker so callers can
+ * implement interactive hover behaviour (e.g. canvas tooltips).
+ *
  * @param {CanvasRenderingContext2D} ctx
  * @param {Array<{x: number, y: number}>} fixations - Ordered sequence.
+ * @returns {Array<{x: number, y: number, r: number, ordinal: number}>}
  */
 function drawFixationSequence(ctx, fixations) {
-  if (fixations.length === 0) return;
+  if (fixations.length === 0) return [];
   ctx.save();
 
   // Scale markers to canvas size so they're legible on large screenshots.
@@ -459,6 +466,10 @@ function drawFixationSequence(ctx, fixations) {
   }
 
   ctx.restore();
+
+  // Return hit-test data so callers can show hover tooltips on the
+  // canvas element without needing to know the internally-computed radius.
+  return fixations.map((f, i) => ({ x: f.x, y: f.y, r: circleR, ordinal: i + 1 }));
 }
 
 /**

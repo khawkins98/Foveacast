@@ -1118,6 +1118,44 @@ body.fc-page-dragover .fc-dropzone {
   }
 }
 
+/* Canvas hover tooltip — fixation sequence markers.
+ *
+ * Fixed-position pill that follows the cursor while hovering over a
+ * numbered fixation circle on the composite canvas. Kept separate from
+ * .fc-tooltip (which is absolutely-positioned relative to a parent) so
+ * the two systems don't interfere. */
+.fc-canvas-tooltip {
+  position: fixed;
+  pointer-events: none;
+  background: var(--fc-surface-highest);
+  color: var(--fc-on-surface);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.3;
+  padding: 0.3rem 0.6rem;
+  border-radius: var(--fc-radius-sm);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity var(--fc-dur-fast) var(--fc-ease),
+    transform var(--fc-dur-fast) var(--fc-ease);
+  z-index: 300;
+}
+
+.fc-canvas-tooltip--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-canvas-tooltip {
+    transition: opacity var(--fc-dur-fast) var(--fc-ease);
+    transform: none;
+  }
+}
+
 /* Export / download button — full-width CTA in the sidebar. */
 .fc-controls__download {
   margin: 0.75rem 1.25rem;

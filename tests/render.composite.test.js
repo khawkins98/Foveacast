@@ -161,7 +161,7 @@ describe('compositeImageAndHeatmap', () => {
     const fakeHeatmap = { width: 100, height: 100 };
     const fixationSequence = [{ x: 20, y: 20 }, { x: 60, y: 40 }, { x: 50, y: 70 }];
 
-    compositeImageAndHeatmap(fakeImage, fakeHeatmap, {
+    const canvas = compositeImageAndHeatmap(fakeImage, fakeHeatmap, {
       showFixation: false,
       fixationSequence,
     });
@@ -170,6 +170,11 @@ describe('compositeImageAndHeatmap', () => {
     expect(ctxStub.arc).toHaveBeenCalled();
     // And setLineDash for the saccade lines.
     expect(ctxStub.setLineDash).toHaveBeenCalled();
+    // Hit-test data is attached to the canvas for tooltip handlers.
+    const markers = /** @type {any} */ (canvas)._fixationMarkers;
+    expect(markers).toHaveLength(fixationSequence.length);
+    expect(markers[0]).toMatchObject({ ordinal: 1 });
+    expect(markers[2]).toMatchObject({ ordinal: 3 });
   });
 
   it('draws the attention zone canvas when attentionZoneCanvas is provided', () => {
