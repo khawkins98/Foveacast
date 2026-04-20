@@ -3,33 +3,21 @@
  *
  * Mounts the attribution and disclosure footer. Called once at boot;
  * the footer content is static — model version, credits, and bias note.
- *
- * When the target element is a <details>, the function prepends a
- * <summary> so the block is collapsible — used for the sidebar credits
- * panel. For any other element type the summary is omitted and the
- * content is rendered flat (backward-compatible with tests that use a
- * plain <footer> as the target).
  */
 
 /**
  * Populate the target element with model attribution and bias disclosure.
  *
- * @param {Element | null} targetEl - Target element. Pass a `<details>`
- *   element for the collapsible sidebar panel; any other element type
- *   receives the content flat (legacy / test behaviour).
+ * @param {Element | null} targetEl - Target element to populate.
  */
 export function mountFooter(targetEl) {
   if (!targetEl) return;
   targetEl.textContent = '';
 
-  // When the target is a <details> element, prepend a <summary> label
-  // so the credits block is collapsible in the sidebar.
-  if (targetEl.tagName === 'DETAILS') {
-    const summary = document.createElement('summary');
-    summary.className = 'fc-sidebar__credits-summary';
-    summary.textContent = 'About this model';
-    targetEl.appendChild(summary);
-  }
+  const heading = document.createElement('h3');
+  heading.className = 'fc-footer__heading';
+  heading.textContent = 'About the model used here';
+  targetEl.appendChild(heading);
 
   const modelLine = document.createElement('p');
   modelLine.className = 'fc-footer__line fc-footer__model';

@@ -295,10 +295,9 @@ a:hover {
 }
 
 /* -- Sidebar removed (single-column redesign) ----------------------------- */
-/* .fc-sidebar and related rules removed. The .fc-sidebar__credits /
-   .fc-sidebar__credits-summary class names are kept in the rules below
-   because footer.js still emits them — renaming would be churn with no
-   user-visible benefit. The <details> element now lives in .fc-page-footer
+/* .fc-sidebar and related rules removed. The .fc-sidebar__credits class name
+   is kept below because footer.js still emits it — renaming would be churn
+   with no user-visible benefit. The block now lives in .fc-page-footer
    inside <main>. */
 
 /* -- Main workspace ------------------------------------------------------- */
@@ -1024,37 +1023,12 @@ body.fc-page-dragover .fc-dropzone {
   font-size: 0.75rem;
 }
 
-.fc-sidebar__credits-summary {
+.fc-footer__heading {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: var(--fc-on-surface-dim);
-  cursor: pointer;
-  padding: 0;
-  list-style: none; /* hide default marker; chevron added via ::before */
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  user-select: none;
-}
-
-.fc-sidebar__credits-summary::-webkit-details-marker { display: none; }
-
-/* Chevron that rotates open/closed. */
-.fc-sidebar__credits-summary::before {
-  content: '';
-  display: inline-block;
-  width: 0.4em;
-  height: 0.4em;
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
-  transform: rotate(-45deg);
-  transition: transform 0.15s ease;
-  flex-shrink: 0;
-}
-
-details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
-  transform: rotate(45deg);
+  margin: 0 0 0.4rem;
 }
 
 .fc-sidebar__credits .fc-footer__line {
