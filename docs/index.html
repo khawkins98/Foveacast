@@ -151,9 +151,6 @@
           <div id="fc-hud-mount"></div>
         </header>
 
-        <!-- Mount point: status banner (model loading, errors, etc.). -->
-        <div id="fc-status-mount" class="fc-mount fc-mount--status"></div>
-
         <!--
           Empty-state intro — visible before first inference, hidden after.
           Sits in the main reading column so the contextual help is inline.
@@ -169,6 +166,11 @@
             <li>Cmd-V / Ctrl-V to paste from clipboard</li>
           </ul>
         </div>
+
+        <!-- Mount point: status banner (model loading, errors, etc.).
+             Placed after the intro so the H1→description reading line
+             stays uninterrupted on first load. -->
+        <div id="fc-status-mount" class="fc-mount fc-mount--status"></div>
 
         <!--
           Bias disclaimer — persistent outside #fc-intro so it stays
