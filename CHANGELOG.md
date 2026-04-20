@@ -13,17 +13,22 @@ All notable changes to Foveacast are recorded here. Format follows [Keep a Chang
 - **Centroid trajectory section** — plain-image canvas with the predicted attention centroid path from first glance to sustained viewing (1 s → 3 s → 7 s). Appears once at least two duration results are ready.
 - **Duration labels spell out "seconds"** — "Full viewing (7 seconds)" rather than "Full viewing (7 s)".
 - **Commercial alternatives listed in README** — a short section naming paid services that offer real eye-tracking studies, with a note that they are not free and send screenshots to a third party.
+- **Print stylesheet** (`docs/print.css`) — clean paper and PDF output. Inverts the dark theme to white, hides all interactive chrome (nav, toolbar, upload zone, controls), and preserves the analysis output: title, hero canvas, report findings, region grid, duration strip, overlay sections, and methodology note. Linked with `media="print"` so screen rendering is unaffected.
 
 ### Fixed
 
 - Region-stat percentage was being multiplied twice (raw float × 100 then formatted as percent again), producing values like "4,700%" instead of "47%". Fixed in the rule-of-thirds headline and grid cells.
 - Opacity and blend controls are now hidden when the view is set to "Original screenshot", where they have no effect.
+- Progress bar stays visible when the user scrolls the report — it is now docked inside the fixed bottom toolbar rather than in the main content flow.
 
 ### Changed
 
 - **Single-column layout** — the sidebar/left-dock is gone. Image drop zone and report occupy a single centred column; the controls toolbar is docked at the bottom of the page.
 - **Viewing duration moved from toolbar to report** — the toolbar radio group is replaced by duration tabs in the report.
 - **Overlay visualizations moved from toolbar to report** — fixation sequence, attention zones, and centroid trajectory are no longer opt-in checkboxes; they appear as static always-visible sections after inference.
+- **View + opacity + download controls moved inline** — they now appear directly below the hero canvas instead of in the bottom toolbar. The toolbar is now a loading-indicator-only dock, hidden the rest of the time.
+- **Region grid is now an intensity map** — each cell's background is tinted on a heat scale (dark navy → warm amber → hot orange) proportional to its share of attention, giving the 3×3 grid an at-a-glance spatial read.
+- **Fixation sequence dots are colour-coded by order** — dot 1 (first, highest priority) is deep navy; the last dot grades to near-white. Number labels auto-contrast against each dot's fill colour.
 - **All-caps text removed** — every `text-transform: uppercase` replaced with mixed-case. Letter-spacing reset to neutral; sub-0.6 rem labels bumped to 0.65–0.7 rem.
 - **Top navigation reordered and renamed** — "Reading results" → "How to read results" (placed before Methodology); "About" → "GitHub". External nav links open in a new tab.
 - **"Analysis Workspace" eyebrow removed** — the redundant label above the canvas title is gone.
@@ -34,6 +39,7 @@ All notable changes to Foveacast are recorded here. Format follows [Keep a Chang
 - Sidebar / left-dock layout and all sidebar-specific CSS.
 - Overlay checkboxes and tooltip "?" buttons from the toolbar.
 - Viewing duration radio group from the toolbar.
+- Blend mode dropdown — composite operation is hardcoded to `source-over` (normal), which is the only mode that makes perceptual sense for a saliency overlay.
 
 ## [0.3.0] — 2026-04-17
 
