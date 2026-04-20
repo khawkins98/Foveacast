@@ -106,11 +106,11 @@ PRs should carry:
 
 ## Coding guide
 
-This is the project's stance on how we write code. It is opinionated on purpose — consistency across a small codebase is worth more than matching any particular external convention. If you disagree with something here, open an issue before adopting a different style in a PR.
+These choices are opinionated on purpose. Consistency across a small codebase matters more than matching any external convention. If something here looks wrong to you, open an issue before diverging in a PR.
 
 ### Ample comments, explaining why
 
-Default to writing comments — this is the opposite of the common "comments are a smell" rule and it is deliberate. Foveacast is expected to be picked up by people who didn't build it, often months after the original context has decayed. A one-line comment that captures why is worth more than a diff that someone has to reverse-engineer.
+Write comments, not fewer — this flips the common "comments are a smell" convention. Foveacast gets picked up by people who weren't there when it was built, often months after the original context is gone. A one-line comment that explains *why* saves the next person from reverse-engineering the diff.
 
 Minimum bar:
 

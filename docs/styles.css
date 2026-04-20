@@ -1321,59 +1321,6 @@ body.fc-page-dragover .fc-dropzone {
   color: var(--fc-on-surface);
 }
 
-/* -- Alternatives modal -------------------------------------------------- */
-
-.fc-modal {
-  max-width: 480px;
-  width: calc(100% - 2rem);
-  border: 1px solid var(--fc-outline-variant);
-  border-radius: var(--fc-radius);
-  padding: 1.5rem;
-  background: var(--fc-surface-highest);
-  color: var(--fc-on-surface);
-  box-shadow: var(--fc-shadow-ambient);
-}
-
-.fc-modal::backdrop {
-  background: rgba(7, 14, 29, 0.7);
-  backdrop-filter: blur(4px);
-}
-
-.fc-modal__title {
-  margin-top: 0;
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--fc-on-surface);
-}
-
-.fc-modal__list {
-  padding-left: 1.2rem;
-  margin: 0.75rem 0;
-  color: var(--fc-on-surface-variant);
-  font-size: 0.9rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.fc-modal__close {
-  margin-top: 1rem;
-  background: var(--fc-primary-container);
-  color: #ffffff;
-  border: none;
-  border-radius: var(--fc-radius-sm);
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 600;
-  padding: 0.5rem 1.1rem;
-  cursor: pointer;
-  transition: filter var(--fc-dur-fast) var(--fc-ease);
-}
-
-.fc-modal__close:hover {
-  filter: brightness(1.15);
-}
-
 /* -- Mobile guard -------------------------------------------------------- */
 
 .fc-mobile-guard {
@@ -1559,6 +1506,12 @@ body.fc-page-dragover .fc-dropzone {
   /* Spinner frozen at rest — show as a solid ring rather than a
      mid-spin arc, which looks broken. */
   .fc-busy-overlay__spinner {
+    animation: none;
+    border-color: var(--fc-primary);
+  }
+
+  /* Same treatment for the output-panel waiting spinner. */
+  .fc-output__waiting-spinner {
     animation: none;
     border-color: var(--fc-primary);
   }

@@ -128,6 +128,15 @@ V1 was the test of that hypothesis. V2 is the test of whether the V1 architectur
 
 If you're curious about the shape of AI-assisted development on a small, opinionated project, [LEARNINGS.md](LEARNINGS.md) is the primary source. The [CHANGELOG.md](CHANGELOG.md) is the secondary source. A retrospective blog post may eventually draw from both.
 
+## Commercial alternatives
+
+Foveacast covers the "quick sanity check before publish" case. If you need real measured eye-tracking, panel-based studies, or enterprise integrations, these services offer that — note that they are paid, and they send your screenshots to a third party:
+
+- [Attention Insight](https://attentioninsight.com)
+- [expoze.io](https://expoze.io)
+- [Clueify](https://clueify.com)
+- [EyeQuant](https://www.eyequant.com)
+
 ## Contributing and maintenance
 
 [CONTRIBUTING.md](CONTRIBUTING.md) covers the practical side — how to set up, the tiers of testing, what goes into a PR, the files that need updating alongside code, and the coding guide (comments, layer discipline, accessibility, dependencies). Read it before opening a PR.
