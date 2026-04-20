@@ -910,36 +910,7 @@ body.fc-page-dragover .fc-dropzone {
   outline-offset: 1px;
 }
 
-/* Overlay toggles — checkbox group inside the collapsible details. */
-.fc-controls__overlays-details {
-  border-bottom: 1px solid var(--fc-outline-variant);
-}
-
-/* Summary row — styled to match other sidebar section headers. */
-.fc-controls__overlays-summary {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.85rem 1.25rem;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  color: var(--fc-on-surface-dim);
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-}
-
-/* Remove the default triangle in WebKit. */
-.fc-controls__overlays-summary::-webkit-details-marker {
-  display: none;
-}
-
-.fc-controls__overlays-details[open] .fc-controls__overlays-summary {
-  border-bottom: 1px solid var(--fc-outline-variant);
-}
-
-/* The inner fieldset: remove its default border; the <details> provides the separator. */
+/* Overlay toggles — checkbox group. */
 .fc-controls__overlays {
   display: flex;
   flex-direction: column;
@@ -1571,45 +1542,35 @@ details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
   min-width: 100px;
 }
 
-/* Visualizations <details>: sits as an inline slot, opens upward */
-.fc-toolbar .fc-controls__overlays-details {
+/* Visualizations: inline slot — checkboxes shown in a horizontal row */
+.fc-toolbar .fc-controls__overlays {
   border-bottom: none;
   border-right: 1px solid var(--fc-outline-variant);
-  /* why: popup uses position:absolute anchored to this element */
-  position: relative;
   display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
-}
-
-.fc-toolbar .fc-controls__overlays-summary {
   padding: 0.45rem 0.75rem;
-  height: 100%;
-  display: flex;
-  align-items: center;
+  margin: 0;
+  gap: 0 0.75rem;
 }
 
-/* Remove the border that appears under the summary when open (not needed
-   in toolbar context where the popup floats above). */
-.fc-toolbar .fc-controls__overlays-details[open] .fc-controls__overlays-summary {
-  border-bottom: none;
+.fc-toolbar .fc-controls__overlays legend {
+  /* why: full-width so legend stays on its own line above the checkboxes */
+  width: 100%;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--fc-on-surface-dim);
+  padding: 0;
+  margin-bottom: 0.1rem;
+  display: block;
+  float: none;
 }
 
-/* Popup panel: positioned above the toolbar */
-.fc-toolbar .fc-controls__overlays-details[open] .fc-controls__overlays {
-  position: absolute;
-  bottom: 100%;
-  left: 0;
-  min-width: 220px;
-  padding: 0.75rem 1rem;
-  background: var(--fc-surface-high);
-  border: 1px solid var(--fc-outline-variant);
-  border-bottom: none;
-  border-radius: var(--fc-radius-sm) var(--fc-radius-sm) 0 0;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
-  z-index: 200;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+.fc-toolbar .fc-controls__overlays .fc-controls__checkbox {
+  font-size: 0.68rem;
+  white-space: nowrap;
 }
 
 /* Download button: pushed to the trailing end of the toolbar row */

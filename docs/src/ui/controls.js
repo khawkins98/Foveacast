@@ -306,38 +306,18 @@ export function createControls(options = {}) {
 
   root.appendChild(blendWrap);
 
-  // --- Overlay toggles (collapsible) --------------------------------
+  // --- Overlay toggles (inline) --------------------------------
   //
-  // Three checkboxes enabling optional saliency visualizations.
-  // Wrapped in a <details> element collapsed by default — these are
-  // interpretation extras, not first-run essentials. The details opens
-  // automatically when the user enables any visualization so it's
-  // clear which toggle they hit.
-  //
-  // The trajectory checkbox is disabled until all 3 duration results are
-  // available, since it spans all durations.
+  // Three checkboxes enabling optional saliency visualizations, shown
+  // directly in the toolbar row. The trajectory checkbox is disabled until
+  // all 3 duration results are available, since it spans all durations.
 
-  const overlayDetails = document.createElement('details');
-  overlayDetails.className = 'fc-controls__overlays-details';
-
-  const overlaySummary = document.createElement('summary');
-  overlaySummary.className = 'fc-controls__overlays-summary';
-  const overlaySummaryIcon = document.createElement('span');
-  overlaySummaryIcon.className = 'fc-controls__icon';
-  overlaySummaryIcon.setAttribute('aria-hidden', 'true');
-  // Reuse the layers icon that "Show" uses — both relate to visual layering.
-  overlaySummaryIcon.innerHTML = iconLayers;
-  overlaySummary.appendChild(overlaySummaryIcon);
-  overlaySummary.appendChild(document.createTextNode('Visualizations'));
-  overlayDetails.appendChild(overlaySummary);
-
-  // The inner fieldset retains its semantic role (groups checkboxes for AT)
-  // but its legend is removed — the <summary> above already labels the group.
   const overlayWrap = document.createElement('fieldset');
   overlayWrap.className = 'fc-controls__field fc-controls__field--group fc-controls__overlays';
-  overlayWrap.setAttribute('aria-label', 'Visualizations');
-  // why: no <legend> here — the parent <summary> provides the accessible
-  // group label; a legend would create a duplicate announcement.
+
+  const overlayLegend = document.createElement('legend');
+  overlayLegend.textContent = 'Visualizations';
+  overlayWrap.appendChild(overlayLegend);
 
   /** @type {{key: keyof OverlayState, label: string, title: string}[]} */
   const OVERLAY_CHOICES = [
@@ -376,8 +356,6 @@ export function createControls(options = {}) {
     chk.type = 'checkbox';
     chk.id = `${prefix}-overlay-${choice.key}`;
     chk.addEventListener('change', () => {
-      // Auto-open the details so the user sees which overlay they toggled.
-      if (chk.checked) overlayDetails.open = true;
       if (onOverlayChange) onOverlayChange(readOverlayState());
     });
     overlayInputs.set(choice.key, chk);
@@ -435,8 +413,7 @@ export function createControls(options = {}) {
     trajectoryInput.parentElement?.classList.add('fc-controls__checkbox--disabled');
   }
 
-  overlayDetails.appendChild(overlayWrap);
-  root.appendChild(overlayDetails);
+  root.appendChild(overlayWrap);
 
   const downloadBtn = document.createElement('button');
   downloadBtn.type = 'button';

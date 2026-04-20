@@ -162,10 +162,14 @@ describe('createControls — overlay control visibility', () => {
   });
 });
 
-describe('createControls — visualizations details', () => {
-  it('visualizations <details> starts collapsed', () => {
+describe('createControls — visualizations', () => {
+  it('visualizations checkboxes are rendered directly (no <details> wrapper)', () => {
     const controls = createControls();
-    const details = controls.element.querySelector('.fc-controls__overlays-details');
-    expect(details.open).toBe(false);
+    // No <details> flyout — fieldset is a direct child of the controls root.
+    expect(controls.element.querySelector('.fc-controls__overlays-details')).toBeNull();
+    const fieldset = controls.element.querySelector('.fc-controls__overlays');
+    expect(fieldset).not.toBeNull();
+    // All 3 checkboxes present.
+    expect(fieldset.querySelectorAll('input[type="checkbox"]').length).toBe(3);
   });
 });
