@@ -122,3 +122,50 @@ describe('createControls — overlay toggles', () => {
     expect(lastOverlays.centroidTrajectory).toBe(false);
   });
 });
+
+describe('createControls — overlay control visibility', () => {
+  it('opacity and blend controls are visible by default (overlay view)', () => {
+    const controls = createControls();
+    const opacityWrap = controls.element.querySelector('.fc-controls__field--opacity');
+    const blendWrap = controls.element.querySelector('.fc-controls__field--blend');
+    expect(opacityWrap.hidden).toBe(false);
+    expect(blendWrap.hidden).toBe(false);
+  });
+
+  it('setView("original") hides opacity and blend controls', () => {
+    const controls = createControls();
+    controls.setView('original');
+    const opacityWrap = controls.element.querySelector('.fc-controls__field--opacity');
+    const blendWrap = controls.element.querySelector('.fc-controls__field--blend');
+    expect(opacityWrap.hidden).toBe(true);
+    expect(blendWrap.hidden).toBe(true);
+  });
+
+  it('setView("sidebyside") keeps opacity and blend controls visible', () => {
+    const controls = createControls();
+    controls.setView('original');   // hide first
+    controls.setView('sidebyside'); // then switch to sidebyside — should re-show
+    const opacityWrap = controls.element.querySelector('.fc-controls__field--opacity');
+    const blendWrap = controls.element.querySelector('.fc-controls__field--blend');
+    expect(opacityWrap.hidden).toBe(false);
+    expect(blendWrap.hidden).toBe(false);
+  });
+
+  it('setView("overlay") keeps opacity and blend controls visible', () => {
+    const controls = createControls();
+    controls.setView('original');
+    controls.setView('overlay');
+    const opacityWrap = controls.element.querySelector('.fc-controls__field--opacity');
+    const blendWrap = controls.element.querySelector('.fc-controls__field--blend');
+    expect(opacityWrap.hidden).toBe(false);
+    expect(blendWrap.hidden).toBe(false);
+  });
+});
+
+describe('createControls — visualizations details', () => {
+  it('visualizations <details> starts collapsed', () => {
+    const controls = createControls();
+    const details = controls.element.querySelector('.fc-controls__overlays-details');
+    expect(details.open).toBe(false);
+  });
+});

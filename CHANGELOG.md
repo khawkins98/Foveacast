@@ -16,16 +16,22 @@ All notable changes to Foveacast are recorded here. Format follows [Keep a Chang
 - **Commercial alternatives listed in README** — the README now has a short "Commercial alternatives" section naming paid services that offer real eye-tracking studies, with a note that they are not free and send screenshots to a third party.
 - **Model credits in sidebar** — attribution, training references, and the bias disclosure note moved from the workspace footer into a collapsible "About this model" panel in the sidebar, so they're visible alongside the analysis controls rather than buried below the output canvas.
 - **Sidebar subtitle links to the MSI-Net paper** — the "MSI-Net · saliency model" subtitle is now an anchor (`doi.org/10.1016/j.neunet.2020.05.004`) with a `title` tooltip giving a plain-English description of the architecture.
+- **Persistent privacy notice in sidebar** — "Runs locally — your image never leaves this tab" is always visible under the sidebar header, not just in the empty-state intro message.
+- **Visualizations section is now collapsible** — the three overlay checkboxes are wrapped in a `<details>` element, collapsed by default. Enabling any checkbox auto-opens the section so it's clear what was toggled.
 
 ### Fixed
 
 - Fixation sequence markers and centroid trajectory dots were tiny on large screenshots. Both now scale proportionally to the canvas short side (fixation: 3.5%, trajectory dot: 1.4%), floored at a readable minimum so small canvases still work.
 - Output-panel waiting spinner (`fc-output__waiting-spinner`) now respects `prefers-reduced-motion: reduce` — shown as a static solid ring rather than a spinning arc.
+- Opacity and blend controls are now hidden when the view is set to "Original screenshot", where they have no effect. They remain visible for "Overlay" and "Side-by-side" views.
 
 ### Changed
 
 - CONTRIBUTING.md coding-guide intro reworded to sound less like a policy document.
 - **All-caps text removed** — every `text-transform: uppercase` instance replaced with mixed-case. Letter-spacing reset to neutral per selector; the two sub-0.6 rem labels bumped to 0.65–0.7 rem to maintain legibility without uppercase compensation.
+- **Top navigation reordered and renamed** — "Reading results" → "How to read results" (placed before Methodology); "About" → "GitHub". All external nav links now open in a new tab.
+- **"Analysis Workspace" eyebrow removed** — the redundant label above the canvas title is gone; "Predicted Attention" stands on its own.
+- **Show control placed above Opacity** — the view-mode picker ("Show") is now directly under the duration picker, before the overlay-strength slider, matching the more common usage order.
 
 ## [0.3.0] — 2026-04-17
 

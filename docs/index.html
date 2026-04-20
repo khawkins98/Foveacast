@@ -81,17 +81,20 @@
           <a class="fc-topnav__link fc-topnav__link--active" href="#fc-main" role="listitem">
             Analysis
           </a>
-          <a class="fc-topnav__link" href="https://github.com/khawkins98/Foveacast"
-             rel="noopener noreferrer" role="listitem">
-            About
+          <a class="fc-topnav__link" href="https://github.com/khawkins98/Foveacast/blob/main/docs/reading-your-results.md"
+             rel="noopener noreferrer" target="_blank" role="listitem"
+             aria-label="How to read results (opens in new tab)">
+            How to read results
           </a>
           <a class="fc-topnav__link" href="https://github.com/khawkins98/Foveacast/blob/main/docs/methodology.md"
-             rel="noopener noreferrer" role="listitem">
+             rel="noopener noreferrer" target="_blank" role="listitem"
+             aria-label="Methodology (opens in new tab)">
             Methodology
           </a>
-          <a class="fc-topnav__link" href="https://github.com/khawkins98/Foveacast/blob/main/docs/reading-your-results.md"
-             rel="noopener noreferrer" role="listitem">
-            Reading results
+          <a class="fc-topnav__link" href="https://github.com/khawkins98/Foveacast"
+             rel="noopener noreferrer" target="_blank" role="listitem"
+             aria-label="GitHub project (opens in new tab)">
+            GitHub
           </a>
         </div>
         <!--
@@ -114,7 +117,6 @@
         <!-- Workspace header: page title + HUD stats. -->
         <header class="fc-workspace-header">
           <div class="fc-workspace-header__title-wrap">
-            <p class="fc-workspace-header__eyebrow">Analysis Workspace</p>
             <h1 class="fc-workspace-header__title">Predicted Attention</h1>
             <!-- Updated by renderOutput() to show the active viewing duration. Hidden until first inference. -->
             <p class="fc-workspace-header__duration-label" id="fc-duration-label" hidden></p>
@@ -230,6 +232,13 @@
              rel="noopener noreferrer"
              title="MSI-Net: Multi-scale self-attention for visual saliency (Kroner et al. 2020, MIT)">MSI-Net · saliency model</a>
         </div>
+
+        <!--
+          Persistent privacy note — remains visible after the intro is
+          hidden on first run, so users always see the local-only assurance
+          alongside the controls rather than only in the empty-state message.
+        -->
+        <p class="fc-sidebar__trust">Runs locally — your image never leaves this tab</p>
 
         <!--
           Intro text — visible before first inference as an empty-state

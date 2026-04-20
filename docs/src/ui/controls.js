@@ -153,7 +153,7 @@ export function createControls(options = {}) {
   // scale.
 
   const opacityWrap = document.createElement('div');
-  opacityWrap.className = 'fc-controls__field';
+  opacityWrap.className = 'fc-controls__field fc-controls__field--opacity';
 
   const opacityLabel = document.createElement('label');
   opacityLabel.htmlFor = `${prefix}-opacity`;
@@ -194,13 +194,12 @@ export function createControls(options = {}) {
     if (onOpacityChange) onOpacityChange(pct / 100);
   });
 
-  root.appendChild(opacityWrap);
-
   // --- View toggle (radio group) ------------------------------------
   //
-  // Radio buttons rather than a select because the three options
-  // benefit from being permanently visible — the user is likely to
-  // cycle between them while reviewing.
+  // Moved before the opacity slider so the two most-used comparison
+  // controls (duration + view mode) sit adjacent at the top. Opacity
+  // and blend are shown/hidden based on whether the overlay is active
+  // — they are only relevant when a heatmap is composited on screen.
 
   const viewWrap = document.createElement('fieldset');
   viewWrap.className = 'fc-controls__field fc-controls__field--group';
@@ -228,8 +227,9 @@ export function createControls(options = {}) {
     radio.id = `${prefix}-view-${choice.value}`;
     if (choice.value === 'overlay') radio.checked = true;
     radio.addEventListener('change', () => {
-      if (radio.checked && onViewChange) {
-        onViewChange(/** @type {ViewMode} */ (radio.value));
+      if (radio.checked) {
+        updateOverlayControlVisibility(/** @type {ViewMode} */ (radio.value));
+        if (onViewChange) onViewChange(/** @type {ViewMode} */ (radio.value));
       }
     });
     viewInputs.push(radio);
@@ -240,6 +240,26 @@ export function createControls(options = {}) {
   }
 
   root.appendChild(viewWrap);
+
+  // --- Opacity/blend visibility helper --------------------------------
+  //
+  // Opacity and blend mode only affect the composited heatmap overlay.
+  // When the user switches to "Original screenshot" there is nothing
+  // to compose, so these controls are hidden to reduce noise.
+  // "Side-by-side" still renders a composited canvas on the right,
+  // so opacity and blend remain available there.
+
+  /**
+   * Show/hide opacity and blend controls based on the active view.
+   * @param {ViewMode} view
+   */
+  function updateOverlayControlVisibility(view) {
+    const hidden = view === 'original';
+    opacityWrap.hidden = hidden;
+    blendWrap.hidden = hidden;
+  }
+
+  root.appendChild(opacityWrap);
 
   // --- Blend mode picker -------------------------------------------
   //
@@ -259,7 +279,7 @@ export function createControls(options = {}) {
   ]);
 
   const blendWrap = document.createElement('div');
-  blendWrap.className = 'fc-controls__field';
+  blendWrap.className = 'fc-controls__field fc-controls__field--blend';
 
   const blendLabel = document.createElement('label');
   blendLabel.htmlFor = `${prefix}-blend`;
@@ -286,18 +306,38 @@ export function createControls(options = {}) {
 
   root.appendChild(blendWrap);
 
-  // --- Overlay toggles -----------------------------------------------
+  // --- Overlay toggles (collapsible) --------------------------------
   //
-  // Three checkboxes enabling optional saliency visualizations. The
-  // trajectory checkbox is disabled until all 3 duration results are
+  // Three checkboxes enabling optional saliency visualizations.
+  // Wrapped in a <details> element collapsed by default — these are
+  // interpretation extras, not first-run essentials. The details opens
+  // automatically when the user enables any visualization so it's
+  // clear which toggle they hit.
+  //
+  // The trajectory checkbox is disabled until all 3 duration results are
   // available, since it spans all durations.
 
+  const overlayDetails = document.createElement('details');
+  overlayDetails.className = 'fc-controls__overlays-details';
+
+  const overlaySummary = document.createElement('summary');
+  overlaySummary.className = 'fc-controls__overlays-summary';
+  const overlaySummaryIcon = document.createElement('span');
+  overlaySummaryIcon.className = 'fc-controls__icon';
+  overlaySummaryIcon.setAttribute('aria-hidden', 'true');
+  // Reuse the layers icon that "Show" uses — both relate to visual layering.
+  overlaySummaryIcon.innerHTML = iconLayers;
+  overlaySummary.appendChild(overlaySummaryIcon);
+  overlaySummary.appendChild(document.createTextNode('Visualizations'));
+  overlayDetails.appendChild(overlaySummary);
+
+  // The inner fieldset retains its semantic role (groups checkboxes for AT)
+  // but its legend is removed — the <summary> above already labels the group.
   const overlayWrap = document.createElement('fieldset');
   overlayWrap.className = 'fc-controls__field fc-controls__field--group fc-controls__overlays';
-
-  const overlayLegend = document.createElement('legend');
-  overlayLegend.textContent = 'Visualizations';
-  overlayWrap.appendChild(overlayLegend);
+  overlayWrap.setAttribute('aria-label', 'Visualizations');
+  // why: no <legend> here — the parent <summary> provides the accessible
+  // group label; a legend would create a duplicate announcement.
 
   /** @type {{key: keyof OverlayState, label: string, title: string}[]} */
   const OVERLAY_CHOICES = [
@@ -336,6 +376,8 @@ export function createControls(options = {}) {
     chk.type = 'checkbox';
     chk.id = `${prefix}-overlay-${choice.key}`;
     chk.addEventListener('change', () => {
+      // Auto-open the details so the user sees which overlay they toggled.
+      if (chk.checked) overlayDetails.open = true;
       if (onOverlayChange) onOverlayChange(readOverlayState());
     });
     overlayInputs.set(choice.key, chk);
@@ -393,7 +435,8 @@ export function createControls(options = {}) {
     trajectoryInput.parentElement?.classList.add('fc-controls__checkbox--disabled');
   }
 
-  root.appendChild(overlayWrap);
+  overlayDetails.appendChild(overlayWrap);
+  root.appendChild(overlayDetails);
 
   const downloadBtn = document.createElement('button');
   downloadBtn.type = 'button';
@@ -423,6 +466,7 @@ export function createControls(options = {}) {
     for (const input of viewInputs) {
       input.checked = input.value === view;
     }
+    updateOverlayControlVisibility(view);
   }
 
   /** @param {number} value - Opacity in `[0, 1]`. */
