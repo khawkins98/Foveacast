@@ -10,13 +10,13 @@ Near-term items that are already queued up live in [TODO.md](../TODO.md). The ro
 
 Foveacast is pre-1.0. Semver releases climb `0.1.0` → `0.1.1` → `0.2.0` → `0.3.0` → eventually `1.0.0` when the product and API shape feel stable enough to freeze. A breaking change in the pre-1.0 phase can land under a minor bump; a `1.0.0` release will mean we are committing to a stable public surface.
 
-The PRD's "Version 1 / 2 / 3" numbering refers to **model generations** — MSI-Net (V1), UNISAL (V2), SUM (V3). It is orthogonal to semver. A V2 model swap could ship under `0.2.0` or `0.3.0` or any later minor; the semver number tracks what's changed for users, not which model is under the hood.
+The PRD's "Version 1 / 2 / 3" numbering referred to **model generations** — MSI-Net via TF.js (V1), UNISAL via ORT Web (V2), MSI-Net fine-tuned on UEyes via ORT Web (V3). All three have shipped. The generation label is orthogonal to semver. The semver number tracks what changed for users; the generation tracks what changed under the hood.
 
 ---
 
 ## Immediate context
 
-`0.1.0` shipped 2026-04-16 with the core drop-screenshot-get-heatmap loop (V1 per the PRD — MSI-Net through TensorFlow.js). The `0.1.1` patch added post-ship housekeeping, layout and mobile-guard refinements informed by running Foveacast on its own landing page, and rounded out test coverage for the remaining gaps from the overnight reviews. The product is usable and live. The next inflection is whether `0.2.0` deepens the feature set, sharpens the model, widens distribution, or does some combination of the three.
+`0.3.x` is current (April 2026). The Precision Lens redesign landed a new UI, parallel multi-duration inference (1 s / 3 s / 7 s), blend-mode controls, a methodology page, and a "Reading your results" guide. The model moved from UNISAL (V2) to MSI-Net fine-tuned on the UEyes web eye-tracking dataset (V3). The next inflection is whether `0.4.0` deepens the feature set, extends comparison workflows, or sharpens the model-quality story.
 
 ## Decision principles
 
@@ -33,7 +33,7 @@ Things a user who has already tried Foveacast might ask for next.
 
 ### Viewport comparison (desktop vs. mobile)
 
-**Size:** 1–2 days. **Status:** PRD names this as the most-likely early request and the layout was drafted with a second drop-zone slot in mind.
+**Size:** 1–2 days. **Status:** speculative. Viewport comparison is the highest-probability early request; the layout was sketched with a second drop-zone slot in mind.
 
 Accept two screenshots, run inference on each, render them side-by-side with shared opacity/view controls. Obvious extensions: AOI differences highlighted, first-fixation crosshair on each, a download that packages both as a single PNG.
 
@@ -63,17 +63,17 @@ Serialise `{ sourceImage, saliencyMap, preset, opacity }` to an IndexedDB record
 
 ### V2 — UNISAL via ONNX Runtime Web (shipped 0.2.0)
 
-**Status:** shipped in `0.2.0`. UNISAL replaced MSI-Net; ORT Web replaced TensorFlow.js. The spike notes remain at [`docs/spikes/unisal-onnx-research.md`](spikes/unisal-onnx-research.md); the ship-day write-up is in LEARNINGS. Delete from this roadmap once anything else on the V2 line ships (e.g. WebGPU unlocked if the distribution story changes, or a second UNISAL checkpoint tuned for a different source). For now, kept as a marker of what landed and a pointer to the open follow-up.
+**Status:** shipped in `0.2.0`. UNISAL replaced MSI-Net; ORT Web replaced TensorFlow.js. Superseded by V3 in `0.3.0`. Spike notes are preserved at [`docs/spikes/unisal-onnx-research.md`](spikes/unisal-onnx-research.md).
 
-Open follow-ups tied directly to the V2 swap:
-- **Qualitative benchmark against MSI-Net** — still unanswered. The spike flagged it as a gate; the ship happened without it. This is the "Model-quality benchmarking" item below.
-- **Real-inference Playwright test** — the current E2E suite runs against demo mode (synthetic saliency), so the real ORT Web inference path is only tested by hand and by unit-level contract. A Playwright test that actually loads the 12.5 MB ONNX and runs inference on a committed fixture would close the only remaining gap in the four testing tiers.
+One open follow-up from the V2 era that is still relevant:
+- **Real-inference Playwright test** — the current E2E suite runs against demo mode (synthetic saliency), so the real ORT Web inference path is only tested by hand and by unit-level contract. A Playwright test that actually loads the ONNX model and runs inference on a committed fixture would close the only remaining gap in the testing tiers.
 
-### V3 — SUM (stretch)
+### V3 — MSI-Net fine-tuned on UEyes (shipped 0.3.0)
 
-**Size:** unknown, possibly a week or more. **Status:** named in PRD as stretch; CUDA-kernel blocker documented in LEARNINGS.
+**Status:** shipped in `0.3.0`. MSI-Net, retrained on the UEyes web page eye-tracking dataset, runs via ORT Web — the same ONNX inference plumbing as V2 UNISAL. Three duration variants (1 s, 3 s, 7 s) are served from gitignored model files fetched at deploy time. See LEARNINGS.md for the V2 → V3 swap notes.
 
-Only worth revisiting once the Mamba CPU-fallback story matures upstream. Track the `mamba-ssm` issue tracker rather than investing engineering time speculatively.
+Open follow-up from V3:
+- **Qualitative benchmark against UNISAL** — still unanswered. The swap happened before a side-by-side comparison could inform the decision. Still worth doing.
 
 ### Model-quality benchmarking
 
@@ -115,11 +115,11 @@ Let the user draw boxes on the output and export annotated PNGs for design-revie
 
 ### Tauri native desktop app
 
-**Size:** 2–3 days for a first working build. **Status:** named in PRD §Version 2b.
+**Size:** 2–3 days for a first working build. **Status:** speculative.
 
 Packaged macOS and Windows installers. Inference via the Rust `ort` crate (CoreML + DirectML where available) instead of TF.js. Likely faster on low-end hardware, and gives a file-association + drag-from-Finder experience that the web app can't match.
 
-Worth doing once V2's ONNX model is stable — the Tauri build and the web build would share the same ONNX artefact.
+Worth doing once the current ONNX model is stable — the Tauri build and the web build would share the same ONNX artefact.
 
 ### Figma plugin
 
@@ -129,9 +129,7 @@ Worth doing once V2's ONNX model is stable — the Tauri build and the web build
 
 ### Browser extension
 
-**Size:** 1–2 days. **Status:** speculative, partly scoped-out in PRD §Why not a bookmarklet.
-
-An extension that captures the current tab and routes it through Foveacast in a side panel. The reason we dropped the bookmarklet idea applies less to an extension (extensions can bundle a WASM runtime), but it brings its own packaging, store-submission, and privacy-policy baggage that a static site avoids.
+**Size:** 1–2 days. **Status:** speculative. An extension that captures the current tab and routes it through Foveacast in a side panel.
 
 ---
 
@@ -154,22 +152,6 @@ An `?cdn=1` flag that loads TF.js and heatmap.js from jsDelivr instead of `docs/
 **Size:** 2–3 days including a proper privacy policy. **Status:** carefully out of scope for now.
 
 If we ever want to know which presets are actually used, how long inference takes across real hardware, or how often the first-drop-fails error path fires, we need some signal. Anything we build here has to be off by default, honest in its copy, zero-PII, and inspectable in the network panel. Not `0.2.0` material unless a specific question demands it.
-
----
-
-## What I'd recommend for `0.2.0` (one opinion, not a decision)
-
-If the goal is "a meaningful step that lands in a couple of weeks":
-
-1. **Viewport comparison** — the PRD's highest-probability early request and the feature most likely to produce repeat use.
-2. **Attention-ordered regions (AOI list)** — small, high-value, changes the product's answerable questions.
-3. **V2 UNISAL spike** — research track, does not have to ship in `0.2.0` but should start.
-4. **Branch protection as code** — its own small PR.
-5. **`@axe-core/playwright` in CI** — small, compounds for every future UI change.
-
-Together these would take roughly a week to two weeks of focused work. They would also give the next honest LEARNINGS entries a lot to chew on.
-
-If the goal is "ship something by Friday", drop to two of the above — ideally (1) and (4), because comparison is the single feature most likely to change whether Foveacast is a one-trip tool or a workshop fixture.
 
 ---
 

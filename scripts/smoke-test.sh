@@ -30,9 +30,9 @@ set -euo pipefail
 
 # --- configuration -----------------------------------------------------------
 
-# Pick an uncommon port so this never collides with a developer's own
-# `pnpm dev` session.
-readonly PORT=5199
+# Pick a random port in the 20000–29999 range each run so this never
+# collides with a developer's own `pnpm dev` session or a parallel CI job.
+PORT=$(( RANDOM % 10000 + 20000 )); readonly PORT
 readonly URL="http://127.0.0.1:${PORT}/"
 readonly LOG_FILE="/tmp/foveacast-smoke-dev.log"
 readonly PAGE_FILE="/tmp/foveacast-smoke-index.html"
@@ -59,6 +59,14 @@ log "starting dev server on port ${PORT} (logs: ${LOG_FILE})"
 # sliding to a different one.
 pnpm dev --port "${PORT}" --strictPort --host 127.0.0.1 >"${LOG_FILE}" 2>&1 &
 DEV_PID=$!
+# Confirm the process hasn't exited immediately (catches missing pnpm,
+# port-in-use with --strictPort, or other startup failures).
+sleep 1
+kill -0 "${DEV_PID}" 2>/dev/null || {
+  log "--- dev server log ---"
+  cat "${LOG_FILE}" >&2 || true
+  fail "dev server exited immediately"
+}
 
 # Always shut the dev server down, even on failure.
 cleanup() {

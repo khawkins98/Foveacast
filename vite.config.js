@@ -4,7 +4,7 @@
 // are exactly what GitHub Pages publishes, and exactly what a user gets
 // when they download the repo as a zip and double-click `index.html`.
 // There is deliberately no build step that copies or transforms the
-// source. The promise in the PRD ("unzip and open index.html") is only
+// source. The "unzip and open index.html" promise is only
 // credible if the folder the developer edits is the folder the user
 // runs.
 //

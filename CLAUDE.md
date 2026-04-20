@@ -101,7 +101,7 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 Changes to the product typically need to move several files together. Check each of these when your change is not purely internal:
 
 - **README.md** — if you added a command, flag, mode, dependency, or supported browser.
-- **docs/PRD.md** — if you changed scope, non-goals, the error-message set, accessibility commitments, or the model roadmap. The PRD is the spec; drift between PRD and code is a bug.
+- **docs/methodology.md** — if you changed how the model works, the limitations stated, or the user-facing description of the inference. The methodology page is the user-facing spec for the model; drift between it and actual behaviour is a bug.
 - **CHANGELOG.md** — user-visible changes get an entry under `[Unreleased]`.
 - **LEARNINGS.md** — add a dated prose entry for any decision that took more than an hour to figure out, any dead end worth documenting, or any "oh, that's how that actually works" moment.
 - **TODO.md** — if your change surfaces a new follow-up you are deliberately not doing in this PR.
