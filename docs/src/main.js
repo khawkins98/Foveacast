@@ -907,7 +907,6 @@ function boot() {
         width: origW,
         height: origH,
       });
-      updateHudRuleOfThirds(hud, ruleOfThirds);
 
       const fixation = firstFixationCentroid(processed, origW, origH);
 
@@ -918,6 +917,7 @@ function boot() {
       const zoneThresholds = computeZoneThresholds(processed, [0.10, 0.25, 0.50]);
       const attentionZoneCanvas = renderAttentionZoneCanvas(processed, origW, origH, zoneThresholds);
       const ruleOfThirds = computeRuleOfThirds(processed, origW, origH);
+      updateHudRuleOfThirds(hud, ruleOfThirds);
 
       // Diagnostic: compute saliency stats for the debug panel.
       let salMin = Infinity, salMax = -Infinity, salSum = 0;
