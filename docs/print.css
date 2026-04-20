@@ -1,0 +1,366 @@
+/*
+ * Foveacast — print stylesheet.
+ *
+ * Linked from index.html with media="print" so it only applies
+ * when the user prints or saves as PDF. The main styles.css remains
+ * authoritative for screen; this file only adds/overrides.
+ *
+ * Goals:
+ *   1. White page, dark readable text — invert the dark-only screen theme.
+ *   2. Hide all interactive chrome (nav, toolbar, upload zone, controls).
+ *   3. Preserve the analysis output: hero canvas, report text, region grid,
+ *      duration strip, overlay section, trajectory section.
+ *   4. Sensible page breaks — report sections avoid splitting mid-block.
+ *   5. Keep heat-map colours on canvas elements and region grid cells
+ *      (they are bitmaps / inline-styled, so they survive the inversion).
+ *
+ * Page size: defaults to whatever the user has set in the browser. @page
+ * sets comfortable margins and removes browser-injected headers/footers
+ * only on the content area — the UA chrome (URL, date) is set by the
+ * browser's own print dialog, not by us.
+ */
+
+@page {
+  margin: 1.8cm 2cm;
+}
+
+/* --------------------------------------------------------------------------
+   1. Page-level colour reset
+   --------------------------------------------------------------------------
+   The screen stylesheet sets all surfaces to near-black via CSS custom
+   properties. Redefining them here gives every dark-surface rule a white
+   equivalent without touching individual selectors. Text token inversions
+   follow the same pattern.
+   -------------------------------------------------------------------------- */
+
+:root {
+  --fc-base:               #ffffff;
+  --fc-surface:            #ffffff;
+  --fc-surface-low:        #f5f6f8;
+  --fc-surface-mid:        #eef0f4;
+  --fc-surface-high:       #e4e7ed;
+  --fc-surface-highest:    #d8dce6;
+  --fc-surface-bright:     #d0d4df;
+  --fc-surface-container:  #e8eaf0;
+
+  --fc-on-surface:         #0d1526;
+  --fc-on-surface-variant: #3a3d4d;
+  --fc-on-surface-dim:     #5a5d6e;
+
+  --fc-primary:            #003ab0;
+  --fc-primary-container:  #d8e0ff;
+  --fc-on-primary-container: #001060;
+
+  --fc-outline-variant:    #c8cad8;
+
+  /* Suppress all transitions and animations. */
+  --fc-dur-fast: 0ms;
+  --fc-dur-med:  0ms;
+}
+
+html,
+body {
+  background: #fff !important;
+  color: #0d1526 !important;
+}
+
+/* --------------------------------------------------------------------------
+   2. Hide non-printable chrome
+   -------------------------------------------------------------------------- */
+
+.fc-skiplink,
+.fc-topnav,
+.fc-toolbar,
+#fc-toolbar,
+.fc-busy-overlay,
+.fc-intro,
+.fc-drop-row,
+.fc-new-upload-row,
+#fc-status-mount,
+.fc-output__waiting-overlay,
+.fc-output__waiting-spinner,
+.fc-canvas-controls-wrap,
+#fc-canvas-controls-mount,
+.fc-page-footer,
+.fc-bg-progress,
+/* Duration tabs — tabs are redundant in print (all sections show at once). */
+.fc-report__hero-tabs {
+  display: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   3. Layout
+   -------------------------------------------------------------------------- */
+
+#fc-app,
+#fc-main {
+  padding: 0 !important;
+  margin: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+.fc-main {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+/* Workspace header — minimal rule-off above the canvas. */
+.fc-workspace-header {
+  padding: 0 0 0.75rem 0 !important;
+  margin-bottom: 1.25rem !important;
+  border-bottom: 1pt solid #c0c4d0 !important;
+  background: transparent !important;
+}
+
+.fc-workspace-header__title {
+  font-size: 20pt;
+  font-weight: 700;
+  margin: 0;
+}
+
+.fc-workspace-header__duration-label {
+  font-size: 11pt;
+  color: #3a3d4d;
+}
+
+/* --------------------------------------------------------------------------
+   4. Output canvas section
+   -------------------------------------------------------------------------- */
+
+/*
+ * The fc-output section uses `hidden` in HTML and is removed by JS once
+ * inference completes. When printing we need to ensure it shows — but only
+ * if it was already unhidden by JS (i.e. an analysis has been run). We do
+ * NOT force-show it if it is still hidden, because an empty canvas is noise.
+ * The [hidden] selector has higher specificity than display:block, so we
+ * override it only when it has been removed by JS.
+ */
+.fc-output {
+  display: block !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+.fc-output__canvas-wrap {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.fc-output__canvas-wrap canvas {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block;
+}
+
+.fc-output__caption {
+  font-size: 9pt;
+  color: #5a5d6e;
+  margin-top: 0.25rem;
+}
+
+/* --------------------------------------------------------------------------
+   5. Analysis report
+   -------------------------------------------------------------------------- */
+
+.fc-report {
+  margin-top: 1.5rem;
+}
+
+/* Report-level heading (e.g. "Analysis report" if present) */
+.fc-report__heading {
+  font-size: 16pt;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: #0d1526;
+}
+
+/* Headline finding — the one-sentence summary. */
+.fc-report__headline {
+  font-size: 13pt;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #0d1526;
+  margin-bottom: 0.25rem;
+}
+
+.fc-report__fixation-note {
+  font-size: 9.5pt;
+  color: #3a3d4d;
+  margin-bottom: 0.75rem;
+}
+
+/* Primary section: hero canvas + findings side-by-side (if space allows). */
+.fc-report__section--primary {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.fc-report__hero-canvas canvas {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block;
+}
+
+.fc-report__findings {
+  display: block;
+}
+
+/* --------------------------------------------------------------------------
+   5a. Region grid
+   -------------------------------------------------------------------------- */
+
+.fc-report__rot-label {
+  font-size: 10.5pt;
+  font-weight: 700;
+  color: #0d1526;
+  margin-bottom: 0.2rem;
+}
+
+.fc-report__rot-hint {
+  font-size: 8.5pt;
+  color: #5a5d6e;
+  margin-bottom: 0.4rem;
+}
+
+.fc-report__rot-grid {
+  max-width: 200px;
+}
+
+/*
+ * Heat-scale cell backgrounds are set as inline styles by renderRotGrid()
+ * and survive the print CSS resets. A thin border separates cells since
+ * gaps between unstyled boxes disappear on some printers.
+ */
+.fc-report__rot-cell {
+  font-size: 8.5pt;
+  border: 0.5pt solid #c0c4d0 !important;
+  min-height: 2rem;
+  /* why: override the screen transition so cells render instantly. */
+  transition: none !important;
+}
+
+.fc-report__rot-wrap {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.fc-report__source-label {
+  font-size: 8.5pt;
+  color: #5a5d6e;
+  margin-top: 0.5rem;
+}
+
+/* --------------------------------------------------------------------------
+   5b. Duration strip and overlay sections
+   -------------------------------------------------------------------------- */
+
+.fc-report__section {
+  margin-top: 1.5rem;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.fc-report__section-heading {
+  font-size: 12pt;
+  font-weight: 700;
+  color: #0d1526;
+  margin-bottom: 0.35rem;
+  /* why: keep heading with the content block that follows it. */
+  page-break-after: avoid;
+  break-after: avoid;
+}
+
+.fc-report__duration-note,
+.fc-report__overlay-note {
+  font-size: 8.5pt;
+  color: #3a3d4d;
+  margin-bottom: 0.5rem;
+}
+
+/* Duration strip: lay out thumbnails side by side across the full width. */
+.fc-report__strip {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 0.75rem !important;
+}
+
+.fc-report__dur-item {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.fc-report__dur-canvas canvas,
+.fc-report__dur-canvas img {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block;
+}
+
+.fc-report__dur-placeholder {
+  /* Hide "not yet loaded" spinners — they add nothing to print. */
+  display: none !important;
+}
+
+.fc-report__dur-label {
+  font-size: 8.5pt;
+  font-weight: 600;
+  color: #0d1526;
+  margin-top: 0.3rem;
+  text-align: center;
+}
+
+/* Trajectory section: single full-width canvas. */
+.fc-report__trajectory-wrap canvas {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block;
+}
+
+/* --------------------------------------------------------------------------
+   5c. Methodology section
+   -------------------------------------------------------------------------- */
+
+.fc-report__section--methodology {
+  margin-top: 1.5rem;
+  page-break-before: avoid;
+  break-before: avoid;
+}
+
+.fc-report__method-body {
+  font-size: 9pt;
+  color: #3a3d4d;
+  line-height: 1.5;
+}
+
+.fc-report__method-links {
+  margin-top: 0.5rem;
+}
+
+/*
+ * Print links as plain text — the URLs are visible in the document already
+ * and external links serve no purpose on paper.
+ */
+.fc-report__method-link {
+  color: #003ab0;
+  text-decoration: none;
+}
+
+.fc-report__method-link::after {
+  content: ' (' attr(href) ')';
+  font-size: 7.5pt;
+  color: #5a5d6e;
+}
+
+/* --------------------------------------------------------------------------
+   6. Suppress everything that should never appear on paper
+   -------------------------------------------------------------------------- */
+
+* {
+  transition: none !important;
+  animation: none !important;
+  box-shadow: none !important;
+}
