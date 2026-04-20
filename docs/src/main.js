@@ -444,6 +444,7 @@ function boot() {
     // called here to keep the report in sync (tab click fast-path
     // does not re-enter the inference flow).
     updateReport();
+  }
 
   /**
    * Background-load the 1 s and 7 s models, run inference on the
