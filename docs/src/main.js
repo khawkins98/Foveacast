@@ -15,7 +15,6 @@ import { mountMobileGuard } from './ui/mobile-guard.js';
 import { createStatus } from './ui/status.js';
 import { createDropzone } from './ui/dropzone.js';
 import { createControls } from './ui/controls.js';
-import { mountFooter } from './ui/footer.js';
 import { renderOutput as renderOutputView } from './ui/output-view.js';
 import { loadModel, DEFAULT_DURATION, DURATION_LABELS } from './model/loader.js';
 import { runInference } from './model/inference.js';
@@ -268,9 +267,6 @@ function boot() {
     const next = CYCLE_DURATIONS[(currentIdx + 1) % CYCLE_DURATIONS.length];
     switchDuration(next);
   });
-
-  // --- Footer (attribution) --------------------------------------------
-  mountFooter(document.querySelector('#fc-sidebar-credits'));
 
   // --- HUD stats panel -------------------------------------------------
   const hud = createHud(hudMount);
@@ -733,7 +729,6 @@ function boot() {
     controls.setDurationLoading(false);
     if (!silent) status.showReady();
     setAppBusy(false);
-    // why: footer is static — no re-mount needed after model reload.
 
     // Drain any file the user dropped while we were still loading.
     // This is the second half of the demo-mode queued-drop flow.

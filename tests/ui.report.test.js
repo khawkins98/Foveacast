@@ -199,6 +199,32 @@ describe('createReport — initial state', () => {
     expect(texts).toContain('How to read results');
     expect(texts).toContain('Methodology');
   });
+
+  it('includes model identifier and architecture credits in the methodology section', () => {
+    const mount = document.createElement('div');
+    createReport({ mountEl: mount });
+    const modelLine = mount.querySelector('.fc-report__credits-model');
+    expect(modelLine).not.toBeNull();
+    expect(modelLine.textContent).toContain('MSI-Net');
+
+    const credits = mount.querySelector('.fc-report__credits');
+    expect(credits).not.toBeNull();
+    const hrefs = Array.from(credits.querySelectorAll('a')).map((a) => a.href);
+    expect(hrefs.some((h) => h.includes('neunet.2020'))).toBe(true);
+    expect(hrefs.some((h) => h.includes('3544548'))).toBe(true);
+    expect(hrefs.some((h) => h.includes('onnxruntime'))).toBe(true);
+  });
+
+  it('all credits links have rel="noopener noreferrer"', () => {
+    const mount = document.createElement('div');
+    createReport({ mountEl: mount });
+    const links = mount.querySelectorAll('.fc-report__credits a');
+    expect(links.length).toBeGreaterThan(0);
+    for (const a of links) {
+      expect(a.rel).toContain('noopener');
+      expect(a.rel).toContain('noreferrer');
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

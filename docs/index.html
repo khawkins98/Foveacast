@@ -97,6 +97,11 @@
              aria-label="GitHub project (opens in new tab)">
             GitHub
           </a>
+          <a class="fc-topnav__link" href="https://github.com/khawkins98/Foveacast/blob/main/LICENSE"
+             rel="noopener noreferrer" target="_blank" role="listitem"
+             aria-label="License (opens in new tab)">
+            License
+          </a>
         </div>
         <!--
           Thin loading bar along the bottom edge of the topnav.
@@ -152,20 +157,26 @@
         <!--
           Empty-state intro — visible before first inference, hidden after.
           Sits in the main reading column so the contextual help is inline.
-          The trust note below is a sibling outside this div so it persists
-          even after showControls() hides the intro.
         -->
         <div id="fc-intro" class="fc-intro" aria-label="Getting started">
           <p class="fc-intro__text">
             Drop or paste a screenshot to generate a predicted attention
             heatmap. Controls appear after the first analysis.
           </p>
-          <p class="fc-trust-note">Runs locally: your image never leaves this tab.</p>
+          <p class="fc-disclaimer">Runs locally: your image never leaves this tab.</p>
           <ul class="fc-intro__tips">
             <li>PNG or JPEG · up to 20&nbsp;MB</li>
             <li>Cmd-V / Ctrl-V to paste from clipboard</li>
           </ul>
         </div>
+
+        <!--
+          Bias disclaimer — persistent outside #fc-intro so it stays
+          visible after showControls() hides the intro. Reminds users
+          that heatmaps are population-average estimates before and while
+          they interpret results.
+        -->
+        <p class="fc-disclaimer">Heatmap outputs reflect population-average gaze patterns from the model's training data. They are estimates, not measurements of any specific person's attention.</p>
 
         <div class="fc-drop-row">
           <div id="fc-dropzone-mount" class="fc-mount fc-mount--dropzone"></div>
@@ -219,28 +230,7 @@
         -->
         <div id="fc-report-mount"></div>
 
-        <!--
-          Page footer — persistent in the main column regardless of
-          inference state. The trust note lives here (not inside #fc-intro)
-          so the "never leaves this tab" assurance stays visible after
-          showControls() hides the intro. Credits and secondary links follow.
-        -->
-        <div class="fc-page-footer">
-          <!--
-            Model credits and bias note — mounted by main.js via mountFooter.
-          -->
-          <div class="fc-sidebar__credits" id="fc-sidebar-credits">
-            <!-- main.js populates this on load. -->
-          </div>
-          <nav class="fc-footer-nav" aria-label="Secondary links">
-            <a class="fc-footer-nav__link"
-               href="https://github.com/khawkins98/Foveacast"
-               rel="noopener noreferrer">GitHub</a>
-            <a class="fc-footer-nav__link"
-               href="https://github.com/khawkins98/Foveacast/blob/main/LICENSE"
-               rel="noopener noreferrer">License</a>
-          </nav>
-        </div>
+
       </main>
 
       <!--

@@ -576,7 +576,7 @@ export function createReport({ mountEl, onDurationChange }) {
   section.appendChild(trajectorySection);
 
   // =========================================================================
-  // Section 6 — Methodology note
+  // Section 6 — About this analysis (description + model credits)
   // =========================================================================
   const methodSection = document.createElement('div');
   methodSection.className = 'fc-report__section fc-report__section--methodology';
@@ -595,6 +595,37 @@ export function createReport({ mountEl, onDurationChange }) {
     'Individual attention varies; treat this as directional guidance, not a ' +
     'substitute for real user research.';
   methodSection.appendChild(methodBody);
+
+  // Model and architecture credits — collapsed into one section to avoid
+  // a separate "About the model used here" footer block.
+  const modelLine = document.createElement('p');
+  modelLine.className = 'fc-report__credits-model';
+  modelLine.textContent = 'Model: MSI-Net · fine-tuned on UEyes (240×320)';
+  methodSection.appendChild(modelLine);
+
+  // Attribution paragraph built node-by-node so anchors carry real DOM
+  // event hooks and no innerHTML XSS surface is introduced.
+  const credits = document.createElement('p');
+  credits.className = 'fc-report__credits';
+  for (const [lead, linkText, href, trail] of [
+    ['Architecture: ', 'MSI-Net', 'https://doi.org/10.1016/j.neunet.2020.05.004', ' (Kroner et al. 2020, MIT). '],
+    ['Fine-tuned on ', 'UEyes', 'https://doi.org/10.1145/3544548.3581096', ' (Jiang et al. 2023, CC BY 4.0). '],
+    ['Training pipeline: ', 'foveacast-training', 'https://github.com/khawkins98/foveacast-training', '. '],
+    ['Inference via ', 'ONNX Runtime Web', 'https://onnxruntime.ai/docs/tutorials/web/', ' (MIT). '],
+    ['Saliency colormap: inferno (matplotlib, ', 'BSD licensed', 'https://matplotlib.org/stable/users/project/license.html', '). '],
+  ]) {
+    const span = document.createElement('span');
+    span.appendChild(document.createTextNode(lead));
+    const a = document.createElement('a');
+    a.href = href;
+    a.textContent = linkText;
+    a.rel = 'noopener noreferrer';
+    a.target = '_blank';
+    span.appendChild(a);
+    span.appendChild(document.createTextNode(trail));
+    credits.appendChild(span);
+  }
+  methodSection.appendChild(credits);
 
   const methodLinks = document.createElement('nav');
   methodLinks.className = 'fc-report__method-links';

@@ -294,12 +294,6 @@ a:hover {
   100% { transform: translateX(280%); }
 }
 
-/* -- Sidebar removed (single-column redesign) ----------------------------- */
-/* .fc-sidebar and related rules removed. The .fc-sidebar__credits class name
-   is kept below because footer.js still emits it — renaming would be churn
-   with no user-visible benefit. The block now lives in .fc-page-footer
-   inside <main>. */
-
 /* -- Main workspace ------------------------------------------------------- */
 
 .fc-main {
@@ -1012,51 +1006,6 @@ body.fc-page-dragover .fc-dropzone {
   }
 }
 
-/* -- Sidebar credits panel ----------------------------------------------- */
-/* why: credits moved from workspace footer into sidebar so attribution
-   is visible alongside controls, not buried below the output canvas. */
-
-.fc-sidebar__credits {
-  color: var(--fc-on-surface-variant);
-  font-size: 0.75rem;
-}
-
-.fc-footer__heading {
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  color: var(--fc-on-surface-variant);
-  margin: 0 0 0.4rem;
-}
-
-.fc-sidebar__credits .fc-footer__line {
-  margin: 0.5rem 0 0;
-}
-
-.fc-sidebar__credits a {
-  color: var(--fc-primary);
-}
-
-.fc-sidebar__credits a:hover {
-  color: var(--fc-on-surface);
-}
-
-.fc-sidebar__credits .fc-footer__bias {
-  background: var(--fc-surface-mid);
-  border-radius: var(--fc-radius-sm);
-  padding: 0.4rem 0.6rem;
-  color: var(--fc-on-surface-variant);
-  font-size: 0.72rem;
-}
-
-.fc-sidebar__credits .fc-footer__model {
-  font-variant-numeric: tabular-nums;
-}
-
-/* fc-footer__line and fc-footer__bias/model class names are kept on the
-   elements for backward-compatibility with existing tests. */
-.fc-footer__line { margin: 0; }
-
 /* -- Mobile guard -------------------------------------------------------- */
 
 .fc-mobile-guard {
@@ -1210,50 +1159,18 @@ body.fc-page-dragover .fc-dropzone {
   margin-top: 0.15rem;
 }
 
-/* -- Page footer: trust note, credits, secondary nav --------------------- */
+/* -- Persistent bias disclaimer (between intro and dropzone) -------------- */
 /*
- * Persistent at the bottom of the main column regardless of inference
- * state. The trust note is here rather than inside #fc-intro so it
- * stays visible after showControls() hides the intro.
+ * Lives outside #fc-intro so it stays visible after showControls() hides
+ * the intro. Reminds users that heatmaps are estimates, not measurements.
  */
 
-.fc-page-footer {
-  border-top: 1px solid var(--fc-outline-variant);
-  padding-top: 1.5rem;
-  margin-top: 0.5rem;
-}
-
-.fc-trust-note {
-  margin: 0 0 0.75rem;
+.fc-disclaimer {
+  margin: 0 0 1rem;
   font-size: 0.75rem;
   color: var(--fc-on-surface-variant);
-  line-height: 1.4;
-}
-
-.fc-footer-nav {
-  display: flex;
-  gap: 1rem;
-  margin-top: 1rem;
-  flex-wrap: wrap;
-}
-
-.fc-footer-nav__link {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--fc-on-surface-variant);
-  text-decoration: none;
-  letter-spacing: 0.01em;
-  transition: color var(--fc-dur-fast) var(--fc-ease);
-}
-
-.fc-footer-nav__link:hover {
-  color: var(--fc-primary);
-}
-
-.fc-footer-nav__link:focus-visible {
-  outline: 2px solid var(--fc-focus);
-  outline-offset: 2px;
-  border-radius: 2px;
+  line-height: 1.5;
+  max-width: 65ch;
 }
 
 /* -- Bottom toolbar ------------------------------------------------------- */
@@ -1691,7 +1608,7 @@ body.fc-page-dragover .fc-dropzone {
 }
 
 /* --------------------------------------------------------------------------
-   Section 6 — Methodology note
+   Section 6 — About this analysis (description + model credits)
    -------------------------------------------------------------------------- */
 
 .fc-report__section--methodology {
@@ -1706,6 +1623,32 @@ body.fc-page-dragover .fc-dropzone {
   line-height: 1.6;
   margin: 0;
   max-width: 65ch;
+}
+
+/* Model identifier line — shown above the full attribution paragraph. */
+.fc-report__credits-model {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-on-surface-variant);
+  margin: 0;
+}
+
+/* Attribution paragraph: architecture, training, inference. */
+.fc-report__credits {
+  font-size: 0.75rem;
+  color: var(--fc-on-surface-variant);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 65ch;
+}
+
+.fc-report__credits a {
+  color: var(--fc-primary);
+  text-decoration: none;
+}
+
+.fc-report__credits a:hover {
+  text-decoration: underline;
 }
 
 .fc-report__method-links {
