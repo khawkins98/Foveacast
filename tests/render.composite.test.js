@@ -34,6 +34,8 @@ describe('compositeImageAndHeatmap', () => {
       rotate: vi.fn(),
       // setLineDash needed by drawFixationSequence / drawCentroidTrajectory.
       setLineDash: vi.fn(),
+      // canvas back-reference needed by drawFixationSequence for proportional sizing.
+      canvas: { width: 800, height: 600 },
       globalCompositeOperation: 'source-over',
       globalAlpha: 1,
       strokeStyle: '',

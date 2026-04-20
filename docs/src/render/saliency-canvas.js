@@ -398,25 +398,19 @@ function drawFixationSequence(ctx, fixations) {
   if (fixations.length === 0) return;
   ctx.save();
 
-  const circleR = 16;
-  const fontSize = 13;
+  // Scale markers to canvas size so they're legible on large screenshots.
+  // Floor at 16 px so they're always readable on small canvases too.
+  const shortSide = Math.min(ctx.canvas.width, ctx.canvas.height);
+  const circleR = Math.max(16, Math.round(shortSide * 0.035));
+  const fontSize = Math.round(circleR * 0.85);
+  const lineW = Math.max(2, Math.round(shortSide * 0.003));
 
   // Draw connecting saccade lines first so circles sit on top.
   if (fixations.length > 1) {
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([6, 4]);
-    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
-    ctx.beginPath();
-    ctx.moveTo(fixations[0].x, fixations[0].y);
-    for (let i = 1; i < fixations.length; i++) {
-      ctx.lineTo(fixations[i].x, fixations[i].y);
-    }
-    ctx.stroke();
-
     // Shadow line in black for legibility over bright backgrounds.
-    ctx.lineWidth = 4.5;
+    ctx.lineWidth = lineW * 2.5;
     ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-    ctx.setLineDash([6, 4]);
+    ctx.setLineDash([circleR * 0.45, circleR * 0.3]);
     ctx.beginPath();
     ctx.moveTo(fixations[0].x, fixations[0].y);
     for (let i = 1; i < fixations.length; i++) {
@@ -425,9 +419,9 @@ function drawFixationSequence(ctx, fixations) {
     ctx.stroke();
 
     // White dash over the top.
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-    ctx.setLineDash([6, 4]);
+    ctx.lineWidth = lineW * 1.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.setLineDash([circleR * 0.45, circleR * 0.3]);
     ctx.beginPath();
     ctx.moveTo(fixations[0].x, fixations[0].y);
     for (let i = 1; i < fixations.length; i++) {
@@ -449,7 +443,7 @@ function drawFixationSequence(ctx, fixations) {
 
     // Black halo.
     ctx.beginPath();
-    ctx.arc(x, y, circleR + 2, 0, Math.PI * 2);
+    ctx.arc(x, y, circleR + lineW * 1.5, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.fill();
 
