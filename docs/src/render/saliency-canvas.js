@@ -402,7 +402,7 @@ export function renderAttentionZoneCanvas(normalisedMap, width, height, threshol
  * @param {Array<{x: number, y: number}>} fixations - Ordered sequence.
  * @returns {Array<{x: number, y: number, r: number, ordinal: number}>}
  */
-function drawFixationSequence(ctx, fixations) {
+export function drawFixationSequence(ctx, fixations) {
   if (fixations.length === 0) return [];
   ctx.save();
 
@@ -487,7 +487,7 @@ function drawFixationSequence(ctx, fixations) {
  *   (e.g. ['1s', '3s', '7s']).
  * @returns {Array<{x: number, y: number, r: number, label: string}>}
  */
-function drawCentroidTrajectory(ctx, trajectory, labels) {
+export function drawCentroidTrajectory(ctx, trajectory, labels) {
   if (trajectory.length < 2) return [];
   ctx.save();
 

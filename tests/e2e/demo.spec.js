@@ -264,23 +264,19 @@ test.describe('Foveacast — demo mode end-to-end', () => {
     await expect(toolbar).toBeVisible();
   });
 
-  test('visualizations checkboxes are visible in the toolbar without any interaction', async ({
-    page,
-  }) => {
-    // Checkboxes are now inline in the toolbar row — no flyout to open.
+  test('overlay sections appear in the report after inference', async ({ page }) => {
+    // Visualizations are now static report sections, not toolbar checkboxes.
     await page.goto('/?demo=1');
     await expect(page.locator('#fc-output[data-foveacast-ready="true"]')).toBeVisible({
       timeout: 15_000,
     });
 
-    const fieldset = page.locator('.fc-controls__overlays').first();
-    await expect(fieldset).toBeVisible({ timeout: 3_000 });
+    // Both per-duration overlay strips should exist in the report DOM.
+    await expect(page.locator('.fc-report__section--fixation')).toBeVisible({ timeout: 3_000 });
+    await expect(page.locator('.fc-report__section--zones')).toBeVisible({ timeout: 3_000 });
 
-    // All 3 checkboxes should be directly visible without clicking anything.
-    const checkboxes = fieldset.locator('input[type="checkbox"]');
-    await expect(checkboxes).toHaveCount(3);
-    for (let i = 0; i < 3; i++) {
-      await expect(checkboxes.nth(i)).toBeVisible();
-    }
+    // Fixation strip should contain 3 duration columns.
+    const fixationItems = page.locator('.fc-report__section--fixation .fc-report__dur-item');
+    await expect(fixationItems).toHaveCount(3);
   });
 });

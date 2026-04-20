@@ -1,8 +1,11 @@
-// Controls: opacity slider, view toggle, overlay checkboxes, download button.
+// Controls: opacity slider, view toggle, download button.
 //
-// Duration selection was moved to the report section (duration tabs above the
-// hero canvas) so it lives next to the thing it controls. This module owns
-// the interactive canvas controls only.
+// Duration selection lives in the report section (duration tabs above the
+// hero canvas). Overlay visualizations (fixation sequence, attention zones,
+// centroid trajectory) are shown as static sections in the report rather
+// than as interactive checkboxes here. This module owns the interactive
+// canvas controls only.
+//
 // Every input element gets a proper <label for="…"> pairing so screen readers
 // announce them correctly, and every handler fires with a normalised value
 // shape so the caller never has to sniff event.target.
@@ -31,19 +34,11 @@ const VIEW_CHOICES = /** @type {const} */ ([
 let instanceCount = 0;
 
 /**
- * @typedef {Object} OverlayState
- * @property {boolean} fixationSequence   - Show numbered IoR fixation sequence.
- * @property {boolean} attentionZones     - Show zone threshold contour overlay.
- * @property {boolean} centroidTrajectory - Show multi-duration centroid line.
- */
-
-/**
  * @typedef {Object} ControlsOptions
  * @property {(opacity: number) => void} [onOpacityChange]
  * @property {(view: ViewMode) => void} [onViewChange]
  * @property {(blendMode: string) => void} [onBlendModeChange]
  * @property {() => void} [onDownload]
- * @property {(overlays: OverlayState) => void} [onOverlayChange]
  */
 
 /**
@@ -57,7 +52,6 @@ let instanceCount = 0;
  * @property {(visible: boolean) => void} setVisible
  * @property {(loading: boolean) => void} setDurationLoading   - No-op; duration tabs moved to report.
  * @property {(duration: Duration, status: 'idle' | 'loading' | 'ready' | 'failed') => void} setDurationStatus - No-op; duration tabs moved to report.
- * @property {(available: boolean) => void} setTrajectoryAvailable
  */
 
 /**
@@ -72,7 +66,7 @@ let instanceCount = 0;
  * @returns {ControlsController}
  */
 export function createControls(options = {}) {
-  const { onOpacityChange, onViewChange, onBlendModeChange, onDownload, onOverlayChange } = options;
+  const { onOpacityChange, onViewChange, onBlendModeChange, onDownload } = options;
 
   const id = ++instanceCount;
   const prefix = `fc-ctl-${id}`;
@@ -242,115 +236,6 @@ export function createControls(options = {}) {
 
   root.appendChild(blendWrap);
 
-  // --- Overlay toggles (inline) --------------------------------
-  //
-  // Three checkboxes enabling optional saliency visualizations, shown
-  // directly in the toolbar row. The trajectory checkbox is disabled until
-  // all 3 duration results are available, since it spans all durations.
-
-  const overlayWrap = document.createElement('fieldset');
-  overlayWrap.className = 'fc-controls__field fc-controls__field--group fc-controls__overlays';
-
-  const overlayLegend = document.createElement('legend');
-  overlayLegend.textContent = 'Visualizations';
-  overlayWrap.appendChild(overlayLegend);
-
-  /** @type {{key: keyof OverlayState, label: string, title: string}[]} */
-  const OVERLAY_CHOICES = [
-    {
-      key: 'fixationSequence',
-      label: 'Fixation sequence',
-      title: 'Show the predicted order in which attention would land, using inhibition-of-return (IoR) modelling.',
-    },
-    {
-      key: 'attentionZones',
-      label: 'Attention zones',
-      title: 'Highlight the hottest 10 %, 25 %, and 50 % attention regions as concentric coloured contours.',
-    },
-    {
-      key: 'centroidTrajectory',
-      label: 'Duration trajectory',
-      title: 'Connect predicted attention centroids across all three viewing durations to show how focus shifts with time. All durations must be loaded first.',
-    },
-  ];
-
-  /** @type {Map<keyof OverlayState, HTMLInputElement>} */
-  const overlayInputs = new Map();
-
-  /** @returns {OverlayState} */
-  const readOverlayState = () => ({
-    fixationSequence: overlayInputs.get('fixationSequence')?.checked ?? false,
-    attentionZones: overlayInputs.get('attentionZones')?.checked ?? false,
-    centroidTrajectory: overlayInputs.get('centroidTrajectory')?.checked ?? false,
-  });
-
-  for (const choice of OVERLAY_CHOICES) {
-    const wrapper = document.createElement('label');
-    wrapper.className = 'fc-controls__checkbox';
-
-    const chk = document.createElement('input');
-    chk.type = 'checkbox';
-    chk.id = `${prefix}-overlay-${choice.key}`;
-    chk.addEventListener('change', () => {
-      if (onOverlayChange) onOverlayChange(readOverlayState());
-    });
-    overlayInputs.set(choice.key, chk);
-
-    wrapper.appendChild(chk);
-    wrapper.appendChild(document.createTextNode(` ${choice.label}`));
-
-    // "?" tooltip button — shows a floating description on hover or focus.
-    const tipId = `${prefix}-tip-${choice.key}`;
-    const tipBtn = document.createElement('button');
-    tipBtn.type = 'button';
-    tipBtn.className = 'fc-tooltip-btn';
-    tipBtn.setAttribute('aria-label', `About ${choice.label}`);
-    tipBtn.setAttribute('aria-describedby', tipId);
-    tipBtn.textContent = '?';
-
-    const tipBox = document.createElement('div');
-    tipBox.id = tipId;
-    tipBox.className = 'fc-tooltip';
-    tipBox.role = 'tooltip';
-    tipBox.textContent = choice.title;
-    tipBox.setAttribute('aria-hidden', 'true');
-
-    // Show / hide handlers — JS-driven so the tooltip is keyboard accessible
-    // and can be dismissed cleanly (unlike CSS :hover-only approaches).
-    const showTip = () => {
-      tipBox.classList.add('fc-tooltip--visible');
-      tipBox.removeAttribute('aria-hidden');
-    };
-    const hideTip = () => {
-      tipBox.classList.remove('fc-tooltip--visible');
-      tipBox.setAttribute('aria-hidden', 'true');
-    };
-
-    tipBtn.addEventListener('mouseenter', showTip);
-    tipBtn.addEventListener('mouseleave', hideTip);
-    tipBtn.addEventListener('focus', showTip);
-    tipBtn.addEventListener('blur', hideTip);
-    // Clicking the "?" button should not toggle the parent <label>'s checkbox.
-    tipBtn.addEventListener('click', (e) => e.preventDefault());
-
-    const tipWrap = document.createElement('span');
-    tipWrap.className = 'fc-tooltip-wrap';
-    tipWrap.appendChild(tipBtn);
-    tipWrap.appendChild(tipBox);
-    wrapper.appendChild(tipWrap);
-
-    overlayWrap.appendChild(wrapper);
-  }
-
-  // Trajectory starts disabled until all 3 durations are ready.
-  const trajectoryInput = overlayInputs.get('centroidTrajectory');
-  if (trajectoryInput) {
-    trajectoryInput.disabled = true;
-    trajectoryInput.parentElement?.classList.add('fc-controls__checkbox--disabled');
-  }
-
-  root.appendChild(overlayWrap);
-
   const downloadBtn = document.createElement('button');
   downloadBtn.type = 'button';
   downloadBtn.className = 'fc-controls__download';
@@ -398,16 +283,6 @@ export function createControls(options = {}) {
     downloadBtn.disabled = d;
     blendSelect.disabled = d;
     for (const input of viewInputs) input.disabled = d;
-    for (const [key, input] of overlayInputs) {
-      // Trajectory input obeys its own availability flag — only disable it
-      // if it's already available (otherwise it stays disabled by default).
-      if (key === 'centroidTrajectory') {
-        if (d) input.disabled = true;
-        // When re-enabling, restore trajectory state via setTrajectoryAvailable.
-      } else {
-        input.disabled = d;
-      }
-    }
     root.classList.toggle('fc-controls--disabled', d);
   }
 
@@ -432,19 +307,6 @@ export function createControls(options = {}) {
    */
   function setDurationStatus(_duration, _status) {} // no-op: duration tabs moved to report section
 
-  /**
-   * Enable or disable the duration trajectory overlay checkbox.
-   * Called by main.js once all 3 duration results are ready.
-   *
-   * @param {boolean} available
-   */
-  function setTrajectoryAvailable(available) {
-    const input = overlayInputs.get('centroidTrajectory');
-    if (!input) return;
-    input.disabled = !available;
-    input.parentElement?.classList.toggle('fc-controls__checkbox--disabled', !available);
-  }
-
   return {
     element: root,
     setDuration,
@@ -455,6 +317,5 @@ export function createControls(options = {}) {
     setVisible,
     setDurationLoading,
     setDurationStatus,
-    setTrajectoryAvailable,
   };
 }

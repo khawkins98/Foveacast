@@ -857,123 +857,12 @@ body.fc-page-dragover .fc-dropzone {
   outline-offset: 1px;
 }
 
-/* Overlay toggles — checkbox group. */
-.fc-controls__overlays {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.fc-controls__checkbox {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-  color: var(--fc-on-surface-variant);
-  padding: 0.2rem 0;
-  cursor: pointer;
-}
-
-.fc-controls__checkbox input[type="checkbox"] {
-  accent-color: var(--fc-primary);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.fc-controls__checkbox--disabled {
-  opacity: 0.45;
-  pointer-events: none;
-}
+/* Overlay toggles — removed; visualizations now appear as static report sections. */
 
 /*
- * JS tooltip system — used by overlay checkboxes to expose one-line
- * descriptions of each visualization without cluttering the label.
- *
- * Structure per checkbox:
- *   <label class="fc-controls__checkbox">
- *     <input>
- *     label text
- *     <span class="fc-tooltip-wrap">
- *       <button class="fc-tooltip-btn">?</button>
- *       <div class="fc-tooltip" role="tooltip">…</div>
- *     </span>
- *   </label>
+ * JS tooltip system — was used by overlay checkboxes (removed).
+ * Canvas hover tooltip (.fc-canvas-tooltip) is still active — kept below.
  */
-
-.fc-tooltip-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  margin-left: auto;
-  flex-shrink: 0;
-}
-
-.fc-tooltip-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--fc-outline-variant);
-  color: var(--fc-on-surface-dim);
-  border: none;
-  font: inherit;
-  font-size: 0.6rem;
-  font-weight: 700;
-  line-height: 1;
-  cursor: help;
-  flex-shrink: 0;
-  transition: background var(--fc-dur-fast) var(--fc-ease);
-}
-
-.fc-tooltip-btn:hover,
-.fc-tooltip-btn:focus-visible {
-  background: var(--fc-primary);
-  color: #ffffff;
-  outline: none;
-}
-
-.fc-tooltip-btn:focus-visible {
-  outline: 2px solid var(--fc-primary);
-  outline-offset: 2px;
-}
-
-.fc-tooltip {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  right: 0;
-  width: 200px;
-  background: var(--fc-surface-highest);
-  color: var(--fc-on-surface);
-  font-size: 0.7rem;
-  font-weight: 400;
-  line-height: 1.4;
-  padding: 0.4rem 0.6rem;
-  border-radius: var(--fc-radius-sm);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(4px);
-  transition:
-    opacity var(--fc-dur-fast) var(--fc-ease),
-    transform var(--fc-dur-fast) var(--fc-ease);
-  z-index: 200;
-  /* Ensure tooltip text doesn't inherit the label cursor */
-  cursor: default;
-}
-
-.fc-tooltip--visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fc-tooltip {
-    transition: opacity var(--fc-dur-fast) var(--fc-ease);
-    transform: none;
-  }
-}
 
 /* Canvas hover tooltip — fixation sequence markers.
  *
@@ -1483,37 +1372,6 @@ details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
   min-width: 100px;
 }
 
-/* Visualizations: inline slot — checkboxes shown in a horizontal row */
-.fc-toolbar .fc-controls__overlays {
-  border-bottom: none;
-  border-right: 1px solid var(--fc-outline-variant);
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  padding: 0.45rem 0.75rem;
-  margin: 0;
-  gap: 0 0.75rem;
-}
-
-.fc-toolbar .fc-controls__overlays legend {
-  /* why: full-width so legend stays on its own line above the checkboxes */
-  width: 100%;
-  font-size: 0.58rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  color: var(--fc-on-surface-dim);
-  padding: 0;
-  margin-bottom: 0.1rem;
-  display: block;
-  float: none;
-}
-
-.fc-toolbar .fc-controls__overlays .fc-controls__checkbox {
-  font-size: 0.68rem;
-  white-space: nowrap;
-}
-
 /* Download button: pushed to the trailing end of the toolbar row */
 .fc-toolbar .fc-controls__download {
   /* why: reset sidebar's full-width calc; make it auto-sized */
@@ -1839,7 +1697,49 @@ details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
 }
 
 /* --------------------------------------------------------------------------
-   Section 3 — Methodology note
+   Sections 3 & 4 — Overlay strips (fixation sequence, attention zones)
+   -------------------------------------------------------------------------- */
+
+.fc-report__section--overlay {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Short descriptive paragraph under each overlay section heading. */
+.fc-report__overlay-note {
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--fc-on-surface-variant);
+  max-width: 60ch;
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Section 5 — Centroid trajectory (cross-duration)
+   -------------------------------------------------------------------------- */
+
+.fc-report__section--trajectory {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Single centred canvas container for the trajectory thumbnail. */
+.fc-report__trajectory-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.fc-report__trajectory-wrap canvas {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--fc-radius-sm);
+  display: block;
+}
+
+/* --------------------------------------------------------------------------
+   Section 6 — Methodology note
    -------------------------------------------------------------------------- */
 
 .fc-report__section--methodology {

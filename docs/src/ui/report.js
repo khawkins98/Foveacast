@@ -7,7 +7,10 @@
  * The report presents findings in narrative order:
  *   1. Primary finding — duration tabs + hero canvas + rule-of-thirds breakdown + first-fixation note
  *   2. Duration comparison strip — thumbnail canvases for all three viewing durations
- *   3. Methodology note — what the model is, what it isn't, links to docs
+ *   3. Eye movement sequence — per-duration fixation sequence thumbnails
+ *   4. Attention zones — per-duration zone band thumbnails
+ *   5. Attention shift (centroid trajectory) — cross-duration trajectory canvas (once ≥2 results ready)
+ *   6. Methodology note — what the model is, what it isn't, links to docs
  *
  * The DOM shell is created once and slots are updated in-place on each
  * `update()` call, avoiding layout shift and focus churn as background
@@ -20,6 +23,8 @@
  * Exports:
  *   createReport({ mountEl, onDurationChange }) → { update }
  */
+
+import { drawFixationSequence, drawCentroidTrajectory } from '../render/saliency-canvas.js';
 
 /** Duration labels shared with the main app. */
 const DURATION_LABELS = Object.freeze({
@@ -78,6 +83,92 @@ function compositeThumb(image, heatmapCanvas, maxW = 480) {
   ctx.restore();
 
   return canvas;
+}
+
+/**
+ * Composite image + heatmap + one overlay type into a thumbnail canvas.
+ *
+ * Renders the base at thumbnail size (via compositeThumb), then draws
+ * scaled overlay markers directly onto the result. Working at thumbnail
+ * size rather than full resolution keeps marker sizes readable — the
+ * draw functions scale their glyphs relative to the canvas dimensions.
+ *
+ * @param {HTMLImageElement|HTMLCanvasElement|ImageBitmap} image
+ * @param {any} result - duration result object with heatmapCanvas, fixationSequence, attentionZoneCanvas
+ * @param {'fixation'|'zones'} overlayType
+ * @param {number} [maxW=400] Maximum output width in pixels.
+ * @returns {HTMLCanvasElement}
+ */
+function compositeOverlayThumb(image, result, overlayType, maxW = 400) {
+  const srcW = /** @type {any} */ (image).naturalWidth || /** @type {any} */ (image).width;
+
+  // Start with the image + heatmap composite at thumbnail size.
+  const thumb = compositeThumb(image, result.heatmapCanvas, maxW);
+  const scale = thumb.width / srcW;
+
+  const ctx = thumb.getContext('2d');
+  // why: jsdom returns null for getContext; return the blank thumb rather
+  // than throwing so unit tests exercise DOM structure without pixel content.
+  // The secondary guard (ctx.canvas) handles jsdom stubs that set getContext
+  // to a partial mock without the canvas back-reference.
+  if (!ctx || !ctx.canvas) return thumb;
+
+  if (overlayType === 'fixation' && result.fixationSequence?.length) {
+    // Scale coordinates to thumbnail space so markers render at the right size.
+    const scaled = result.fixationSequence.map(
+      /** @param {{x:number, y:number}} p */
+      (p) => ({ x: p.x * scale, y: p.y * scale }),
+    );
+    drawFixationSequence(ctx, scaled);
+  } else if (overlayType === 'zones' && result.attentionZoneCanvas) {
+    // Zone canvas lives in source coordinate space — drawImage scales it.
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(result.attentionZoneCanvas, 0, 0, thumb.width, thumb.height);
+    ctx.restore();
+  }
+
+  return thumb;
+}
+
+/**
+ * Composite a centroid trajectory over the plain image as a thumbnail.
+ *
+ * Uses the plain image (no heatmap) so no single duration's heatmap is
+ * privileged — the trajectory path is the main visual. Coordinates are
+ * scaled from source space to thumbnail space before drawing.
+ *
+ * @param {HTMLImageElement|HTMLCanvasElement|ImageBitmap} image
+ * @param {Array<{x: number, y: number}>} trajectory - Centroid points (1s → 3s → 7s).
+ * @param {string[]} labels - Duration labels parallel to trajectory.
+ * @param {number} [maxW=600] Maximum output width in pixels.
+ * @returns {HTMLCanvasElement}
+ */
+function compositeTrajectoryThumb(image, trajectory, labels, maxW = 600) {
+  const srcW = /** @type {any} */ (image).naturalWidth || /** @type {any} */ (image).width;
+  const srcH = /** @type {any} */ (image).naturalHeight || /** @type {any} */ (image).height;
+  const scale = Math.min(1, maxW / srcW);
+  const w = Math.round(srcW * scale);
+  const h = Math.round(srcH * scale);
+
+  const thumb = document.createElement('canvas');
+  thumb.width  = w;
+  thumb.height = h;
+
+  const ctx = thumb.getContext('2d');
+  if (!ctx || !ctx.canvas) return thumb;
+
+  // Plain image only — trajectory is the focus, no duration-specific heatmap.
+  ctx.drawImage(image, 0, 0, w, h);
+
+  const scaled = trajectory.map(
+    /** @param {{x:number, y:number}} p */
+    (p) => ({ x: p.x * scale, y: p.y * scale }),
+  );
+  drawCentroidTrajectory(ctx, scaled, labels);
+
+  return thumb;
 }
 
 /**
@@ -350,7 +441,111 @@ export function createReport({ mountEl, onDurationChange }) {
   section.appendChild(durationSection);
 
   // =========================================================================
-  // Section 3 — Methodology note
+  // Sections 3 & 4 — Per-duration overlay strips (fixation sequence, attention zones)
+  //
+  // Each section uses the same stable-slot pattern as the duration strip:
+  // DOM shells created once, canvas nodes replaced in-place each update().
+  // =========================================================================
+
+  /**
+   * Build a three-column overlay strip section.
+   * Returns the section element, slot Map, and a stable canvas-wrap Map.
+   *
+   * @param {string} heading - Section heading text.
+   * @param {string} description - Short description for sighted readers.
+   * @param {string} sectionClass - Extra BEM modifier class.
+   * @returns {{ el: HTMLElement, slots: Map<string, { canvasWrap: HTMLElement }> }}
+   */
+  function createOverlaySection(heading, description, sectionClass) {
+    const el = document.createElement('div');
+    el.className = `fc-report__section fc-report__section--overlay ${sectionClass}`;
+
+    const h = document.createElement('h3');
+    h.className = 'fc-report__section-heading';
+    h.textContent = heading;
+    el.appendChild(h);
+
+    const p = document.createElement('p');
+    p.className = 'fc-report__overlay-note';
+    p.textContent = description;
+    el.appendChild(p);
+
+    const grid = document.createElement('div');
+    grid.className = 'fc-report__strip';
+    el.appendChild(grid);
+
+    /** @type {Map<string, { canvasWrap: HTMLElement }>} */
+    const slots = new Map();
+
+    for (const dur of DURATIONS) {
+      const figure = document.createElement('figure');
+      figure.className = 'fc-report__dur-item';
+      figure.dataset.duration = dur;
+
+      const canvasWrap = document.createElement('div');
+      canvasWrap.className = 'fc-report__dur-canvas';
+      figure.appendChild(canvasWrap);
+
+      const initial = document.createElement('div');
+      initial.className = 'fc-report__dur-placeholder';
+      initial.setAttribute('aria-label', 'Not yet loaded');
+      canvasWrap.appendChild(initial);
+
+      const figcaption = document.createElement('figcaption');
+      figcaption.className = 'fc-report__dur-label';
+      figcaption.textContent = DURATION_LABELS[dur] ?? dur;
+      figure.appendChild(figcaption);
+
+      grid.appendChild(figure);
+      slots.set(dur, { canvasWrap });
+    }
+
+    return { el, slots };
+  }
+
+  const { el: fixationSection, slots: fixationSlots } = createOverlaySection(
+    'Eye movement sequence',
+    'Predicted order in which attention scans the image, modelled using inhibition-of-return (IoR). ' +
+    'Numbers show fixation order; earlier numbers indicate higher priority regions.',
+    'fc-report__section--fixation',
+  );
+  section.appendChild(fixationSection);
+
+  const { el: zonesSection, slots: zoneSlots } = createOverlaySection(
+    'Attention zones',
+    'Concentric contour bands showing the hottest 10%, 25%, and 50% attention regions. ' +
+    'Tighter contours indicate more concentrated attention.',
+    'fc-report__section--zones',
+  );
+  section.appendChild(zonesSection);
+
+  // =========================================================================
+  // Section 5 — Centroid trajectory (cross-duration, appears once ≥2 results ready)
+  // =========================================================================
+  const trajectorySection = document.createElement('div');
+  trajectorySection.className = 'fc-report__section fc-report__section--trajectory';
+  // why: hidden until at least 2 duration results have fixation data; update() reveals it.
+  trajectorySection.hidden = true;
+
+  const trajHeading = document.createElement('h3');
+  trajHeading.className = 'fc-report__section-heading';
+  trajHeading.textContent = 'Attention shift';
+  trajectorySection.appendChild(trajHeading);
+
+  const trajNote = document.createElement('p');
+  trajNote.className = 'fc-report__overlay-note';
+  trajNote.textContent =
+    'How the predicted centre of attention moves from the first glance to sustained viewing. ' +
+    'Each dot marks the attention centroid at that viewing duration.';
+  trajectorySection.appendChild(trajNote);
+
+  const trajectoryCanvasWrap = document.createElement('div');
+  trajectoryCanvasWrap.className = 'fc-report__trajectory-wrap';
+  trajectorySection.appendChild(trajectoryCanvasWrap);
+  section.appendChild(trajectorySection);
+
+  // =========================================================================
+  // Section 6 — Methodology note
   // =========================================================================
   const methodSection = document.createElement('div');
   methodSection.className = 'fc-report__section fc-report__section--methodology';
@@ -430,7 +625,13 @@ export function createReport({ mountEl, onDurationChange }) {
       ? { dur: activeDuration, result: activeResult }
       : pickHero(durationResults);
 
-    if (!hero) return;
+    if (!hero) {
+      // why: even when no hero is available (no results at all), the trajectory
+      // section must hide — it could have been visible from a prior image.
+      trajectorySection.hidden = true;
+      trajectoryCanvasWrap.textContent = '';
+      return;
+    }
 
     section.hidden = false;
 
@@ -509,6 +710,98 @@ export function createReport({ mountEl, onDurationChange }) {
 
         slot.canvasWrap.appendChild(placeholder);
       }
+    }
+
+    // ----- Fixation sequence slots -----------------------------------------
+    for (const dur of DURATIONS) {
+      const slot = fixationSlots.get(dur);
+      if (!slot) continue;
+
+      const result = durationResults[dur];
+      slot.canvasWrap.textContent = '';
+
+      if (result && result !== 'loading' && result !== 'failed' && result.fixationSequence?.length) {
+        const thumb = compositeOverlayThumb(image, result, 'fixation', 400);
+        thumb.setAttribute('role', 'img');
+        thumb.setAttribute('aria-label', `${DURATION_LABELS[dur] ?? dur} fixation sequence`);
+        slot.canvasWrap.appendChild(thumb);
+        slot.canvasWrap.removeAttribute('aria-busy');
+      } else {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'fc-report__dur-placeholder';
+        if (result === 'loading') {
+          placeholder.setAttribute('aria-label', 'Loading…');
+          slot.canvasWrap.setAttribute('aria-busy', 'true');
+        } else if (result === 'failed') {
+          placeholder.classList.add('fc-report__dur-placeholder--failed');
+          placeholder.setAttribute('aria-label', 'Unavailable');
+          slot.canvasWrap.removeAttribute('aria-busy');
+        } else {
+          placeholder.setAttribute('aria-label', 'Not yet loaded');
+          slot.canvasWrap.removeAttribute('aria-busy');
+        }
+        slot.canvasWrap.appendChild(placeholder);
+      }
+    }
+
+    // ----- Attention zones slots -------------------------------------------
+    for (const dur of DURATIONS) {
+      const slot = zoneSlots.get(dur);
+      if (!slot) continue;
+
+      const result = durationResults[dur];
+      slot.canvasWrap.textContent = '';
+
+      if (result && result !== 'loading' && result !== 'failed' && result.attentionZoneCanvas) {
+        const thumb = compositeOverlayThumb(image, result, 'zones', 400);
+        thumb.setAttribute('role', 'img');
+        thumb.setAttribute('aria-label', `${DURATION_LABELS[dur] ?? dur} attention zones`);
+        slot.canvasWrap.appendChild(thumb);
+        slot.canvasWrap.removeAttribute('aria-busy');
+      } else {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'fc-report__dur-placeholder';
+        if (result === 'loading') {
+          placeholder.setAttribute('aria-label', 'Loading…');
+          slot.canvasWrap.setAttribute('aria-busy', 'true');
+        } else if (result === 'failed') {
+          placeholder.classList.add('fc-report__dur-placeholder--failed');
+          placeholder.setAttribute('aria-label', 'Unavailable');
+          slot.canvasWrap.removeAttribute('aria-busy');
+        } else {
+          placeholder.setAttribute('aria-label', 'Not yet loaded');
+          slot.canvasWrap.removeAttribute('aria-busy');
+        }
+        slot.canvasWrap.appendChild(placeholder);
+      }
+    }
+
+    // ----- Centroid trajectory (cross-duration) ----------------------------
+    // why: must re-evaluate visibility on every update() — a new image resets
+    // all results, so the section must hide again even after being visible.
+    const TRAJ_DURATIONS = /** @type {const} */ (['1s', '3s', '7s']);
+    const trajPoints = [];
+    const trajLabels = [];
+    for (const d of TRAJ_DURATIONS) {
+      const r = durationResults[d];
+      if (r && r !== 'loading' && r !== 'failed' && r.fixation) {
+        trajPoints.push(r.fixation);
+        trajLabels.push(DURATION_LABELS[d] ?? d);
+      }
+    }
+
+    trajectoryCanvasWrap.textContent = '';
+    if (trajPoints.length >= 2) {
+      trajectorySection.hidden = false;
+      const trajCanvas = compositeTrajectoryThumb(image, trajPoints, trajLabels, 600);
+      trajCanvas.setAttribute('role', 'img');
+      trajCanvas.setAttribute(
+        'aria-label',
+        'Attention shift trajectory showing centroid movement across viewing durations',
+      );
+      trajectoryCanvasWrap.appendChild(trajCanvas);
+    } else {
+      trajectorySection.hidden = true;
     }
   }
 

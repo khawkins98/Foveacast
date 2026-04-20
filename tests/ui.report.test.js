@@ -66,10 +66,12 @@ function fakeHeatmap(w = 800, h = 600) {
  */
 function fakeResult(rot = Array(9).fill(1 / 9)) {
   return {
-    heatmapCanvas: fakeHeatmap(),
-    fixation:      { x: 400, y: 300 },
-    origDims:      [600, 800],
-    ruleOfThirds:  rot,
+    heatmapCanvas:      fakeHeatmap(),
+    fixation:           { x: 400, y: 300 },
+    origDims:           [600, 800],
+    ruleOfThirds:       rot,
+    fixationSequence:   [{ x: 200, y: 150 }, { x: 400, y: 300 }, { x: 600, y: 400 }],
+    attentionZoneCanvas: fakeHeatmap(),
   };
 }
 
@@ -177,10 +179,12 @@ describe('createReport — initial state', () => {
     expect(section.hidden).toBe(true);
   });
 
-  it('renders three duration slot figures at mount time', () => {
+  it('renders three duration slot figures in the comparison strip at mount time', () => {
     const mount = document.createElement('div');
     createReport({ mountEl: mount });
-    const slots = mount.querySelectorAll('.fc-report__dur-item');
+    // Query scoped to the duration comparison strip only — not the overlay strips.
+    const strip = mount.querySelector('.fc-report__section--durations .fc-report__strip');
+    const slots = strip ? strip.querySelectorAll('.fc-report__dur-item') : [];
     expect(slots.length).toBe(3);
     const attrs = Array.from(slots).map((s) => s.dataset.duration);
     expect(attrs).toEqual(['1s', '3s', '7s']);
@@ -373,5 +377,107 @@ describe('createReport — duration tabs', () => {
     update({ image: fakeImage(), durationResults: only3s(), activeDuration: '7s' });
     const sourceLabel = mount.querySelector('.fc-report__source-label');
     expect(sourceLabel.textContent).toMatch(/Quick scan \(3 seconds\)/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Overlay sections — fixation, zones, trajectory
+// ---------------------------------------------------------------------------
+
+describe('report overlay sections — DOM structure', () => {
+  it('renders a fixation sequence section', () => {
+    const mount = document.createElement('div');
+    createReport({ mountEl: mount });
+    expect(mount.querySelector('.fc-report__section--fixation')).not.toBeNull();
+  });
+
+  it('renders an attention zones section', () => {
+    const mount = document.createElement('div');
+    createReport({ mountEl: mount });
+    expect(mount.querySelector('.fc-report__section--zones')).not.toBeNull();
+  });
+
+  it('renders a trajectory section hidden by default', () => {
+    const mount = document.createElement('div');
+    createReport({ mountEl: mount });
+    const traj = mount.querySelector('.fc-report__section--trajectory');
+    expect(traj).not.toBeNull();
+    expect(traj.hidden).toBe(true);
+  });
+
+  it('fixation section has 3 per-duration slots', () => {
+    const mount = document.createElement('div');
+    createReport({ mountEl: mount });
+    const section = mount.querySelector('.fc-report__section--fixation');
+    const items = section.querySelectorAll('.fc-report__dur-item');
+    expect(items.length).toBe(3);
+  });
+});
+
+describe('report overlay sections — update()', () => {
+  it('populates fixation slots with canvases when results are ready', () => {
+    const mount = document.createElement('div');
+    const { update } = createReport({ mountEl: mount });
+    update({ image: fakeImage(), durationResults: allReady() });
+    const section = mount.querySelector('.fc-report__section--fixation');
+    const canvases = section.querySelectorAll('canvas');
+    // All 3 ready → 3 canvases
+    expect(canvases.length).toBe(3);
+  });
+
+  it('shows placeholder for a loading duration in fixation section', () => {
+    const mount = document.createElement('div');
+    const { update } = createReport({ mountEl: mount });
+    update({ image: fakeImage(), durationResults: { '1s': 'loading', '3s': fakeResult(), '7s': null } });
+    const section = mount.querySelector('.fc-report__section--fixation');
+    const placeholders = section.querySelectorAll('.fc-report__dur-placeholder');
+    // 1 loading + 1 null = 2 placeholders; 1 canvas for 3s
+    expect(placeholders.length).toBe(2);
+  });
+
+  it('populates zone slots with canvases when results are ready', () => {
+    const mount = document.createElement('div');
+    const { update } = createReport({ mountEl: mount });
+    update({ image: fakeImage(), durationResults: allReady() });
+    const section = mount.querySelector('.fc-report__section--zones');
+    const canvases = section.querySelectorAll('canvas');
+    expect(canvases.length).toBe(3);
+  });
+
+  it('trajectory section stays hidden with only 1 result', () => {
+    const mount = document.createElement('div');
+    const { update } = createReport({ mountEl: mount });
+    update({ image: fakeImage(), durationResults: only3s() });
+    const traj = mount.querySelector('.fc-report__section--trajectory');
+    expect(traj.hidden).toBe(true);
+  });
+
+  it('trajectory section is revealed once 2+ results are ready', () => {
+    const mount = document.createElement('div');
+    const { update } = createReport({ mountEl: mount });
+    const results = { '1s': fakeResult(), '3s': fakeResult(), '7s': null };
+    update({ image: fakeImage(), durationResults: results });
+    const traj = mount.querySelector('.fc-report__section--trajectory');
+    expect(traj.hidden).toBe(false);
+  });
+
+  it('trajectory section contains a canvas when visible', () => {
+    const mount = document.createElement('div');
+    const { update } = createReport({ mountEl: mount });
+    update({ image: fakeImage(), durationResults: allReady() });
+    const wrap = mount.querySelector('.fc-report__trajectory-wrap');
+    expect(wrap.querySelector('canvas')).not.toBeNull();
+  });
+
+  it('trajectory section re-hides after image reset', () => {
+    const mount = document.createElement('div');
+    const { update } = createReport({ mountEl: mount });
+    // First: 3 results ready — trajectory visible
+    update({ image: fakeImage(), durationResults: allReady() });
+    const traj = mount.querySelector('.fc-report__section--trajectory');
+    expect(traj.hidden).toBe(false);
+    // New image: no results yet — trajectory must hide again
+    update({ image: fakeImage(), durationResults: { '1s': null, '3s': null, '7s': null } });
+    expect(traj.hidden).toBe(true);
   });
 });

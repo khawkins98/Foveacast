@@ -103,7 +103,6 @@ const FIRST_RUN_THRESHOLD_MS = 800;
  *   } | null,
  *   lastCompositeCanvas: HTMLCanvasElement | null,
  *   durationSwitchGeneration: number,
- *   overlays: { fixationSequence: boolean, attentionZones: boolean, centroidTrajectory: boolean },
  *   lastFixationSequence: Array<{x: number, y: number}> | null,
  *   lastAttentionZoneCanvas: HTMLCanvasElement | null,
  *   lastRuleOfThirds: number[] | null,
@@ -145,11 +144,6 @@ const state = {
    *  duration. This prevents a slow 1s download from stomping a fast 3s
    *  download that the user selected while the 1s was in flight. */
   durationSwitchGeneration: 0,
-  /** Active overlay toggles — controlled by the overlay checkboxes. */
-  overlays: { fixationSequence: false, attentionZones: false, centroidTrajectory: false },
-  /** Cached saliency visualization artifacts for the currently displayed duration. */
-  lastFixationSequence: /** @type {Array<{x: number, y: number}> | null} */ (null),
-  lastAttentionZoneCanvas: /** @type {HTMLCanvasElement | null} */ (null),
   lastRuleOfThirds: /** @type {number[] | null} */ (null),
 };
 
@@ -262,10 +256,6 @@ function boot() {
       downloadCompositeAsPng(/** @type {HTMLCanvasElement} */ (compositeCanvas)).catch((err) => {
         console.error('Foveacast: download failed.', err);
       });
-    },
-    onOverlayChange: (overlays) => {
-      state.overlays = overlays;
-      renderOutput();
     },
   });
   controls.setDisabled(true); // Enabled once the model is ready.
@@ -418,8 +408,6 @@ function boot() {
     state.lastFixation = result.fixation;
     state.lastOrigDims = result.origDims;
     state.lastDiagnostics = result.diagnostics;
-    state.lastFixationSequence = result.fixationSequence ?? null;
-    state.lastAttentionZoneCanvas = result.attentionZoneCanvas ?? null;
     state.lastRuleOfThirds = result.ruleOfThirds ?? null;
     state.displayedDuration = duration;
 
@@ -593,15 +581,13 @@ function boot() {
             applyDurationResult(dur);
           }
 
-          // Once all 3 durations are ready, enable the trajectory overlay
-          // and re-render if the trajectory toggle is on, so the overlay
-          // appears without requiring the user to toggle it off and on.
+          // Once all 3 durations are ready, update the report so the trajectory
+          // section appears automatically.
           const allReady = (['1s', '3s', '7s'] /** @type {const} */).every(
             (d) => state.durationResults[d] && state.durationResults[d] !== 'loading' && state.durationResults[d] !== 'failed',
           );
           if (allReady) {
-            controls.setTrajectoryAvailable(true);
-            if (state.overlays.centroidTrajectory) renderOutput();
+            updateReport();
           }
         }
       }
@@ -1002,9 +988,6 @@ function boot() {
         }
       }
       controls.setDurationStatus(inferDuration, 'ready');
-      // Reset trajectory availability for the new image — it will be re-enabled
-      // by loadBackgroundDurations once all 3 durations complete.
-      controls.setTrajectoryAvailable(false);
 
       // Kick off background loading of the other two durations.
       // Fire-and-forget: errors are handled inside loadBackgroundDurations.
@@ -1093,19 +1076,6 @@ function boot() {
   function renderOutput() {
     if (!state.lastImage || !state.lastHeatmapCanvas) return;
 
-    // Build centroid trajectory from all three ready duration results.
-    // Ordered 1s → 3s → 7s so the line shows attention shift over time.
-    const TRAJ_DURATIONS = /** @type {const} */ (['1s', '3s', '7s']);
-    const centroidTrajectory = [];
-    const centroidLabels = [];
-    for (const d of TRAJ_DURATIONS) {
-      const r = state.durationResults[d];
-      if (r && r !== 'loading' && r !== 'failed' && r.fixation) {
-        centroidTrajectory.push(r.fixation);
-        centroidLabels.push(DURATION_LABELS[d] ?? d);
-      }
-    }
-
     // Delegate rendering to the output-view module. The return value is
     // the composite canvas (null for the 'original' view) which we store
     // so the download handler always has a direct reference — avoiding
@@ -1122,11 +1092,7 @@ function boot() {
         origDims: state.lastOrigDims,
         duration: DURATION_LABELS[state.displayedDuration],
         diagnostics: state.lastDiagnostics,
-        fixationSequence: state.lastFixationSequence,
-        attentionZoneCanvas: state.lastAttentionZoneCanvas,
-        centroidTrajectory: centroidTrajectory.length >= 2 ? centroidTrajectory : null,
-        centroidLabels,
-        overlays: state.overlays,
+        overlays: { fixationSequence: false, attentionZones: false, centroidTrajectory: false },
       },
       { outputSection, outputCanvasWrap, outputCaption },
     );
