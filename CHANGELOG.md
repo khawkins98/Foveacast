@@ -14,6 +14,8 @@ All notable changes to Foveacast are recorded here. Format follows [Keep a Chang
 - **Canvas hover tooltips** — hovering over a numbered fixation circle shows "Fixation N of M — most likely first fixation" (and ordinal equivalents). Hovering over a centroid trajectory dot shows the full duration label (e.g. "First glance (1 second)"). Both use a single floating `position: fixed` tooltip that tracks the cursor.
 - **Duration labels now spell out "seconds"** — "Full viewing (7 seconds)" instead of "Full viewing (7 s)".
 - **Commercial alternatives listed in README** — the README now has a short "Commercial alternatives" section naming paid services that offer real eye-tracking studies, with a note that they are not free and send screenshots to a third party.
+- **Model credits in sidebar** — attribution, training references, and the bias disclosure note moved from the workspace footer into a collapsible "About this model" panel in the sidebar, so they're visible alongside the analysis controls rather than buried below the output canvas.
+- **Sidebar subtitle links to the MSI-Net paper** — the "MSI-Net · saliency model" subtitle is now an anchor (`doi.org/10.1016/j.neunet.2020.05.004`) with a `title` tooltip giving a plain-English description of the architecture.
 
 ### Fixed
 
@@ -23,6 +25,7 @@ All notable changes to Foveacast are recorded here. Format follows [Keep a Chang
 ### Changed
 
 - CONTRIBUTING.md coding-guide intro reworded to sound less like a policy document.
+- **All-caps text removed** — every `text-transform: uppercase` instance replaced with mixed-case. Letter-spacing reset to neutral per selector; the two sub-0.6 rem labels bumped to 0.65–0.7 rem to maintain legibility without uppercase compensation.
 
 ## [0.3.0] — 2026-04-17
 
