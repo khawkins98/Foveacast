@@ -751,6 +751,21 @@ body.fc-page-dragover .fc-dropzone {
   opacity: 0.45;
 }
 
+.fc-dropzone__icon {
+  /* why: icon sits above the label to anchor the visual centre of the
+     drop zone and make the affordance immediately legible. Dim colour
+     keeps it from competing with the label text. */
+  display: block;
+  color: var(--fc-on-surface-dim);
+  margin-bottom: 0.6rem;
+  line-height: 0;
+}
+
+.fc-dropzone__icon svg {
+  width: 2rem;
+  height: 2rem;
+}
+
 .fc-dropzone__label {
   font-size: 1.05rem;
   font-weight: 700;

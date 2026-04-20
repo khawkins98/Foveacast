@@ -23,6 +23,7 @@
 //   - §First-Run: "Ready once model loads…" label during the disabled state.
 
 import { validateDroppedFile } from './file-validation.js';
+import { iconUpload } from './icons.js';
 
 /**
  * @typedef {Object} DropzoneError
@@ -66,6 +67,13 @@ export function createDropzone({ onFile, onError }) {
     'aria-label',
     'Drop a screenshot here or press Enter to choose a file',
   );
+
+  // Upload icon — decorative, reinforces the affordance visually.
+  const icon = document.createElement('span');
+  icon.className = 'fc-dropzone__icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.innerHTML = iconUpload;
+  element.appendChild(icon);
 
   // Default visible copy. Caller can swap this out via setEnabled(false).
   const label = document.createElement('p');
