@@ -310,6 +310,70 @@ a:hover {
   flex-direction: column;
   gap: 1.5rem;
   padding: calc(var(--fc-topnav-h) + 2rem) 2rem 2rem;
+
+  /* why: required so .fc-voxel-bg (position: absolute) anchors to this
+     column rather than the viewport or a higher ancestor. */
+  position: relative;
+}
+
+/* -- Voxel background decoration ------------------------------------------ */
+
+/*
+ * .fc-voxel-bg is a purely decorative, aria-hidden SVG container driven by
+ * ui/voxel-bg.js. It sits below all content (z-index: 0) and is pointer-event
+ * transparent.
+ *
+ * State classes applied by voxel-bg.js:
+ *   .fc-voxel-bg--loading  →  prominent, centred, full-opacity (spinning cube)
+ *   .fc-voxel-bg--ready    →  background position, reduced opacity (sphere shell)
+ *
+ * The element starts invisible (opacity: 0) so a brief flash is not visible
+ * before JS initialises the loading state.
+ */
+.fc-voxel-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  transition:
+    opacity 1s ease,
+    transform 1.5s ease;
+  /* Contain the SVG so it does not overflow the main column. */
+  overflow: hidden;
+}
+
+.fc-voxel-bg svg {
+  /* The heerich SVG is unitless; scale it to a visible size. */
+  width: 260px;
+  height: 260px;
+}
+
+.fc-voxel-bg--loading {
+  opacity: 0.45;
+}
+
+.fc-voxel-bg--ready {
+  opacity: 0.15;
+  transform: scale(0.65) translate(55%, -25%);
+}
+
+/* Ensure flex children stacked after .fc-voxel-bg sit on top of it. */
+.fc-main > *:not(.fc-voxel-bg) {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-voxel-bg {
+    transition: none;
+  }
 }
 
 /*

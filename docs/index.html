@@ -152,6 +152,14 @@
         </header>
 
         <!--
+          Voxel wireframe background — purely decorative, no semantic content.
+          Driven by ui/voxel-bg.js: spins as a cube while the model loads,
+          morphs to a sphere shell when ready, then fades to a low-opacity
+          ambient background decoration. aria-hidden keeps it invisible to AT.
+        -->
+        <div id="fc-voxel-bg" class="fc-voxel-bg" aria-hidden="true"></div>
+
+        <!--
           Empty-state intro — visible before first inference, hidden after.
           Sits in the main reading column so the contextual help is inline.
         -->

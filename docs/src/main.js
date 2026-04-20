@@ -29,6 +29,7 @@ import { readHasRunSentinel, writeHasRunSentinel } from './ui/has-run-sentinel.j
 import { computeSaliencyMetrics, computeZoneThresholds, computeRuleOfThirds } from './pipeline/metrics.js';
 import { createReport } from './ui/report.js';
 import { createHud, updateHud, updateHudRuleOfThirds } from './ui/hud.js';
+import { createVoxelBg } from './ui/voxel-bg.js';
 
 /**
  * Threshold (ms) above which we treat the first onProgress tick as a
@@ -182,6 +183,13 @@ function boot() {
   const hudMount = mustGet('fc-hud-mount');
   const reportMount = mustGet('fc-report-mount');
   const toolbarEl = mustGet('fc-toolbar');
+
+  // --- Voxel background -------------------------------------------------
+  // Purely decorative; failures are non-fatal. The element is aria-hidden
+  // and pointer-events:none so AT and input are unaffected whether or not
+  // heerich initialises successfully.
+  const voxelBgEl = document.getElementById('fc-voxel-bg');
+  const voxelBg = voxelBgEl ? createVoxelBg(voxelBgEl) : null;
 
   // --- Status banner ----------------------------------------------------
   const status = createStatus();
@@ -728,6 +736,8 @@ function boot() {
     controls.setDisabled(false);
     controls.setDurationLoading(false);
     if (!silent) status.showReady();
+    // Trigger the cube→sphere morph now that the model is ready.
+    voxelBg?.setState('ready');
     setAppBusy(false);
 
     // Drain any file the user dropped while we were still loading.
@@ -1005,6 +1015,10 @@ function boot() {
       // Reveal controls now that there is a real result to operate on
       // (non-demo path). Safe to call repeatedly — no-op after first.
       showControls();
+      // Fade out and tear down the voxel decoration once the user has a
+      // real result — it has served its purpose as a loading indicator.
+      // destroy() is a no-op on second call so this is safe to repeat.
+      voxelBg?.destroy();
       status.clear();
 
       // PRD §Accessibility: after inference completes, move focus to
