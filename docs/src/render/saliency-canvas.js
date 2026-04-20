@@ -487,12 +487,16 @@ function drawCentroidTrajectory(ctx, trajectory, labels) {
   if (trajectory.length < 2) return;
   ctx.save();
 
-  const dotR = 8;
-  const fontSize = 12;
+  // Scale to canvas size so dots and labels are legible on large screenshots.
+  // Floor at 8 px (dot) / 11 px (font) for small canvases.
+  const shortSide = Math.min(ctx.canvas.width, ctx.canvas.height);
+  const dotR    = Math.max(8,  Math.round(shortSide * 0.014));
+  const fontSize = Math.max(11, Math.round(shortSide * 0.022));
+  const lineW   = Math.max(2,  Math.round(shortSide * 0.003));
 
   // Dashed trajectory line.
-  ctx.setLineDash([8, 5]);
-  ctx.lineWidth = 3;
+  ctx.setLineDash([dotR * 1.0, dotR * 0.6]);
+  ctx.lineWidth = lineW * 2;
   ctx.strokeStyle = 'rgba(100,200,255,0.85)';
   ctx.beginPath();
   ctx.moveTo(trajectory[0].x, trajectory[0].y);
