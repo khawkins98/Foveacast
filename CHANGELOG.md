@@ -11,7 +11,12 @@ All notable changes to Foveacast are recorded here. Format follows [Keep a Chang
 - **Duration trajectory overlay** — line connecting predicted attention centroids across the 1-second, 3-second, and 7-second results. Shows how focus shifts as viewing time increases. Enabled automatically once all three duration models have run.
 - **Rule-of-thirds HUD panel** — collapsible 3×3 grid showing the percentage of saliency mass in each image third. Values are integer-rounded and always sum to 100.
 - **Tooltip "?" buttons** on each overlay toggle — hover or focus to read a one-line description of what the visualization shows. Keyboard-accessible, ARIA-labelled.
+- **Canvas hover tooltips** — hovering over a numbered fixation circle shows "Fixation N of M — most likely first fixation" (and ordinal equivalents). Hovering over a centroid trajectory dot shows the full duration label (e.g. "First glance (1 second)"). Both use a single floating `position: fixed` tooltip that tracks the cursor.
 - **Duration labels now spell out "seconds"** — "Full viewing (7 seconds)" instead of "Full viewing (7 s)".
+
+### Fixed
+
+- Fixation sequence markers and centroid trajectory dots were tiny on large screenshots. Both now scale proportionally to the canvas short side (fixation: 3.5%, trajectory dot: 1.4%), floored at a readable minimum so small canvases still work.
 
 ## [0.3.0] — 2026-04-17
 
