@@ -32,12 +32,17 @@ function installOrtMock({ sessionCreate } = {}) {
  * Build a fetch mock that streams `bytes` through a ReadableStream so
  * the progress-tracking code path is actually exercised.
  */
-function makeStreamingFetch(bytes, { contentLength = bytes.byteLength, ok = true, status = 200 } = {}) {
+function makeStreamingFetch(bytes, { contentLength = bytes.byteLength, ok = true, status = 200, etag = null } = {}) {
   return vi.fn().mockResolvedValue({
     ok,
     status,
     headers: {
-      get: (name) => (String(name).toLowerCase() === 'content-length' ? String(contentLength) : null),
+      get: (name) => {
+        const n = String(name).toLowerCase();
+        if (n === 'content-length') return contentLength != null ? String(contentLength) : null;
+        if (n === 'etag') return etag;
+        return null;
+      },
     },
     body: {
       getReader() {
@@ -290,5 +295,185 @@ describe('loadModel — structured error classification', () => {
     } catch (err) {
       expect(/** @type {any} */ (err).code).toBe('MODEL_DOWNLOAD_FAILED');
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cache API caching
+// ---------------------------------------------------------------------------
+// These tests mock `globalThis.caches` to exercise the Cache API layer in
+// `fetchModelBytes`. In the normal jsdom test environment `caches` is
+// undefined, so existing tests are unaffected; only this block sets it up.
+// ---------------------------------------------------------------------------
+
+describe('Cache API caching', () => {
+  /** @type {any} */ let originalCaches;
+  /** @type {any} */ let originalOrt;
+  /** @type {any} */ let originalFetch;
+
+  beforeEach(() => {
+    originalCaches = /** @type {any} */ (globalThis).caches;
+    originalOrt = /** @type {any} */ (globalThis).ort;
+    originalFetch = globalThis.fetch;
+    installOrtMock();
+  });
+
+  afterEach(() => {
+    /** @type {any} */ (globalThis).caches = originalCaches;
+    /** @type {any} */ (globalThis).ort = originalOrt;
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  /**
+   * Build a minimal `caches`-like mock and return the inner `cache` object
+   * so individual tests can assert on `match`, `put`, and `delete` calls.
+   */
+  function makeCachesMock({ cachedResponse = /** @type {any} */ (null) } = {}) {
+    const mockCache = {
+      match: vi.fn().mockResolvedValue(cachedResponse),
+      delete: vi.fn().mockResolvedValue(true),
+      put: vi.fn().mockResolvedValue(undefined),
+    };
+    /** @type {any} */ (globalThis).caches = {
+      open: vi.fn().mockResolvedValue(mockCache),
+    };
+    return mockCache;
+  }
+
+  /**
+   * Build a duck-typed Response-like object as returned by `cache.match()`.
+   * `etag` may be null to simulate a cached entry without a validator.
+   */
+  function makeCachedEntry(bytes, etag) {
+    return {
+      headers: {
+        get: (/** @type {string} */ name) => {
+          const n = String(name).toLowerCase();
+          if (n === 'etag') return etag ?? null;
+          if (n === 'content-type') return 'application/octet-stream';
+          if (n === 'content-length') return String(bytes.byteLength);
+          return null;
+        },
+      },
+      arrayBuffer: async () => bytes.buffer.slice(0),
+    };
+  }
+
+  it('serves from cache immediately without blocking on a network round-trip', async () => {
+    const bytes = new Uint8Array([10, 20, 30, 40]);
+    const etag = '"model-etag-v1"';
+    makeCachesMock({ cachedResponse: makeCachedEntry(bytes, etag) });
+
+    // HEAD resolves (background revalidation) but should not block the return
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: (/** @type {string} */ n) => (n === 'ETag' ? etag : null) },
+    });
+
+    const progressEvents = /** @type {any[]} */ ([]);
+    const result = await loadModel({ onProgress: (p) => progressEvents.push(p) });
+
+    // Model loaded from cache
+    expect(result.session).toEqual({ fake: 'session' });
+    // Exactly one progress event fired at fraction=1 (instant cache read)
+    expect(progressEvents).toHaveLength(1);
+    expect(progressEvents[0].fraction).toBe(1);
+    // No GET fetch — only the background HEAD
+    const getCalls = globalThis.fetch.mock.calls.filter(
+      (/** @type {any[]} */ [, opts]) => !opts || opts.method !== 'HEAD',
+    );
+    expect(getCalls).toHaveLength(0);
+  });
+
+  it('evicts stale cache entry in background when server ETag changes', async () => {
+    const oldEtag = '"old-etag"';
+    const newEtag = '"new-etag"';
+    const mockCache = makeCachesMock({
+      cachedResponse: makeCachedEntry(new Uint8Array([1, 2, 3]), oldEtag),
+    });
+
+    // HEAD returns new ETag — model was updated on the server
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: (/** @type {string} */ n) => (n === 'ETag' ? newEtag : null) },
+    });
+
+    await loadModel();
+    // Flush the background revalidation promise chain
+    await new Promise((r) => setTimeout(r, 0));
+
+    // Stale entry should have been evicted; next load will re-download
+    expect(mockCache.delete).toHaveBeenCalledWith(modelUrlForDuration('3s'));
+    // We did NOT re-download in this same session
+    const getCalls = globalThis.fetch.mock.calls.filter(
+      (/** @type {any[]} */ [, opts]) => !opts || opts.method !== 'HEAD',
+    );
+    expect(getCalls).toHaveLength(0);
+  });
+
+  it('keeps cache entry when server ETag matches (no eviction)', async () => {
+    const etag = '"stable-etag"';
+    const mockCache = makeCachesMock({
+      cachedResponse: makeCachedEntry(new Uint8Array([5, 6, 7]), etag),
+    });
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: (/** @type {string} */ n) => (n === 'ETag' ? etag : null) },
+    });
+
+    await loadModel();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(mockCache.delete).not.toHaveBeenCalled();
+  });
+
+  it('uses stale cache entry when offline (HEAD rejects)', async () => {
+    const etag = '"offline-etag"';
+    makeCachesMock({ cachedResponse: makeCachedEntry(new Uint8Array([9, 8, 7]), etag) });
+
+    // All fetch calls fail (offline)
+    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('Network failure'));
+
+    const result = await loadModel();
+    await new Promise((r) => setTimeout(r, 0));
+
+    // Model still loaded from the stale cache entry
+    expect(result.session).toEqual({ fake: 'session' });
+  });
+
+  it('downloads and caches the model on a cache miss', async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4, 5]);
+    const etag = '"fresh-etag"';
+    const mockCache = makeCachesMock({ cachedResponse: null });
+
+    globalThis.fetch = makeStreamingFetch(bytes, { etag });
+
+    await loadModel();
+
+    // Bytes should have been written to the cache
+    expect(mockCache.put).toHaveBeenCalledTimes(1);
+    const [cachedUrl] = mockCache.put.mock.calls[0];
+    expect(cachedUrl).toBe(modelUrlForDuration('3s'));
+  });
+
+  it('does not cache when the server response has no ETag', async () => {
+    // No ETag — we refuse to cache to avoid a permanently stale entry
+    const mockCache = makeCachesMock({ cachedResponse: null });
+    globalThis.fetch = makeStreamingFetch(new Uint8Array([1, 2, 3]), { etag: null });
+
+    await loadModel();
+
+    expect(mockCache.put).not.toHaveBeenCalled();
+  });
+
+  it('falls back to normal network fetch when Cache API is unavailable', async () => {
+    // Simulate an environment where caches is undefined (e.g. non-secure context)
+    /** @type {any} */ (globalThis).caches = undefined;
+    globalThis.fetch = makeStreamingFetch(new Uint8Array([1, 2, 3]), { etag: '"x"' });
+
+    const result = await loadModel();
+    expect(result.session).toEqual({ fake: 'session' });
   });
 });

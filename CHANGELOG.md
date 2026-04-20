@@ -6,6 +6,10 @@ All notable changes to Foveacast are recorded here. Format follows [Keep a Chang
 
 ### Added
 
+- **Persistent model caching via Cache API** — model `.onnx` files are now stored in `CacheStorage` after the first download. GitHub Pages serves these files with `Cache-Control: max-age=600` (10 minutes), causing repeat visitors to re-download the 57 MB model on every return visit after that window. Cache API storage has no TTL; the model stays cached until the user clears site data or the model is updated. Cache hits include a background ETag revalidation so model updates propagate on the next page load without user action. Falls back to normal HTTP caching on browsers where the Cache API is unavailable or in insecure contexts.
+
+### Added
+
 - **Analysis report** — scrollable report below the interactive heatmap. Presents findings in narrative order: duration tabs, hero heatmap, primary-finding headline from rule-of-thirds breakdown, first-fixation coordinate note, 3×3 rule-of-thirds grid, duration comparison strip, fixation sequence strip, attention zones strip, centroid trajectory section, and a methodology note. Builds in-place as background duration results arrive; earlier results appear without waiting for all three.
 - **Duration tabs in the report** — tabbed interface above the hero canvas for switching between viewing durations. Tabs enable as each model's result arrives. Replaces the radio-button group that was in the toolbar.
 - **Fixation sequence section** — three-column strip with numbered saccade paths overlaid on heatmap thumbnails, one per viewing duration. Shows the predicted scan order using inhibition-of-return (IoR). Always visible after inference; no toggle required.

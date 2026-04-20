@@ -93,6 +93,125 @@ export function modelUrlForDuration(duration) {
  */
 
 /**
+ * Cache API store name for persisted model artefacts. The `v1` suffix
+ * lets a future breaking change (different URL scheme, model format)
+ * force a clean slate by bumping to `v2`, treating every browser as a
+ * first-time visitor for the new download.
+ */
+const CACHE_NAME = 'foveacast-models-v1';
+
+/**
+ * Revalidate a cached model entry in the background using an ETag HEAD
+ * check. If the server ETag has changed (i.e. a new model was deployed),
+ * evict the stale entry so the *next* page load re-downloads the updated
+ * model. Errors are silently ignored — offline, server hiccups, quota
+ * issues — none of these should disturb a loaded session.
+ *
+ * @param {string} url
+ * @param {string} cachedEtag
+ * @param {Cache} cache
+ */
+async function revalidateCachedModel(url, cachedEtag, cache) {
+  try {
+    const head = await fetch(url, { method: 'HEAD' });
+    const serverEtag = head.ok ? head.headers.get('ETag') : null;
+    if (serverEtag && serverEtag !== cachedEtag) {
+      // why: evict now so the next load fetches the updated model; the
+      // current session is unaffected — bytes are already in memory.
+      await cache.delete(url);
+    }
+  } catch {
+    // Offline or transient network error — stale model is better than none.
+  }
+}
+
+/**
+ * Try to serve model bytes from the Cache API. Returns an ArrayBuffer
+ * immediately on a hit, or `null` on a miss.
+ *
+ * Why Cache API and not the browser HTTP cache?
+ *   GitHub Pages serves `.onnx` files with `Cache-Control: max-age=600`
+ *   (10 minutes). After that window the browser must revalidate, and a
+ *   changed ETag (e.g. after a re-deploy) triggers a full 57 MB download.
+ *   Cache API storage has no automatic TTL — the model stays until the user
+ *   clears site data or this function evicts it on an ETag mismatch.
+ *
+ * Cache hits never block on the network: bytes are served immediately,
+ * and a background HEAD request revalidates the ETag. If the model was
+ * updated, the stale entry is evicted and the *next* load re-downloads.
+ *
+ * Only entries backed by an ETag are persisted, so we always have a
+ * validator for future revalidation and never accumulate permanently stale
+ * entries.
+ *
+ * @param {string} url
+ * @param {(progress: LoadProgress) => void} [onProgress]
+ * @returns {Promise<ArrayBuffer|null>}
+ */
+async function readFromModelCache(url, onProgress) {
+  if (typeof caches === 'undefined') return null;
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(url);
+    if (!cached) return null;
+
+    const cachedEtag = cached.headers.get('ETag');
+    const buf = await cached.arrayBuffer();
+
+    // Revalidate in background — don't gate cache hits on a network round-trip.
+    // If the ETag changed, the stale entry is evicted; the next page load
+    // re-downloads. If we're offline the stale model serves fine.
+    if (cachedEtag) {
+      revalidateCachedModel(url, cachedEtag, cache).catch(() => {});
+    }
+
+    if (onProgress) onProgress({ fraction: 1, loaded: buf.byteLength, total: buf.byteLength });
+    return buf;
+  } catch {
+    // Cache API error (quota, permissions, …) — fall through to network.
+    return null;
+  }
+}
+
+/**
+ * Persist model bytes to the Cache API after a successful network download,
+ * so future page loads can skip the re-download.
+ *
+ * We only cache responses that carry an ETag. Without a validator we cannot
+ * detect future model updates, and the entry would remain forever stale.
+ *
+ * Errors are silently swallowed — a cache write failure is non-fatal; the
+ * model is already loaded and the user is unaware.
+ *
+ * @param {string} url
+ * @param {ArrayBuffer} buf
+ * @param {Headers} responseHeaders - From the original GET response (for ETag).
+ */
+async function writeToModelCache(url, buf, responseHeaders) {
+  if (typeof caches === 'undefined') return;
+  const etag = responseHeaders.get('ETag');
+  // Only cache if we have a validator for future revalidation. GitHub Pages
+  // always provides ETags; this guard prevents permanent stale entries if a
+  // future CDN ever omits them.
+  if (!etag) return;
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    const headers = new Headers();
+    headers.set('ETag', etag);
+    headers.set(
+      'Content-Type',
+      responseHeaders.get('Content-Type') || 'application/octet-stream',
+    );
+    headers.set('Content-Length', String(buf.byteLength));
+    // buf.slice(0) gives the Response its own copy of the bytes so the
+    // caller's ArrayBuffer remains valid for ORT inference after this awaits.
+    await cache.put(url, new Response(buf.slice(0), { headers }));
+  } catch {
+    // Quota exceeded or Cache API unavailable — not fatal.
+  }
+}
+
+/**
  * Fetch a URL with an intermediate stream reader so progress events
  * can be reported while the bytes are still in flight. Returns the
  * full response body as an `ArrayBuffer` once the stream finishes.
@@ -102,11 +221,21 @@ export function modelUrlForDuration(duration) {
  * progress bar is worth the extra plumbing; we fetch ourselves and
  * hand the buffer to `InferenceSession.create(bytes)`.
  *
+ * On repeat visits the bytes come from the Cache API (see
+ * `readFromModelCache`), bypassing the browser HTTP cache which
+ * GitHub Pages expires every 10 minutes.
+ *
  * @param {string} url
  * @param {(progress: LoadProgress) => void} [onProgress]
  * @returns {Promise<ArrayBuffer>}
  */
 async function fetchModelBytes(url, onProgress) {
+  // Try the Cache API before hitting the network. Unlike the HTTP cache
+  // (max-age=600 on GitHub Pages), Cache API storage persists across sessions
+  // and is only evicted when the server ETag changes or the user clears site data.
+  const cachedBuf = await readFromModelCache(url, onProgress);
+  if (cachedBuf) return cachedBuf;
+
   const response = await fetch(url);
   if (!response.ok) {
     const err = /** @type {Error & { code?: string, status?: number }} */ (
@@ -117,47 +246,57 @@ async function fetchModelBytes(url, onProgress) {
     throw err;
   }
 
+  const responseHeaders = response.headers;
+
   // Content-Length is the only honest "total" signal; when the server
   // omits it (some CDNs, some dev servers with chunked encoding) we
   // fall back to fraction-undefined and let the UI show an
   // indeterminate spinner instead.
-  const headerLen = response.headers.get('Content-Length');
+  const headerLen = responseHeaders.get('Content-Length');
   const total = headerLen ? Number(headerLen) : undefined;
   const body = response.body;
+
+  let buf;
 
   // Older browsers without ReadableStream — or any environment where
   // the body is null (shouldn't happen on fetch-200) — fall back to
   // response.arrayBuffer(). Progress is a single 1.0 at the end.
   if (!body || typeof body.getReader !== 'function') {
-    const buf = await response.arrayBuffer();
+    buf = await response.arrayBuffer();
     if (onProgress) onProgress({ fraction: 1, loaded: buf.byteLength, total });
-    return buf;
-  }
-
-  const reader = body.getReader();
-  const chunks = [];
-  let loaded = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    loaded += value.byteLength;
-    if (onProgress) {
-      const fraction = total ? Math.min(loaded / total, 0.999) : undefined;
-      onProgress({ fraction: fraction ?? 0, loaded, total });
+  } else {
+    const reader = body.getReader();
+    const chunks = [];
+    let loaded = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      loaded += value.byteLength;
+      if (onProgress) {
+        const fraction = total ? Math.min(loaded / total, 0.999) : undefined;
+        onProgress({ fraction: fraction ?? 0, loaded, total });
+      }
     }
-  }
-  if (onProgress) onProgress({ fraction: 1, loaded, total: total ?? loaded });
+    if (onProgress) onProgress({ fraction: 1, loaded, total: total ?? loaded });
 
-  // Concatenate chunks into a single ArrayBuffer. One-off cost at the
-  // end of download; dwarfed by the inference cost that follows.
-  const out = new Uint8Array(loaded);
-  let offset = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, offset);
-    offset += chunk.byteLength;
+    // Concatenate chunks into a single ArrayBuffer. One-off cost at the
+    // end of download; dwarfed by the inference cost that follows.
+    const out = new Uint8Array(loaded);
+    let offset = 0;
+    for (const chunk of chunks) {
+      out.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    buf = out.buffer;
   }
-  return out.buffer;
+
+  // Persist for future visits. Awaited so tests can assert on cache.put
+  // without extra flushes; for users the extra latency is negligible
+  // compared to the 57 MB download that just finished.
+  await writeToModelCache(url, buf, responseHeaders);
+
+  return buf;
 }
 
 /**

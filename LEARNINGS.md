@@ -6,6 +6,23 @@ This file is not a changelog (that's `CHANGELOG.md`) and it isn't the spec (that
 
 ---
 
+## 2026-04-20 — GitHub Pages HTTP cache TTL is 10 minutes, not "permanent"
+
+The model `.onnx` files are served by GitHub Pages with `Cache-Control: max-age=600`. That's 10 minutes. After every 10-minute window the browser must revalidate. If a new deployment happened (changing the ETag), the browser re-downloads the full file — 57 MB for each V3 duration model.
+
+This showed up as "the model keeps re-downloading on every visit" after a routine UI-only re-deploy. Users noticed it as a long loading spinner on what they thought was a returning visit.
+
+The fix is the **Cache API** (`caches.open()`). Unlike the HTTP cache, Cache API storage has no automatic TTL. The model stays cached until the user clears site data or the ETag changes. We use a stale-while-revalidate approach:
+
+- On a cache hit: return the cached bytes immediately (no network wait), then fire a background HEAD request to check the ETag.
+- If the ETag changed: evict the stale entry. The *next* page load re-downloads the fresh model. The current session is unaffected — the bytes are already in memory and ORT has its session.
+- If the HEAD fails (offline): use the stale cache entry anyway. This is intentional — offline capability is a stated product property.
+- Only cache responses that carry an ETag. Without a validator we'd have no way to detect future model updates, and the entry would sit in CacheStorage forever.
+
+Key implementation detail: `writeToModelCache` creates a `new Response(buf.slice(0), { headers })`. The `buf.slice(0)` gives the Response its own copy so the original `ArrayBuffer` remains valid for ORT inference. The 57 MB copy spike is brief and bounded to the initial download path (subsequent visits load from cache with no copy).
+
+Code lives in `docs/src/model/loader.js` in `readFromModelCache`, `revalidateCachedModel`, and `writeToModelCache`. Tests are in `tests/model.loader.test.js` under "Cache API caching".
+
 ## 2026-04-16 — Initial V1 build
 
 V1 shipped as a buildless static site. The source tree under `docs/` is the same folder that GitHub Pages publishes and the same folder a user gets when they unzip the repo and double-click `index.html`. There is no bundler step between edit and publish. Vite is in the project as a dev-time convenience only — it serves `docs/` on localhost and reloads on change, but it is never asked to produce a `dist/` folder. TF.js and heatmap.js come in through `<script>` tags from jsDelivr; everything else is plain ES modules loaded with `type="module"`. No framework. The promise in the PRD about "unzip and open index.html" is only credible if the folder the developer edits is literally the folder the user runs, and this layout makes that true by construction.
