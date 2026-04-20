@@ -121,15 +121,18 @@ export function createVoxelBg(containerEl) {
 
   // why: opaque:false (set per applyGeometry call) lets back faces render; fill:none
   // makes every face transparent so only the stroke outline is visible — the
-  // wireframe aesthetic. The CSS variable for stroke colour matches the design
-  // token so it automatically picks up dark/light mode changes.
+  // wireframe aesthetic. We use 'currentColor' rather than a CSS custom property
+  // because heerich writes stroke as an SVG presentation attribute, and browsers
+  // do not resolve var() inside SVG presentation attributes. Setting color on the
+  // container element (in CSS) and using currentColor here lets the design token
+  // propagate correctly via the CSS cascade.
   const h = new Heerich({
     camera: { type: 'isometric', angle: FINAL_ANGLE_DEG },
     style: {
       default: {
         fill: 'none',
-        stroke: 'var(--fc-on-surface-dim)',
-        strokeWidth: 0.5,
+        stroke: 'currentColor',
+        strokeWidth: 1,
       },
     },
   });

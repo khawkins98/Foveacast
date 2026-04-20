@@ -342,6 +342,11 @@ a:hover {
   pointer-events: none;
   z-index: 0;
   opacity: 0;
+  /* why: heerich writes stroke as SVG presentation attributes, not inline styles,
+     so CSS custom properties (var()) won't resolve there. We set color here and
+     use currentColor in the heerich style config so the design token propagates
+     via the CSS cascade instead. */
+  color: var(--fc-on-surface-dim);
   transition:
     opacity 1s ease,
     transform 1.5s ease;
