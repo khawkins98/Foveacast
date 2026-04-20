@@ -371,3 +371,31 @@ Carried over from `docs/PRD.md` §Open Questions. These are live, not resolved.
 - **First-run weight-caching UX.** Actual per-preset weight sizes should be measured from the GCS bucket rather than estimated. The status banner text should use those measured numbers.
 - **Viewport-comparison feature.** Desktop vs mobile was out of scope for V1 but the second drop-zone slot was left in mind when designing the layout. Leiva et al. (MobileHCI 2020) is the prior-art reading for whoever implements this.
 - **Bias-disclosure wording review.** The footer carries a plain-language note about population-average gaze patterns. That wording should get a review pass from someone with a UX-research or research-ethics background before any wider distribution.
+
+## 2026-04-20 — Report-metaphor UI redesign: decisions and dead ends
+
+This batch of work replaced the sidebar/toolbar layout with a single-column "report metaphor" where inference results present as a scrollable narrative beneath the heatmap canvas.
+
+**Why report over toolbar controls**
+
+The toolbar checkbox pattern for overlays (fixation sequence, attention zones, centroid trajectory) sounds sensible on paper — progressive disclosure, user control — but testing showed it falls flat. Users don't know the visualizations exist until they've already derived what they can from the raw heatmap, and the tooltip "?" buttons added cognitive load for a benefit (knowing what the toggle does) that was better served by just showing the output. Making the visualizations always-visible sections removes the discovery problem entirely. The report layout also creates natural space for explanatory prose alongside each finding, which a toolbar can't do.
+
+**Thumbnail-size compositing**
+
+Initial approach was: render full-resolution overlays then scale the canvas down in CSS. Wrong. `drawFixationSequence` and `drawCentroidTrajectory` both scale their markers relative to `ctx.canvas.width / height`. At full resolution (e.g. 1200 × 800 px) the markers are 16–20 px and look fine; after CSS scaling them down to a 400 px thumbnail they become unreadably tiny 5–7 px blobs. The fix is to draw at thumbnail size (400 px wide, aspect-ratio-preserving) in the first place. The marker sizes then look exactly as designed.
+
+For the attention zones strip the `drawImage(attentionZoneCanvas, 0, 0, w, h)` call lets the canvas API scale the zone canvas automatically, which is correct — the zone canvas already has correct spatial structure.
+
+**The jsdom `ctx.canvas` gap**
+
+Both draw functions read `ctx.canvas.width` and `ctx.canvas.height` to scale markers. jsdom's canvas stub — created by `document.createElement('canvas')` in the test environment — does not populate `ctx.canvas` on the context object. Calling `getContext('2d')` on a jsdom canvas returns a partial stub where `ctx.canvas` is undefined. This caused `TypeError: Cannot read properties of undefined` in every overlay-section unit test.
+
+Fix: guard at the top of each helper (`if (!ctx || !ctx.canvas) return thumb`) and return the unmodified thumbnail base. The tests stub the canvas with an object that passes the guard. In production, real browser canvases always have `ctx.canvas`, so the guard is dead code in normal operation.
+
+**Trajectory re-hide on reset**
+
+The `update()` function returns early if no inference result is loaded (image dropped but not yet processed, or app just started). The centroid trajectory section, which builds from `previousHero` state between two duration results, was not being explicitly hidden before that early return. After the first successful inference, if the user dropped a second image before all durations finished, the trajectory section from the previous run stayed visible. Fixed by adding an explicit `trajectorySection.hidden = true` before the early return, mirroring the same guard already in place for the hero canvas.
+
+**Slot count test scoping**
+
+After adding the fixation and zones strips (each with three `fc-report__dur-item` slots), an existing test that queried `querySelectorAll('.fc-report__dur-item')` found 9 elements instead of the expected 3. The test was checking the duration comparison strip, not all strips. Fixed by scoping the query to `.fc-report__section--durations .fc-report__strip` before counting items. General lesson: always scope querySelectorAll to the nearest appropriate ancestor; unscoped class queries get fragile as the DOM grows.
