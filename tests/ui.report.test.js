@@ -89,29 +89,29 @@ function allReady() {
 
 describe('rotHeadline', () => {
   it('names the dominant third when it is clearly dominant', () => {
-    const rot = Array(9).fill(0.05);
-    rot[0] = 0.6; // top-left dominates
+    const rot = Array(9).fill(5);
+    rot[0] = 60; // top-left dominates (leaves 40 split among 8 cells of 5)
     expect(rotHeadline(rot)).toMatch(/top-left/);
     expect(rotHeadline(rot)).toMatch(/60%/);
     expect(rotHeadline(rot)).toMatch(/Most attention/);
   });
 
   it('uses near-tie copy when two cells are within 10% of each other', () => {
-    const rot = Array(9).fill(0.05);
-    rot[0] = 0.20; // top-left
-    rot[4] = 0.19; // center — within 10% of top-left value
+    const rot = Array(9).fill(5);
+    rot[0] = 20; // top-left
+    rot[4] = 19; // center — within 10% of top-left value
     const headline = rotHeadline(rot);
     expect(headline).toMatch(/split between/);
     expect(headline).toMatch(/top-left/);
     expect(headline).toMatch(/center/);
   });
 
-  it('rounds percentages to integers', () => {
-    const rot = Array(9).fill(0.05);
-    rot[8] = 0.556789; // bottom-right
+  it('displays the integer percentage directly', () => {
+    const rot = Array(9).fill(5);
+    rot[8] = 56; // bottom-right — a representative integer value
     const headline = rotHeadline(rot);
-    // Should round to 56%, not show a decimal point before the percent sign.
     expect(headline).toMatch(/56%/);
+    // Should not show a decimal fraction before the percent sign.
     expect(headline).not.toMatch(/\d\.\d+%/);
   });
 });
@@ -123,23 +123,23 @@ describe('rotHeadline', () => {
 describe('renderRotGrid', () => {
   it('renders exactly 9 cells', () => {
     const container = document.createElement('div');
-    renderRotGrid(container, Array(9).fill(1 / 9));
+    renderRotGrid(container, Array(9).fill(11)); // ~99, close enough for structure test
     expect(container.querySelectorAll('.fc-report__rot-cell').length).toBe(9);
   });
 
   it('marks the max cell with --max modifier class', () => {
-    const rot = Array(9).fill(0.05);
-    rot[4] = 0.8; // center dominates
+    const rot = Array(9).fill(5);
+    rot[4] = 60; // center dominates
     const container = document.createElement('div');
     renderRotGrid(container, rot);
     const maxCells = container.querySelectorAll('.fc-report__rot-cell--max');
     expect(maxCells.length).toBe(1);
-    expect(maxCells[0].textContent).toBe('80%');
+    expect(maxCells[0].textContent).toBe('60%');
   });
 
   it('max cell aria-label includes "highest attention area"', () => {
-    const rot = Array(9).fill(0.05);
-    rot[0] = 0.65; // top-left
+    const rot = Array(9).fill(5);
+    rot[0] = 65; // top-left
     const container = document.createElement('div');
     renderRotGrid(container, rot);
     const maxCell = container.querySelector('.fc-report__rot-cell--max');
@@ -147,8 +147,8 @@ describe('renderRotGrid', () => {
   });
 
   it('non-max cells do not have the --max class', () => {
-    const rot = Array(9).fill(0.05);
-    rot[3] = 0.55;
+    const rot = Array(9).fill(5);
+    rot[3] = 55;
     const container = document.createElement('div');
     renderRotGrid(container, rot);
     const nonMax = Array.from(container.querySelectorAll('.fc-report__rot-cell')).filter(

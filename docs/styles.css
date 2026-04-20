@@ -1660,7 +1660,7 @@ details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
 }
 
 .fc-report__section-heading {
-  font-size: 0.75rem;
+  font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--fc-on-surface-dim);
@@ -1699,7 +1699,7 @@ details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
 }
 
 .fc-report__headline {
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-weight: 600;
   color: var(--fc-on-surface);
   line-height: 1.4;
@@ -1707,14 +1707,14 @@ details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
 }
 
 .fc-report__fixation-note {
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   color: var(--fc-on-surface-variant);
   margin: 0;
   line-height: 1.5;
 }
 
 .fc-report__source-label {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   color: var(--fc-on-surface-dim);
   margin: 0;
 }
@@ -1727,11 +1727,18 @@ details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
 }
 
 .fc-report__rot-label {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--fc-on-surface-dim);
   margin: 0;
+}
+
+.fc-report__rot-hint {
+  font-size: 0.72rem;
+  color: var(--fc-on-surface-dim);
+  margin: 0;
+  line-height: 1.4;
 }
 
 .fc-report__rot-grid {
@@ -1744,7 +1751,7 @@ details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
 .fc-report__rot-cell {
   background: var(--fc-surface-container);
   color: var(--fc-on-surface-variant);
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 600;
   text-align: center;
   padding: 0.4rem 0.25rem;
@@ -1776,7 +1783,7 @@ details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
 }
 
 .fc-report__duration-note {
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   color: var(--fc-on-surface-variant);
   margin: 0;
   line-height: 1.5;
@@ -1786,21 +1793,23 @@ details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
 .fc-report__strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1.25rem;
+  gap: 1.5rem;
 }
 
 .fc-report__dur-item {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0;
+  background: var(--fc-surface-container);
+  border-radius: var(--fc-radius-sm, 6px);
+  overflow: hidden;
 }
 
 .fc-report__dur-canvas {
   /* Fixed aspect ratio placeholder before the canvas arrives. */
   aspect-ratio: 16 / 9;
-  background: var(--fc-surface-container);
-  border-radius: 4px;
+  background: var(--fc-surface-high);
   overflow: hidden;
   position: relative;
 }
@@ -1837,8 +1846,10 @@ details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
 }
 
 .fc-report__dur-label {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
   color: var(--fc-on-surface-variant);
+  padding: 0.5rem 0.75rem;
 }
 
 /* --------------------------------------------------------------------------

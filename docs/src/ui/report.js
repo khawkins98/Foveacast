@@ -81,7 +81,7 @@ function compositeThumb(image, heatmapCanvas, maxW = 480) {
  * Detects near-ties (second value ≥ 90% of best) and returns softer copy
  * to avoid overclaiming when two regions are roughly equal.
  *
- * @param {number[]} rot Nine-value row-major array (0–1 fractions).
+ * @param {number[]} rot Nine-value row-major array (0–100 integers summing to 100).
  * @returns {string}
  */
 export function rotHeadline(rot) {
@@ -89,10 +89,11 @@ export function rotHeadline(rot) {
   indexed.sort((a, b) => b.v - a.v);
   const best   = indexed[0];
   const second = indexed[1];
-  const pct    = Math.round(best.v * 100);
+  // why: values are already integer percentages (0–100); no multiplication needed.
+  const pct    = best.v;
 
   if (second.v >= best.v * 0.9) {
-    const pct2 = Math.round(second.v * 100);
+    const pct2 = second.v;
     return (
       `Attention is split between the ${POSITION_NAMES[best.i]} (${pct}%) ` +
       `and ${POSITION_NAMES[second.i]} (${pct2}%) of the image.`
@@ -107,14 +108,15 @@ export function rotHeadline(rot) {
  * aria-label — so the distinction is not conveyed by colour alone.
  *
  * @param {HTMLElement} container
- * @param {number[]} rot
+ * @param {number[]} rot Nine-value row-major array (0–100 integers summing to 100).
  */
 export function renderRotGrid(container, rot) {
   const maxVal = Math.max(...rot);
   container.textContent = '';
 
   for (let i = 0; i < 9; i++) {
-    const pct  = Math.round(rot[i] * 100);
+    // why: values are already integer percentages (0–100); no multiplication needed.
+    const pct  = rot[i];
     const cell = document.createElement('div');
     cell.className = 'fc-report__rot-cell';
 
@@ -202,6 +204,12 @@ export function createReport({ mountEl }) {
   rotLabel.className = 'fc-report__rot-label';
   rotLabel.textContent = 'Attention by image region';
   rotWrap.appendChild(rotLabel);
+
+  // Explainer: users often don't know what these percentages mean.
+  const rotHint = document.createElement('p');
+  rotHint.className = 'fc-report__rot-hint';
+  rotHint.textContent = 'Share of all predicted attention in each region — values sum to 100%.';
+  rotWrap.appendChild(rotHint);
 
   const rotGrid = document.createElement('div');
   rotGrid.className = 'fc-report__rot-grid';
