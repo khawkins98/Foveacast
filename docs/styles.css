@@ -1028,6 +1028,96 @@ body.fc-page-dragover .fc-dropzone {
   pointer-events: none;
 }
 
+/*
+ * JS tooltip system — used by overlay checkboxes to expose one-line
+ * descriptions of each visualization without cluttering the label.
+ *
+ * Structure per checkbox:
+ *   <label class="fc-controls__checkbox">
+ *     <input>
+ *     label text
+ *     <span class="fc-tooltip-wrap">
+ *       <button class="fc-tooltip-btn">?</button>
+ *       <div class="fc-tooltip" role="tooltip">…</div>
+ *     </span>
+ *   </label>
+ */
+
+.fc-tooltip-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.fc-tooltip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--fc-outline-variant);
+  color: var(--fc-on-surface-dim);
+  border: none;
+  font: inherit;
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+  flex-shrink: 0;
+  transition: background var(--fc-dur-fast) var(--fc-ease);
+}
+
+.fc-tooltip-btn:hover,
+.fc-tooltip-btn:focus-visible {
+  background: var(--fc-primary);
+  color: #ffffff;
+  outline: none;
+}
+
+.fc-tooltip-btn:focus-visible {
+  outline: 2px solid var(--fc-primary);
+  outline-offset: 2px;
+}
+
+.fc-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  width: 200px;
+  background: var(--fc-surface-highest);
+  color: var(--fc-on-surface);
+  font-size: 0.7rem;
+  font-weight: 400;
+  line-height: 1.4;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--fc-radius-sm);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity var(--fc-dur-fast) var(--fc-ease),
+    transform var(--fc-dur-fast) var(--fc-ease);
+  z-index: 200;
+  /* Ensure tooltip text doesn't inherit the label cursor */
+  cursor: default;
+}
+
+.fc-tooltip--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-tooltip {
+    transition: opacity var(--fc-dur-fast) var(--fc-ease);
+    transform: none;
+  }
+}
+
 /* Export / download button — full-width CTA in the sidebar. */
 .fc-controls__download {
   margin: 0.75rem 1.25rem;

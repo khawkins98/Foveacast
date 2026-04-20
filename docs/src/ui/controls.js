@@ -331,7 +331,6 @@ export function createControls(options = {}) {
   for (const choice of OVERLAY_CHOICES) {
     const wrapper = document.createElement('label');
     wrapper.className = 'fc-controls__checkbox';
-    wrapper.title = choice.title;
 
     const chk = document.createElement('input');
     chk.type = 'checkbox';
@@ -343,6 +342,47 @@ export function createControls(options = {}) {
 
     wrapper.appendChild(chk);
     wrapper.appendChild(document.createTextNode(` ${choice.label}`));
+
+    // "?" tooltip button — shows a floating description on hover or focus.
+    const tipId = `${prefix}-tip-${choice.key}`;
+    const tipBtn = document.createElement('button');
+    tipBtn.type = 'button';
+    tipBtn.className = 'fc-tooltip-btn';
+    tipBtn.setAttribute('aria-label', `About ${choice.label}`);
+    tipBtn.setAttribute('aria-describedby', tipId);
+    tipBtn.textContent = '?';
+
+    const tipBox = document.createElement('div');
+    tipBox.id = tipId;
+    tipBox.className = 'fc-tooltip';
+    tipBox.role = 'tooltip';
+    tipBox.textContent = choice.title;
+    tipBox.setAttribute('aria-hidden', 'true');
+
+    // Show / hide handlers — JS-driven so the tooltip is keyboard accessible
+    // and can be dismissed cleanly (unlike CSS :hover-only approaches).
+    const showTip = () => {
+      tipBox.classList.add('fc-tooltip--visible');
+      tipBox.removeAttribute('aria-hidden');
+    };
+    const hideTip = () => {
+      tipBox.classList.remove('fc-tooltip--visible');
+      tipBox.setAttribute('aria-hidden', 'true');
+    };
+
+    tipBtn.addEventListener('mouseenter', showTip);
+    tipBtn.addEventListener('mouseleave', hideTip);
+    tipBtn.addEventListener('focus', showTip);
+    tipBtn.addEventListener('blur', hideTip);
+    // Clicking the "?" button should not toggle the parent <label>'s checkbox.
+    tipBtn.addEventListener('click', (e) => e.preventDefault());
+
+    const tipWrap = document.createElement('span');
+    tipWrap.className = 'fc-tooltip-wrap';
+    tipWrap.appendChild(tipBtn);
+    tipWrap.appendChild(tipBox);
+    wrapper.appendChild(tipWrap);
+
     overlayWrap.appendChild(wrapper);
   }
 
