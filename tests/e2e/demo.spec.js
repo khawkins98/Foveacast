@@ -121,7 +121,7 @@ test.describe('Foveacast — demo mode end-to-end', () => {
     // observable. We only care that the controls panel is hidden
     // before any render has happened.
     await page.goto('/');
-    const controls = page.locator('#fc-controls-mount > *').first();
+    const controls = page.locator('#fc-canvas-controls-mount > *').first();
     // First visible element under the mount should have hidden
     // because createControls defaults to hidden=false but main.js
     // calls setVisible(false) on boot.
@@ -134,7 +134,7 @@ test.describe('Foveacast — demo mode end-to-end', () => {
       timeout: 15_000,
     });
     // After demo renders, the controls panel should be visible.
-    await expect(page.locator('#fc-controls-mount > *').first()).toBeVisible();
+    await expect(page.locator('#fc-canvas-controls-mount > *').first()).toBeVisible();
   });
 
   test('dropzone and controls are interactive as soon as demo renders, even while the background model is still loading', async ({
@@ -161,10 +161,12 @@ test.describe('Foveacast — demo mode end-to-end', () => {
       expect(val).not.toBe('true');
     });
 
-    // Duration picker operable (default 3s selected)
-    const duration3s = page.locator('input[type="radio"][value="3s"]');
-    await expect(duration3s).toBeEnabled();
-    await expect(duration3s).toBeChecked();
+    // Duration tab operable (3s selected by default as the primary model)
+    const duration3s = page.locator('.fc-report__hero-tab[data-duration="3s"]');
+    await expect(duration3s).toHaveAttribute('aria-selected', 'true');
+    // why: aria-disabled starts true and flips to false as model results arrive;
+    // demo mode loads the 3s result so this tab must be enabled after render.
+    await expect(duration3s).toHaveAttribute('aria-disabled', 'false');
 
     // Opacity slider operable
     const slider = page.locator('input[type="range"]').first();
@@ -244,5 +246,45 @@ test.describe('Foveacast — demo mode end-to-end', () => {
       return false;
     });
     expect(hasColourSpread).toBe(true);
+  });
+
+  test('toolbar starts hidden and only appears during background duration loading', async ({
+    page,
+  }) => {
+    // The toolbar is now a loading-indicator-only dock. It starts
+    // hidden and should remain hidden after the primary (3s) demo
+    // render completes — it only appears while background durations
+    // are still loading, then hides again when they finish.
+    await page.goto('/');
+    const toolbar = page.locator('#fc-toolbar');
+    await expect(toolbar).toBeHidden({ timeout: 5_000 });
+
+    // After demo renders the primary result the toolbar may briefly
+    // appear for background loads, but should not be permanently
+    // visible. We assert it is initially hidden on a fresh load.
+    // The canvas controls (view / opacity / download) are now inline
+    // below the canvas in #fc-canvas-controls-mount.
+    await page.goto('/?demo=1');
+    await expect(page.locator('#fc-output[data-foveacast-ready="true"]')).toBeVisible({
+      timeout: 15_000,
+    });
+    // Inline controls must be visible; toolbar is transient.
+    await expect(page.locator('#fc-canvas-controls-mount > *').first()).toBeVisible();
+  });
+
+  test('overlay sections appear in the report after inference', async ({ page }) => {
+    // Visualizations are now static report sections, not toolbar checkboxes.
+    await page.goto('/?demo=1');
+    await expect(page.locator('#fc-output[data-foveacast-ready="true"]')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Both per-duration overlay strips should exist in the report DOM.
+    await expect(page.locator('.fc-report__section--fixation')).toBeVisible({ timeout: 3_000 });
+    await expect(page.locator('.fc-report__section--zones')).toBeVisible({ timeout: 3_000 });
+
+    // Fixation strip should contain 3 duration columns.
+    const fixationItems = page.locator('.fc-report__section--fixation .fc-report__dur-item');
+    await expect(fixationItems).toHaveCount(3);
   });
 });

@@ -6,26 +6,40 @@ All notable changes to Foveacast are recorded here. Format follows [Keep a Chang
 
 ### Added
 
-- **Fixation sequence overlay** — numbered saccade path showing the predicted order attention would land, computed using inhibition-of-return (IoR) with a separable Gaussian suppression kernel. Toggle in the Visualizations panel. Documented as population-average free-viewing predictions, not individual scanpaths.
-- **Attention zones overlay** — concentric contour rings marking where 10%, 25%, and 50% of total attention mass falls. Useful for checking whether a CTA is inside the high-attention region.
-- **Duration trajectory overlay** — line connecting predicted attention centroids across the 1-second, 3-second, and 7-second results. Shows how focus shifts as viewing time increases. Enabled automatically once all three duration models have run.
-- **Rule-of-thirds HUD panel** — collapsible 3×3 grid showing the percentage of saliency mass in each image third. Values are integer-rounded and always sum to 100.
-- **Tooltip "?" buttons** on each overlay toggle — hover or focus to read a one-line description of what the visualization shows. Keyboard-accessible, ARIA-labelled.
-- **Canvas hover tooltips** — hovering over a numbered fixation circle shows "Fixation N of M — most likely first fixation" (and ordinal equivalents). Hovering over a centroid trajectory dot shows the full duration label (e.g. "First glance (1 second)"). Both use a single floating `position: fixed` tooltip that tracks the cursor.
-- **Duration labels now spell out "seconds"** — "Full viewing (7 seconds)" instead of "Full viewing (7 s)".
-- **Commercial alternatives listed in README** — the README now has a short "Commercial alternatives" section naming paid services that offer real eye-tracking studies, with a note that they are not free and send screenshots to a third party.
-- **Model credits in sidebar** — attribution, training references, and the bias disclosure note moved from the workspace footer into a collapsible "About this model" panel in the sidebar, so they're visible alongside the analysis controls rather than buried below the output canvas.
-- **Sidebar subtitle links to the MSI-Net paper** — the "MSI-Net · saliency model" subtitle is now an anchor (`doi.org/10.1016/j.neunet.2020.05.004`) with a `title` tooltip giving a plain-English description of the architecture.
+- **Analysis report** — scrollable report below the interactive heatmap. Presents findings in narrative order: duration tabs, hero heatmap, primary-finding headline from rule-of-thirds breakdown, first-fixation coordinate note, 3×3 rule-of-thirds grid, duration comparison strip, fixation sequence strip, attention zones strip, centroid trajectory section, and a methodology note. Builds in-place as background duration results arrive; earlier results appear without waiting for all three.
+- **Duration tabs in the report** — tabbed interface above the hero canvas for switching between viewing durations. Tabs enable as each model's result arrives. Replaces the radio-button group that was in the toolbar.
+- **Fixation sequence section** — three-column strip with numbered saccade paths overlaid on heatmap thumbnails, one per viewing duration. Shows the predicted scan order using inhibition-of-return (IoR). Always visible after inference; no toggle required.
+- **Attention zones section** — three-column strip of heatmap thumbnails with concentric contour rings at 10%, 25%, and 50% attention mass.
+- **Centroid trajectory section** — plain-image canvas with the predicted attention centroid path from first glance to sustained viewing (1 s → 3 s → 7 s). Appears once at least two duration results are ready.
+- **Duration labels spell out "seconds"** — "Full viewing (7 seconds)" rather than "Full viewing (7 s)".
+- **Commercial alternatives listed in README** — a short section naming paid services that offer real eye-tracking studies, with a note that they are not free and send screenshots to a third party.
+- **Print stylesheet** (`docs/print.css`) — clean paper and PDF output. Inverts the dark theme to white, hides all interactive chrome (nav, toolbar, upload zone, controls), and preserves the analysis output: title, hero canvas, report findings, region grid, duration strip, overlay sections, and methodology note. Linked with `media="print"` so screen rendering is unaffected.
 
 ### Fixed
 
-- Fixation sequence markers and centroid trajectory dots were tiny on large screenshots. Both now scale proportionally to the canvas short side (fixation: 3.5%, trajectory dot: 1.4%), floored at a readable minimum so small canvases still work.
-- Output-panel waiting spinner (`fc-output__waiting-spinner`) now respects `prefers-reduced-motion: reduce` — shown as a static solid ring rather than a spinning arc.
+- Region-stat percentage was being multiplied twice (raw float × 100 then formatted as percent again), producing values like "4,700%" instead of "47%". Fixed in the rule-of-thirds headline and grid cells.
+- Opacity and blend controls are now hidden when the view is set to "Original screenshot", where they have no effect.
+- Progress bar stays visible when the user scrolls the report — it is now docked inside the fixed bottom toolbar rather than in the main content flow.
 
 ### Changed
 
-- CONTRIBUTING.md coding-guide intro reworded to sound less like a policy document.
-- **All-caps text removed** — every `text-transform: uppercase` instance replaced with mixed-case. Letter-spacing reset to neutral per selector; the two sub-0.6 rem labels bumped to 0.65–0.7 rem to maintain legibility without uppercase compensation.
+- **Single-column layout** — the sidebar/left-dock is gone. Image drop zone and report occupy a single centred column; the controls toolbar is docked at the bottom of the page.
+- **Viewing duration moved from toolbar to report** — the toolbar radio group is replaced by duration tabs in the report.
+- **Overlay visualizations moved from toolbar to report** — fixation sequence, attention zones, and centroid trajectory are no longer opt-in checkboxes; they appear as static always-visible sections after inference.
+- **View + opacity + download controls moved inline** — they now appear directly below the hero canvas instead of in the bottom toolbar. The toolbar is now a loading-indicator-only dock, hidden the rest of the time.
+- **Region grid is now an intensity map** — each cell's background is tinted on a heat scale (dark navy → warm amber → hot orange) proportional to its share of attention, giving the 3×3 grid an at-a-glance spatial read.
+- **Fixation sequence dots are colour-coded by order** — dot 1 (first, highest priority) is deep navy; the last dot grades to near-white. Number labels auto-contrast against each dot's fill colour.
+- **All-caps text removed** — every `text-transform: uppercase` replaced with mixed-case. Letter-spacing reset to neutral; sub-0.6 rem labels bumped to 0.65–0.7 rem.
+- **Top navigation reordered and renamed** — "Reading results" → "How to read results" (placed before Methodology); "About" → "GitHub". External nav links open in a new tab.
+- **"Analysis Workspace" eyebrow removed** — the redundant label above the canvas title is gone.
+- **Show control placed above Opacity** — view-mode picker is now directly under the duration picker, before the overlay-strength slider.
+
+### Removed
+
+- Sidebar / left-dock layout and all sidebar-specific CSS.
+- Overlay checkboxes and tooltip "?" buttons from the toolbar.
+- Viewing duration radio group from the toolbar.
+- Blend mode dropdown — composite operation is hardcoded to `source-over` (normal), which is the only mode that makes perceptual sense for a saliency overlay.
 
 ## [0.3.0] — 2026-04-17
 
@@ -165,6 +179,28 @@ First public cut of Foveacast. V1 per the PRD: a buildless static web app that p
 - Five quality presets (Very Low, Low, Standard, High, Very High) mapped to the MSI-Net input dimensions `48x64`, `72x96`, `120x160`, `168x224`, `240x320`. Default is Standard.
 - Image preprocessing: resize to the preset's input dimensions, cast to float, clip to 0–255, reverse the channel axis into BGR order, add a batch dimension. Large screenshots (wider than 2560 px) are downsampled before the model sees them.
 - Saliency post-processing: bilinear upsample to the original image dimensions, Gaussian blur, normalise to 0–1, compute the centroid of the top-10% saliency region as a first-fixation estimate.
+- heatmap.js overlay rendering, composited onto the original image through the Canvas 2D API, with a downloadable PNG export.
+- Drop zone with drag-and-drop and click-to-browse, keyboard-operable with Tab and Enter or Space, rejecting non-PNG/JPEG input and files larger than 20 MB at the drop zone.
+- Overlay opacity slider, heatmap/original view toggle, preset picker, and download button.
+- First-run status banner with progress bar, model-ready confirmation, and the error messages defined in the PRD (download failed, load failed, inference failed, unsupported file, file too large).
+- Mobile-browser detection with a friendly "use a desktop" message, per the PRD's browser-support scope.
+- WCAG 2.1 AA accessibility pass: skip link, visible focus rings, ARIA live regions for status, reduced-motion support on the progress animation, focus move to the output area after inference.
+- Persistent footer with model and preset indicator, attribution to MSI-Net, TensorFlow.js and heatmap.js, a bias-disclosure note, and a "Need more?" link to a modal listing commercial alternatives.
+- Vitest test suite covering the preprocess, postprocess, fixation, heatmap render, model loader (mocked), and mobile-guard modules. Six files, 49 tests.
+
+### Notes
+
+- **Model in use:** MSI-Net (Kroner et al., 2020; MIT licence), ~25M parameters, converted to a TF.js Graph Model by the model's author.
+- **Default preset:** Standard (120x160 input).
+- **Weight hosting:** Google Cloud Storage at `storage.googleapis.com/msi-net/model/{preset}/`. Weights download once and are then served from the browser cache. The PRD's original claim that weights lived on HuggingFace was wrong and was corrected in commit 2; HF hosts the Keras SavedModel, which is not loadable in the browser without a conversion step.
+- **Runtime backends:** TF.js picks the best available backend at load time. WebGL is the common case on desktop; WebGPU is used where Chrome exposes it; CPU is the fallback. The UI does not probe or expose this choice.
+
+### Known limitations
+
+- Desktop Chrome and Firefox only; Safari and mobile browsers are out of scope for V1.
+- MSI-Net was trained primarily on natural scenes; accuracy drops on dense text, data visualisations and maps.
+- First run requires network access to the Google Cloud Storage bucket. There is no vendored mirror in this release (see `LEARNINGS.md` for the resilience follow-up).
+inear upsample to the original image dimensions, Gaussian blur, normalise to 0–1, compute the centroid of the top-10% saliency region as a first-fixation estimate.
 - heatmap.js overlay rendering, composited onto the original image through the Canvas 2D API, with a downloadable PNG export.
 - Drop zone with drag-and-drop and click-to-browse, keyboard-operable with Tab and Enter or Space, rejecting non-PNG/JPEG input and files larger than 20 MB at the drop zone.
 - Overlay opacity slider, heatmap/original view toggle, preset picker, and download button.

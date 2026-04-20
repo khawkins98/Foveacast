@@ -62,7 +62,8 @@
 
   /* Layout */
   --fc-topnav-h:           64px;
-  --fc-sidebar-w:          256px;
+  --fc-sidebar-w:          256px; /* retained as a reference; sidebar removed in single-column redesign */
+  --fc-toolbar-h:          80px;
 
   /* Shadows — tinted to background hue, not pure black. */
   --fc-shadow-ambient:     0 4px 24px rgba(7, 14, 29, 0.5);
@@ -204,7 +205,7 @@ a:hover {
   font-weight: 600;
   letter-spacing: 0.01em;
   text-decoration: none;
-  color: var(--fc-on-surface-dim);
+  color: var(--fc-on-surface-variant);
   padding: 0.4rem 0.75rem;
   border-radius: var(--fc-radius-sm);
   transition: color var(--fc-dur-fast) var(--fc-ease),
@@ -293,114 +294,19 @@ a:hover {
   100% { transform: translateX(280%); }
 }
 
-/* -- Sidebar ------------------------------------------------------------- */
+/* -- Sidebar removed (single-column redesign) ----------------------------- */
+/* .fc-sidebar and related rules removed. The .fc-sidebar__credits class name
+   is kept below because footer.js still emits it — renaming would be churn
+   with no user-visible benefit. The block now lives in .fc-page-footer
+   inside <main>. */
 
-.fc-sidebar {
-  position: fixed;
-  top: var(--fc-topnav-h);
-  left: 0;
-  width: var(--fc-sidebar-w);
-  height: calc(100vh - var(--fc-topnav-h));
-  z-index: 90;
-  background: var(--fc-surface-low);
-  /* Ambient shadow to separate sidebar from main canvas. */
-  box-shadow: 1px 0 0 var(--fc-outline-variant);
-
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  padding: 1.5rem 0 1rem;
-}
-
-.fc-sidebar__header {
-  padding: 0 1.25rem 1.25rem;
-  border-bottom: 1px solid var(--fc-outline-variant);
-  margin-bottom: 1rem;
-}
-
-.fc-sidebar__title {
-  display: block;
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: var(--fc-primary);
-}
-
-.fc-sidebar__subtitle {
-  display: block;
-  font-size: 0.65rem;
-  color: var(--fc-on-surface-dim);
-  margin-top: 0.2rem;
-  letter-spacing: 0.02em;
-  text-decoration: none;
-}
-
-/* When the subtitle is an anchor, give it a hover state. */
-a.fc-sidebar__subtitle:hover {
-  color: var(--fc-primary);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-/* Intro / empty state — visible before controls are revealed. */
-.fc-sidebar__intro {
-  padding: 0 1.25rem;
-  flex: 1;
-}
-
-.fc-sidebar__intro-text {
-  font-size: 0.8rem;
-  color: var(--fc-on-surface-variant);
-  line-height: 1.5;
-  margin: 0 0 0.75rem;
-}
-
-.fc-sidebar__intro-list {
-  margin: 0;
-  padding-left: 1rem;
-  font-size: 0.75rem;
-  color: var(--fc-on-surface-dim);
-  line-height: 1.6;
-}
-
-.fc-sidebar__intro-list li + li {
-  margin-top: 0.15rem;
-}
-
-/* Footer links at the bottom of the sidebar. */
-.fc-sidebar__footer {
-  padding: 1rem 1.25rem 0;
-  border-top: 1px solid var(--fc-outline-variant);
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.fc-sidebar__footer-link {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  text-decoration: none;
-  color: var(--fc-on-surface-dim);
-  padding: 0.45rem 0.5rem;
-  border-radius: var(--fc-radius-sm);
-  transition: color var(--fc-dur-fast) var(--fc-ease),
-              background var(--fc-dur-fast) var(--fc-ease);
-}
-
-.fc-sidebar__footer-link:hover {
-  color: var(--fc-primary);
-  background: var(--fc-surface-mid);
-}
-
-/* -- Main workspace ------------------------------------------------------ */
+/* -- Main workspace ------------------------------------------------------- */
 
 .fc-main {
-  margin-left: var(--fc-sidebar-w);
+  /* why: no sidebar offset in the single-column design; centred instead. */
+  max-width: 960px;
+  margin-left: auto;
+  margin-right: auto;
   /* scroll-margin-top ensures the #fc-main anchor (skip link target)
      is not hidden under the fixed topnav. */
   scroll-margin-top: var(--fc-topnav-h);
@@ -411,6 +317,12 @@ a.fc-sidebar__subtitle:hover {
   gap: 1.5rem;
   padding: calc(var(--fc-topnav-h) + 2rem) 2rem 2rem;
 }
+
+/*
+ * .fc-main--has-toolbar was used when the bottom toolbar contained
+ * permanent controls. The toolbar now only appears transiently during
+ * background loading, so no permanent padding-bottom is needed.
+ */
 
 .fc-main:focus {
   outline: none; /* Focus moves here programmatically after inference;
@@ -508,14 +420,17 @@ a.fc-sidebar__subtitle:hover {
 
 /* -- Background-duration progress bar ------------------------------------ */
 /*
- * Thin strip shown below the status banner while the 1 s and 7 s models
- * are loading automatically after the primary 3 s inference. Hidden at
- * rest (main.js sets `hidden` attribute). The fill width is driven
- * from JS via `showBgProgress(fraction)`.
+ * Thin strip at the top of the fixed toolbar while the 1 s and 7 s models
+ * load after the primary 3 s inference. Positioned inside .fc-toolbar so it
+ * stays visible as the user scrolls the report. Hidden at rest (main.js
+ * sets `hidden` attribute). Fill width driven from JS via showBgProgress().
  */
 
 .fc-bg-progress {
-  padding: 0.5rem var(--fc-main-px, 2rem);
+  /* why: spans the full toolbar width above the controls row; border
+     separates it visually from the topnav border-top of the toolbar */
+  padding: 0.4rem var(--fc-main-px, 2rem) 0.3rem;
+  border-bottom: 1px solid var(--fc-outline-variant);
 }
 
 .fc-bg-progress__track {
@@ -534,9 +449,9 @@ a.fc-sidebar__subtitle:hover {
 }
 
 .fc-bg-progress__label {
-  margin: 0.3rem 0 0;
+  margin: 0.25rem 0 0;
   font-size: 0.72rem;
-  color: var(--fc-on-surface-dim);
+  color: var(--fc-on-surface-variant);
 }
 
 
@@ -561,7 +476,7 @@ a.fc-sidebar__subtitle:hover {
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0;
-  color: var(--fc-on-surface-dim);
+  color: var(--fc-on-surface-variant);
   line-height: 1.3;
 }
 
@@ -622,7 +537,7 @@ a.fc-sidebar__subtitle:hover {
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0;
-  color: var(--fc-on-surface-dim);
+  color: var(--fc-on-surface-variant);
   cursor: pointer;
   user-select: none;
   padding: 0.25rem 0;
@@ -742,7 +657,7 @@ a.fc-sidebar__subtitle:hover {
 
 .fc-status__readout {
   font-variant-numeric: tabular-nums;
-  color: var(--fc-on-surface-dim);
+  color: var(--fc-on-surface-variant);
   font-size: 0.85rem;
 }
 
@@ -850,7 +765,7 @@ body.fc-page-dragover .fc-dropzone {
 }
 
 .fc-dropzone__hint {
-  color: var(--fc-on-surface-dim);
+  color: var(--fc-on-surface-variant);
   margin: 0;
   font-size: 0.85rem;
 }
@@ -878,10 +793,6 @@ body.fc-page-dragover .fc-dropzone {
   border-bottom: 1px solid var(--fc-outline-variant);
 }
 
-.fc-controls__field:last-of-type {
-  border-bottom: none;
-}
-
 .fc-controls__field--group {
   border: none;   /* remove fieldset browser default */
   margin: 0;
@@ -896,7 +807,7 @@ body.fc-page-dragover .fc-dropzone {
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.01em;
-  color: var(--fc-on-surface-dim);
+  color: var(--fc-on-surface-variant);
   padding: 0;
   margin-bottom: 0.5rem;
   display: flex;
@@ -921,62 +832,9 @@ body.fc-page-dragover .fc-dropzone {
 
 .fc-controls__readout {
   font-variant-numeric: tabular-nums;
-  color: var(--fc-on-surface-dim);
+  color: var(--fc-on-surface-variant);
   font-size: 0.75rem;
   text-align: right;
-}
-
-.fc-controls__radio {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-  color: var(--fc-on-surface-variant);
-  padding: 0.2rem 0;
-  cursor: pointer;
-}
-
-.fc-controls__radio input[type="radio"] {
-  accent-color: var(--fc-primary);
-  cursor: pointer;
-}
-
-.fc-controls__duration-loading {
-  font-size: 0.75rem;
-  color: var(--fc-on-surface-dim);
-  font-style: italic;
-}
-
-/*
- * Per-duration status indicators — set via `data-status` on the <label>
- * element by controls.setDurationStatus(). Shown only after the first
- * inference (the attribute is never set before that point).
- */
-
-.fc-controls__radio[data-status="loading"]::after {
-  content: '';
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  border: 1.5px solid color-mix(in srgb, var(--fc-primary) 30%, transparent);
-  border-top-color: var(--fc-primary);
-  animation: fc-spin 0.7s linear infinite;
-  flex-shrink: 0;
-}
-
-.fc-controls__radio[data-status="ready"]::after {
-  content: '✓';
-  color: var(--fc-success);
-  font-size: 0.7rem;
-  flex-shrink: 0;
-}
-
-.fc-controls__radio[data-status="failed"]::after {
-  content: '✕';
-  color: var(--fc-danger);
-  font-size: 0.7rem;
-  flex-shrink: 0;
 }
 
 /* Blend mode select. */
@@ -998,123 +856,12 @@ body.fc-page-dragover .fc-dropzone {
   outline-offset: 1px;
 }
 
-/* Overlay toggles — checkbox group inside the sidebar. */
-.fc-controls__overlays {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.fc-controls__checkbox {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-  color: var(--fc-on-surface-variant);
-  padding: 0.2rem 0;
-  cursor: pointer;
-}
-
-.fc-controls__checkbox input[type="checkbox"] {
-  accent-color: var(--fc-primary);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.fc-controls__checkbox--disabled {
-  opacity: 0.45;
-  pointer-events: none;
-}
+/* Overlay toggles — removed; visualizations now appear as static report sections. */
 
 /*
- * JS tooltip system — used by overlay checkboxes to expose one-line
- * descriptions of each visualization without cluttering the label.
- *
- * Structure per checkbox:
- *   <label class="fc-controls__checkbox">
- *     <input>
- *     label text
- *     <span class="fc-tooltip-wrap">
- *       <button class="fc-tooltip-btn">?</button>
- *       <div class="fc-tooltip" role="tooltip">…</div>
- *     </span>
- *   </label>
+ * JS tooltip system — was used by overlay checkboxes (removed).
+ * Canvas hover tooltip (.fc-canvas-tooltip) is still active — kept below.
  */
-
-.fc-tooltip-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  margin-left: auto;
-  flex-shrink: 0;
-}
-
-.fc-tooltip-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--fc-outline-variant);
-  color: var(--fc-on-surface-dim);
-  border: none;
-  font: inherit;
-  font-size: 0.6rem;
-  font-weight: 700;
-  line-height: 1;
-  cursor: help;
-  flex-shrink: 0;
-  transition: background var(--fc-dur-fast) var(--fc-ease);
-}
-
-.fc-tooltip-btn:hover,
-.fc-tooltip-btn:focus-visible {
-  background: var(--fc-primary);
-  color: #ffffff;
-  outline: none;
-}
-
-.fc-tooltip-btn:focus-visible {
-  outline: 2px solid var(--fc-primary);
-  outline-offset: 2px;
-}
-
-.fc-tooltip {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  right: 0;
-  width: 200px;
-  background: var(--fc-surface-highest);
-  color: var(--fc-on-surface);
-  font-size: 0.7rem;
-  font-weight: 400;
-  line-height: 1.4;
-  padding: 0.4rem 0.6rem;
-  border-radius: var(--fc-radius-sm);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(4px);
-  transition:
-    opacity var(--fc-dur-fast) var(--fc-ease),
-    transform var(--fc-dur-fast) var(--fc-ease);
-  z-index: 200;
-  /* Ensure tooltip text doesn't inherit the label cursor */
-  cursor: default;
-}
-
-.fc-tooltip--visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fc-tooltip {
-    transition: opacity var(--fc-dur-fast) var(--fc-ease);
-    transform: none;
-  }
-}
 
 /* Canvas hover tooltip — fixation sequence markers.
  *
@@ -1241,7 +988,7 @@ body.fc-page-dragover .fc-dropzone {
 
 .fc-output__caption {
   margin: 0.75rem 0 0;
-  color: var(--fc-on-surface-dim);
+  color: var(--fc-on-surface-variant);
   font-size: 0.85rem;
   line-height: 1.4;
 }
@@ -1270,43 +1017,16 @@ body.fc-page-dragover .fc-dropzone {
    is visible alongside controls, not buried below the output canvas. */
 
 .fc-sidebar__credits {
-  border-top: 1px solid var(--fc-outline-variant);
-  padding: 0.75rem 1.25rem 1rem;
-  color: var(--fc-on-surface-dim);
+  color: var(--fc-on-surface-variant);
   font-size: 0.75rem;
 }
 
-.fc-sidebar__credits-summary {
+.fc-footer__heading {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.01em;
-  color: var(--fc-on-surface-dim);
-  cursor: pointer;
-  padding: 0;
-  list-style: none; /* hide default marker; chevron added via ::before */
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  user-select: none;
-}
-
-.fc-sidebar__credits-summary::-webkit-details-marker { display: none; }
-
-/* Chevron that rotates open/closed. */
-.fc-sidebar__credits-summary::before {
-  content: '';
-  display: inline-block;
-  width: 0.4em;
-  height: 0.4em;
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
-  transform: rotate(-45deg);
-  transition: transform 0.15s ease;
-  flex-shrink: 0;
-}
-
-details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
-  transform: rotate(45deg);
+  color: var(--fc-on-surface-variant);
+  margin: 0 0 0.4rem;
 }
 
 .fc-sidebar__credits .fc-footer__line {
@@ -1453,31 +1173,14 @@ details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
   margin: 0;
 }
 
-/* -- Responsive: narrow desktop / tablet (< 900 px) ---------------------
+/* -- Responsive: narrow viewport (< 900 px) ------------------------------ */
 /*
- * Below 900 px the sidebar leaves fixed positioning and stacks below
- * the main workspace in normal document flow. Since <aside> follows
- * <main> in the DOM, controls remain reachable after inference completes
- * without any JavaScript reparenting.
+ * Tighten horizontal padding on narrower viewports and hide the
+ * topnav link list (navigation is available via in-page anchors and
+ * the bottom toolbar).
  */
 @media (max-width: 899px) {
-  .fc-sidebar {
-    position: static;
-    width: 100%;
-    height: auto;
-    box-shadow: none;
-    border-top: 1px solid var(--fc-outline-variant);
-    padding: 1.5rem 1.25rem 1rem;
-  }
-
-  /* margin-top: auto has no effect in normal block flow — replace with
-     explicit spacing so the footer links don't collapse into the controls. */
-  .fc-sidebar__footer {
-    margin-top: 1.5rem;
-  }
-
   .fc-main {
-    margin-left: 0;
     padding-left: 1.25rem;
     padding-right: 1.25rem;
   }
@@ -1485,6 +1188,149 @@ details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
   .fc-topnav__links {
     display: none;
   }
+}
+
+/* -- Empty-state intro (pre-inference, single-column) --------------------- */
+
+.fc-intro__text {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--fc-on-surface-variant);
+}
+
+.fc-intro__tips {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.8rem;
+  color: var(--fc-on-surface-variant);
+  line-height: 1.6;
+}
+
+.fc-intro__tips li + li {
+  margin-top: 0.15rem;
+}
+
+/* -- Page footer: trust note, credits, secondary nav --------------------- */
+/*
+ * Persistent at the bottom of the main column regardless of inference
+ * state. The trust note is here rather than inside #fc-intro so it
+ * stays visible after showControls() hides the intro.
+ */
+
+.fc-page-footer {
+  border-top: 1px solid var(--fc-outline-variant);
+  padding-top: 1.5rem;
+  margin-top: 0.5rem;
+}
+
+.fc-trust-note {
+  margin: 0 0 0.75rem;
+  font-size: 0.75rem;
+  color: var(--fc-on-surface-variant);
+  line-height: 1.4;
+}
+
+.fc-footer-nav {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.fc-footer-nav__link {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--fc-on-surface-variant);
+  text-decoration: none;
+  letter-spacing: 0.01em;
+  transition: color var(--fc-dur-fast) var(--fc-ease);
+}
+
+.fc-footer-nav__link:hover {
+  color: var(--fc-primary);
+}
+
+.fc-footer-nav__link:focus-visible {
+  outline: 2px solid var(--fc-focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* -- Bottom toolbar ------------------------------------------------------- */
+/*
+ * Now used only as a loading indicator dock. Shown by showBgProgress() and
+ * hidden by hideBgProgress() in main.js; collapsed the rest of the time.
+ */
+.fc-toolbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 90;
+  background: var(--fc-surface-low);
+  border-top: 1px solid var(--fc-outline-variant);
+  box-shadow: 0 -2px 12px rgba(7, 14, 29, 0.3);
+}
+
+/* -- Inline canvas controls ---------------------------------------------- */
+/*
+ * View-mode picker + opacity slider + download button rendered directly
+ * below the hero canvas. Using a horizontal pill/row so the controls feel
+ * attached to the image they govern rather than floating in a distant toolbar.
+ */
+
+.fc-canvas-controls-wrap .fc-controls {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  flex-wrap: wrap;
+  padding: 0;
+  margin-top: 0.75rem;
+  background: var(--fc-surface-low);
+  border: 1px solid var(--fc-outline-variant);
+  border-radius: var(--fc-radius-sm);
+  overflow: hidden;
+}
+
+.fc-canvas-controls-wrap .fc-controls__field,
+.fc-canvas-controls-wrap .fc-controls__field--group {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.5rem 0.9rem;
+  border-bottom: none;
+  border-right: 1px solid var(--fc-outline-variant);
+  margin: 0;
+  gap: 0.15rem;
+  white-space: nowrap;
+}
+
+.fc-canvas-controls-wrap .fc-controls__field > label,
+.fc-canvas-controls-wrap .fc-controls__field > legend,
+.fc-canvas-controls-wrap .fc-controls__legend {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--fc-on-surface-variant);
+  padding: 0;
+  margin-bottom: 0.1rem;
+  display: block;
+  float: none;
+}
+
+.fc-canvas-controls-wrap .fc-controls__field--opacity {
+  min-width: 160px;
+}
+
+.fc-canvas-controls-wrap .fc-controls__slider {
+  width: 100%;
+}
+
+/* Download button: pushed to the trailing end of the controls row */
+.fc-canvas-controls-wrap .fc-controls__download {
+  margin: 0.4rem 0.75rem 0.4rem auto;
+  width: auto;
+  align-self: center;
+  flex-shrink: 0;
 }
 
 /* -- Reduced motion ------------------------------------------------------ */
@@ -1530,5 +1376,370 @@ details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
   .fc-output__waiting-spinner {
     animation: none;
     border-color: var(--fc-primary);
+  }
+}
+
+/* ==========================================================================
+   Analysis Report section
+   Appears below the interactive heatmap canvas after inference completes.
+   The report presents findings in narrative order: primary finding, duration
+   comparison strip, and methodology note.
+   ========================================================================== */
+
+.fc-report {
+  border-top: 2px solid var(--fc-outline-variant);
+  padding-top: 2.5rem;
+}
+
+/* Report top heading */
+.fc-report__header {
+  margin-bottom: 2rem;
+}
+
+.fc-report__heading {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--fc-on-surface);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+/* Shared section wrapper */
+.fc-report__section {
+  padding: 2rem 0;
+  border-top: 1px solid var(--fc-outline-variant);
+}
+
+.fc-report__section-heading {
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--fc-on-surface);
+  margin: 0 0 1rem;
+}
+
+/* --------------------------------------------------------------------------
+   Section 1 — Primary finding (hero + findings panel)
+   Two-column on wide screens; stacks on narrow.
+   -------------------------------------------------------------------------- */
+
+.fc-report__section--primary {
+  display: grid;
+  grid-template-columns: minmax(0, 55%) minmax(0, 45%);
+  gap: 2rem;
+  align-items: start;
+}
+
+/* Duration tab bar spans both grid columns, sitting above hero + findings */
+.fc-report__hero-tabs {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--fc-outline-variant);
+  margin-bottom: 0.5rem;
+}
+
+.fc-report__hero-tab {
+  padding: 0.45rem 1rem;
+  border-radius: var(--fc-radius-sm);
+  border: 1px solid var(--fc-outline-variant);
+  background: var(--fc-surface-container);
+  color: var(--fc-on-surface-variant);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1.4;
+}
+
+.fc-report__hero-tab[aria-selected="true"] {
+  background: var(--fc-primary);
+  color: var(--fc-on-primary);
+  border-color: var(--fc-primary);
+}
+
+.fc-report__hero-tab[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.fc-report__hero-tab:not([aria-disabled="true"]):not([aria-selected="true"]):hover {
+  background: var(--fc-surface-container-high);
+  color: var(--fc-on-surface);
+}
+
+.fc-report__hero-tab:focus-visible {
+  outline: 2px solid var(--fc-primary);
+  outline-offset: 2px;
+}
+
+/* Hero figure */
+.fc-report__hero {
+  margin: 0;
+}
+
+.fc-report__hero-canvas canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+/* Findings panel */
+.fc-report__findings {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.fc-report__headline {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--fc-on-surface);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.fc-report__fixation-note {
+  font-size: 0.9rem;
+  color: var(--fc-on-surface-variant);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.fc-report__source-label {
+  font-size: 0.8rem;
+  color: var(--fc-on-surface-variant);
+  margin: 0;
+}
+
+/* Rule-of-thirds grid */
+.fc-report__rot-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.fc-report__rot-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--fc-on-surface-variant);
+  margin: 0;
+}
+
+.fc-report__rot-hint {
+  font-size: 0.72rem;
+  color: var(--fc-on-surface-dim);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.fc-report__rot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  max-width: 200px;
+}
+
+.fc-report__rot-cell {
+  /* Background is set inline by renderRotGrid on the heat scale;
+     fallback here in case JS hasn't run yet. */
+  background: var(--fc-surface-container);
+  color: var(--fc-on-surface-variant);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+  padding: 0.4rem 0.25rem;
+  border-radius: 2px;
+  /* why: min-height keeps cells square-ish regardless of percentage string length. */
+  min-height: 2.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--fc-dur-fast);
+}
+
+/* Max-attention cell: bold weight; background/color come from inline heat scale.
+   aria-label on each cell conveys the maximum distinction to screen readers. */
+.fc-report__rot-cell--max {
+  font-weight: 700;
+}
+
+/* --------------------------------------------------------------------------
+   Section 2 — Duration comparison strip
+   -------------------------------------------------------------------------- */
+
+.fc-report__section--durations {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.fc-report__duration-note {
+  font-size: 0.9rem;
+  color: var(--fc-on-surface-variant);
+  margin: 0;
+  line-height: 1.5;
+  max-width: 55ch;
+}
+
+.fc-report__strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.fc-report__dur-item {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--fc-surface-container);
+  border-radius: var(--fc-radius-sm, 6px);
+  overflow: hidden;
+}
+
+.fc-report__dur-canvas {
+  /* Fixed aspect ratio placeholder before the canvas arrives. */
+  aspect-ratio: 16 / 9;
+  background: var(--fc-surface-high);
+  overflow: hidden;
+  position: relative;
+}
+
+.fc-report__dur-canvas canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Pending / loading placeholder — fills the aspect-ratio box. */
+.fc-report__dur-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Animated pulse for the loading state. */
+.fc-report__dur-canvas[aria-busy="true"] .fc-report__dur-placeholder {
+  animation: fc-report-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes fc-report-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.fc-report__dur-placeholder--failed::after {
+  content: 'Unavailable';
+  font-size: 0.7rem;
+  color: var(--fc-on-surface-dim);
+}
+
+.fc-report__dur-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--fc-on-surface-variant);
+  padding: 0.5rem 0.75rem;
+}
+
+/* --------------------------------------------------------------------------
+   Sections 3 & 4 — Overlay strips (fixation sequence, attention zones)
+   -------------------------------------------------------------------------- */
+
+.fc-report__section--overlay {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Short descriptive paragraph under each overlay section heading. */
+.fc-report__overlay-note {
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--fc-on-surface-variant);
+  max-width: 60ch;
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Section 5 — Centroid trajectory (cross-duration)
+   -------------------------------------------------------------------------- */
+
+.fc-report__section--trajectory {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Single centred canvas container for the trajectory thumbnail. */
+.fc-report__trajectory-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.fc-report__trajectory-wrap canvas {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--fc-radius-sm);
+  display: block;
+}
+
+/* --------------------------------------------------------------------------
+   Section 6 — Methodology note
+   -------------------------------------------------------------------------- */
+
+.fc-report__section--methodology {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.fc-report__method-body {
+  font-size: 0.8rem;
+  color: var(--fc-on-surface-variant);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 65ch;
+}
+
+.fc-report__method-links {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.fc-report__method-link {
+  font-size: 0.75rem;
+  color: var(--fc-primary);
+  text-decoration: none;
+}
+
+.fc-report__method-link:hover,
+.fc-report__method-link:focus-visible {
+  text-decoration: underline;
+  outline-offset: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   Responsive: below the sidebar breakpoint, stack the primary section
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 860px) {
+  .fc-report__section--primary {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Reduced motion: disable the placeholder pulse. */
+@media (prefers-reduced-motion: reduce) {
+  .fc-report__dur-canvas[aria-busy="true"] .fc-report__dur-placeholder {
+    animation: none;
+    opacity: 0.6;
   }
 }

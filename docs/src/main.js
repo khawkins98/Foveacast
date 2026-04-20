@@ -28,6 +28,7 @@ import { isDemoModeRequested, runDemoMode } from './demo.js';
 import { installPageDrop } from './ui/page-drop.js';
 import { readHasRunSentinel, writeHasRunSentinel } from './ui/has-run-sentinel.js';
 import { computeSaliencyMetrics, computeZoneThresholds, computeRuleOfThirds } from './pipeline/metrics.js';
+import { createReport } from './ui/report.js';
 import { createHud, updateHud, updateHudRuleOfThirds } from './ui/hud.js';
 
 /**
@@ -86,7 +87,6 @@ const FIRST_RUN_THRESHOLD_MS = 800;
  *   lastFixation: { x: number, y: number } | null,
  *   lastOrigDims: [number, number] | null,
  *   opacity: number,
- *   blendMode: string,
  *   view: 'overlay' | 'original' | 'sidebyside',
  *   queuedFile: File | null,
  *   lastDiagnostics: {
@@ -102,7 +102,6 @@ const FIRST_RUN_THRESHOLD_MS = 800;
  *   } | null,
  *   lastCompositeCanvas: HTMLCanvasElement | null,
  *   durationSwitchGeneration: number,
- *   overlays: { fixationSequence: boolean, attentionZones: boolean, centroidTrajectory: boolean },
  *   lastFixationSequence: Array<{x: number, y: number}> | null,
  *   lastAttentionZoneCanvas: HTMLCanvasElement | null,
  *   lastRuleOfThirds: number[] | null,
@@ -129,8 +128,6 @@ const state = {
   lastFixation: null,
   lastOrigDims: null,
   opacity: 0.6,
-  /** Canvas 2D globalCompositeOperation for the heatmap overlay layer. */
-  blendMode: 'source-over',
   view: 'overlay',
   /** File dropped before the model finished loading (demo-mode race). */
   queuedFile: /** @type {File | null} */ (null),
@@ -144,11 +141,6 @@ const state = {
    *  duration. This prevents a slow 1s download from stomping a fast 3s
    *  download that the user selected while the 1s was in flight. */
   durationSwitchGeneration: 0,
-  /** Active overlay toggles — controlled by the overlay checkboxes. */
-  overlays: { fixationSequence: false, attentionZones: false, centroidTrajectory: false },
-  /** Cached saliency visualization artifacts for the currently displayed duration. */
-  lastFixationSequence: /** @type {Array<{x: number, y: number}> | null} */ (null),
-  lastAttentionZoneCanvas: /** @type {HTMLCanvasElement | null} */ (null),
   lastRuleOfThirds: /** @type {number[] | null} */ (null),
 };
 
@@ -184,11 +176,13 @@ function boot() {
   // Mount points — these exist in index.html.
   const statusMount = mustGet('fc-status-mount');
   const dropzoneMount = mustGet('fc-dropzone-mount');
-  const controlsMount = mustGet('fc-controls-mount');
+  const controlsMount = mustGet('fc-canvas-controls-mount');
   const outputSection = mustGet('fc-output');
   const outputCanvasWrap = mustGet('fc-output-canvas-wrap');
   const outputCaption = mustGet('fc-output-caption');
   const hudMount = mustGet('fc-hud-mount');
+  const reportMount = mustGet('fc-report-mount');
+  const toolbarEl = mustGet('fc-toolbar');
 
   // --- Status banner ----------------------------------------------------
   const status = createStatus();
@@ -238,9 +232,6 @@ function boot() {
 
   // --- Controls ---------------------------------------------------------
   const controls = createControls({
-    onDurationChange: (duration) => {
-      switchDuration(duration);
-    },
     onOpacityChange: (value) => {
       state.opacity = value;
       recomposite();
@@ -248,10 +239,6 @@ function boot() {
     onViewChange: (view) => {
       state.view = view;
       renderOutput();
-    },
-    onBlendModeChange: (mode) => {
-      state.blendMode = mode;
-      recomposite();
     },
     onDownload: () => {
       // why: state.lastCompositeCanvas is always the most recent composite,
@@ -262,10 +249,6 @@ function boot() {
       downloadCompositeAsPng(/** @type {HTMLCanvasElement} */ (compositeCanvas)).catch((err) => {
         console.error('Foveacast: download failed.', err);
       });
-    },
-    onOverlayChange: (overlays) => {
-      state.overlays = overlays;
-      renderOutput();
     },
   });
   controls.setDisabled(true); // Enabled once the model is ready.
@@ -292,14 +275,23 @@ function boot() {
   // --- HUD stats panel -------------------------------------------------
   const hud = createHud(hudMount);
 
+  // --- Analysis report -------------------------------------------------
+  const report = createReport({
+    mountEl: reportMount,
+    onDurationChange: (dur) => switchDuration(dur),
+  });
+
   /**
-   * Reveal the controls panel and hide the sidebar's empty-state intro.
+   * Reveal the bottom toolbar and hide the pre-inference intro section.
    * Called from both the demo path and the real-inference path so both
    * share the same reveal behaviour.
    */
   function showControls() {
     controls.setVisible(true);
-    const intro = document.getElementById('fc-sidebar-intro');
+    // Controls now live inline in the output section; no toolbar reveal needed.
+    // Hide the empty-state intro (renamed from fc-sidebar-intro in the
+    // single-column redesign).
+    const intro = document.getElementById('fc-intro');
     if (intro) intro.hidden = true;
     // Swap out the full dropzone for the compact new-image button.
     // Drag-anywhere and clipboard paste remain active via page-drop.js
@@ -308,6 +300,18 @@ function boot() {
     if (dropRow) dropRow.hidden = true;
     const newUploadRow = document.getElementById('fc-new-upload-row');
     if (newUploadRow) newUploadRow.hidden = false;
+  }
+
+  /**
+   * Refresh the analysis report with the current state. Safe to call
+   * repeatedly — the report module updates in-place without rebuilding DOM.
+   * Called after primary inference and after each background duration arrives.
+   */
+  function updateReport() {
+    if (!state.lastImage) return;
+    // why: displayedDuration (not activeDuration) is what's visible on screen;
+    // the report hero and tab highlight must match the canvas, not the loaded model.
+    report.update({ image: state.lastImage, durationResults: state.durationResults, activeDuration: state.displayedDuration });
   }
 
   /**
@@ -356,6 +360,9 @@ function boot() {
   function showBgProgress(fraction, currentLabel) {
     const bar = document.getElementById('fc-bg-progress');
     if (!bar) return;
+    // Show the toolbar (which now only contains this progress bar) so it
+    // docks at the bottom of the viewport during background loading.
+    toolbarEl.hidden = false;
     bar.hidden = false;
     const fill = /** @type {HTMLElement | null} */ (bar.querySelector('.fc-bg-progress__fill'));
     if (fill) fill.style.width = `${Math.round(fraction * 100)}%`;
@@ -372,10 +379,12 @@ function boot() {
     }
   }
 
-  /** Hide the background-loading progress bar. */
+  /** Hide the background-loading progress bar and collapse the toolbar. */
   function hideBgProgress() {
     const bar = document.getElementById('fc-bg-progress');
     if (bar) bar.hidden = true;
+    // why: collapse toolbar when not loading so it doesn't obstruct the page
+    toolbarEl.hidden = true;
   }
 
   /**
@@ -393,8 +402,6 @@ function boot() {
     state.lastFixation = result.fixation;
     state.lastOrigDims = result.origDims;
     state.lastDiagnostics = result.diagnostics;
-    state.lastFixationSequence = result.fixationSequence ?? null;
-    state.lastAttentionZoneCanvas = result.attentionZoneCanvas ?? null;
     state.lastRuleOfThirds = result.ruleOfThirds ?? null;
     state.displayedDuration = duration;
 
@@ -413,6 +420,12 @@ function boot() {
     controls.setDuration(duration);
     setOutputWaiting(false);
     renderOutput();
+    // Sync the report hero and tab highlight to what's now displayed.
+    // why: applyDurationResult is the single place where #fc-output and
+    // state.displayedDuration are updated, so updateReport must be
+    // called here to keep the report in sync (tab click fast-path
+    // does not re-enter the inference flow).
+    updateReport();
   }
 
   /**
@@ -551,6 +564,7 @@ function boot() {
         if (result && state.bgGenId === genId) {
           state.durationResults[dur] = result;
           controls.setDurationStatus(dur, 'ready');
+          updateReport(); // Refresh the report strip with the new duration canvas.
           // Announce the next duration loading, or 100% if this was the last.
           const nextLabel = i + 1 < BG_DURATIONS.length ? DURATION_LABELS[BG_DURATIONS[i + 1]] : undefined;
           showBgProgress((i + 1) / total, nextLabel);
@@ -561,15 +575,13 @@ function boot() {
             applyDurationResult(dur);
           }
 
-          // Once all 3 durations are ready, enable the trajectory overlay
-          // and re-render if the trajectory toggle is on, so the overlay
-          // appears without requiring the user to toggle it off and on.
+          // Once all 3 durations are ready, update the report so the trajectory
+          // section appears automatically.
           const allReady = (['1s', '3s', '7s'] /** @type {const} */).every(
             (d) => state.durationResults[d] && state.durationResults[d] !== 'loading' && state.durationResults[d] !== 'failed',
           );
           if (allReady) {
-            controls.setTrajectoryAvailable(true);
-            if (state.overlays.centroidTrajectory) renderOutput();
+            updateReport();
           }
         }
       }
@@ -594,7 +606,22 @@ function boot() {
       outputSection,
       onBanner: (message) => status.showDemoBanner(message),
     })
-      .then(() => {
+      .then((demoResult) => {
+        // Populate state so the report renders with demo data.
+        // Only the 3s slot gets a result (one synthetic map for the
+        // primary model); 1s and 7s stay null so their placeholders
+        // show "Not yet loaded" — an honest representation of demo mode.
+        state.lastImage = demoResult.workCanvas;
+        state.lastHeatmapCanvas = demoResult.heatmapCanvas;
+        state.lastFixation = demoResult.fixation;
+        state.lastOrigDims = demoResult.origDims;
+        state.displayedDuration = '3s';
+        state.durationResults['3s'] = {
+          heatmapCanvas: demoResult.heatmapCanvas,
+          fixation: demoResult.fixation,
+          origDims: demoResult.origDims,
+        };
+        updateReport();
         // As soon as the demo renders, the user has a canvas to
         // control — enable and reveal the controls plus the dropzone
         // right away even though the background model is still
@@ -970,9 +997,6 @@ function boot() {
         }
       }
       controls.setDurationStatus(inferDuration, 'ready');
-      // Reset trajectory availability for the new image — it will be re-enabled
-      // by loadBackgroundDurations once all 3 durations complete.
-      controls.setTrajectoryAvailable(false);
 
       // Kick off background loading of the other two durations.
       // Fire-and-forget: errors are handled inside loadBackgroundDurations.
@@ -982,6 +1006,7 @@ function boot() {
       });
 
       renderOutput();
+      updateReport();
       // Reveal controls now that there is a real result to operate on
       // (non-demo path). Safe to call repeatedly — no-op after first.
       showControls();
@@ -1060,19 +1085,6 @@ function boot() {
   function renderOutput() {
     if (!state.lastImage || !state.lastHeatmapCanvas) return;
 
-    // Build centroid trajectory from all three ready duration results.
-    // Ordered 1s → 3s → 7s so the line shows attention shift over time.
-    const TRAJ_DURATIONS = /** @type {const} */ (['1s', '3s', '7s']);
-    const centroidTrajectory = [];
-    const centroidLabels = [];
-    for (const d of TRAJ_DURATIONS) {
-      const r = state.durationResults[d];
-      if (r && r !== 'loading' && r !== 'failed' && r.fixation) {
-        centroidTrajectory.push(r.fixation);
-        centroidLabels.push(DURATION_LABELS[d] ?? d);
-      }
-    }
-
     // Delegate rendering to the output-view module. The return value is
     // the composite canvas (null for the 'original' view) which we store
     // so the download handler always has a direct reference — avoiding
@@ -1084,16 +1096,12 @@ function boot() {
         heatmapCanvas: state.lastHeatmapCanvas,
         view: state.view,
         opacity: state.opacity,
-        blendMode: state.blendMode,
+        blendMode: 'source-over',
         fixation: state.lastFixation,
         origDims: state.lastOrigDims,
         duration: DURATION_LABELS[state.displayedDuration],
         diagnostics: state.lastDiagnostics,
-        fixationSequence: state.lastFixationSequence,
-        attentionZoneCanvas: state.lastAttentionZoneCanvas,
-        centroidTrajectory: centroidTrajectory.length >= 2 ? centroidTrajectory : null,
-        centroidLabels,
-        overlays: state.overlays,
+        overlays: { fixationSequence: false, attentionZones: false, centroidTrajectory: false },
       },
       { outputSection, outputCanvasWrap, outputCaption },
     );

@@ -220,4 +220,10 @@ export async function runDemoMode(mounts) {
   // simpler to wait on than any event-listener-based protocol.
   outputSection.setAttribute('data-foveacast-ready', 'true');
   outputSection.setAttribute('data-foveacast-mode', 'demo');
+
+  // Return the minimum result data so main.js can populate the analysis
+  // report with demo content. The report won't have fixation-sequence or
+  // zone overlays (those require real inference), but the hero canvas,
+  // fixation note, and ROT grid will all render correctly.
+  return { workCanvas, heatmapCanvas, fixation, origDims: /** @type {[number, number]} */ ([origH, origW]) };
 }

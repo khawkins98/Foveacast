@@ -402,7 +402,7 @@ export function renderAttentionZoneCanvas(normalisedMap, width, height, threshol
  * @param {Array<{x: number, y: number}>} fixations - Ordered sequence.
  * @returns {Array<{x: number, y: number, r: number, ordinal: number}>}
  */
-function drawFixationSequence(ctx, fixations) {
+export function drawFixationSequence(ctx, fixations) {
   if (fixations.length === 0) return [];
   ctx.save();
 
@@ -445,24 +445,39 @@ function drawFixationSequence(ctx, fixations) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  for (let i = 0; i < fixations.length; i++) {
+  // Colour ramp: first fixation = deep navy, last = near-white.
+  // Interpolated linearly in RGB so intermediate dots grade through mid-blues.
+  // Text colour flips to dark once the fill is bright enough to ensure contrast.
+  const startRGB = [0, 52, 140];       // dark navy blue
+  const endRGB   = [220, 232, 255];    // near-white with slight blue tint
+  const n = fixations.length;
+
+  for (let i = 0; i < n; i++) {
     const { x, y } = fixations[i];
     const label = String(i + 1);
 
-    // Black halo.
+    // t = 0 for the first fixation (dark), 1 for the last (bright).
+    const t = n > 1 ? i / (n - 1) : 0;
+    const r = Math.round(startRGB[0] + t * (endRGB[0] - startRGB[0]));
+    const g = Math.round(startRGB[1] + t * (endRGB[1] - startRGB[1]));
+    const b = Math.round(startRGB[2] + t * (endRGB[2] - startRGB[2]));
+
+    // Black halo for legibility against any background.
     ctx.beginPath();
     ctx.arc(x, y, circleR + lineW * 1.5, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fill();
 
-    // Filled circle — white for first fixation, semi-transparent for rest.
+    // Filled circle with ramp colour.
     ctx.beginPath();
     ctx.arc(x, y, circleR, 0, Math.PI * 2);
-    ctx.fillStyle = i === 0 ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.70)';
+    ctx.fillStyle = `rgba(${r},${g},${b},0.95)`;
     ctx.fill();
 
-    // Number.
-    ctx.fillStyle = 'black';
+    // Number — white on dark dots, near-black on bright dots.
+    // Perceived brightness formula (ITU-R BT.601): (R*299+G*587+B*114)/1000.
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    ctx.fillStyle = brightness > 140 ? 'rgba(0,20,60,0.9)' : 'white';
     ctx.fillText(label, x, y);
   }
 
@@ -487,7 +502,7 @@ function drawFixationSequence(ctx, fixations) {
  *   (e.g. ['1s', '3s', '7s']).
  * @returns {Array<{x: number, y: number, r: number, label: string}>}
  */
-function drawCentroidTrajectory(ctx, trajectory, labels) {
+export function drawCentroidTrajectory(ctx, trajectory, labels) {
   if (trajectory.length < 2) return [];
   ctx.save();
 
