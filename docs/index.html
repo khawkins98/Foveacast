@@ -149,20 +149,6 @@
         <div id="fc-status-mount" class="fc-mount fc-mount--status"></div>
 
         <!--
-          Background-duration progress bar — shown during automatic
-          background loading of the 1 s and 7 s models after the
-          primary 3 s inference completes. Hidden at rest.
-          aria-hidden because the progress update is not screen-reader
-          critical: the HUD and duration buttons carry that narrative.
-        -->
-        <div id="fc-bg-progress" class="fc-bg-progress" aria-hidden="true" hidden>
-          <div class="fc-bg-progress__track">
-            <div class="fc-bg-progress__fill"></div>
-          </div>
-          <p class="fc-bg-progress__label">Loading other durations…</p>
-        </div>
-
-        <!--
           Empty-state intro — visible before first inference, hidden after.
           Sits in the main reading column so the contextual help is inline.
           The trust note below is a sibling outside this div so it persists
@@ -257,6 +243,19 @@
         <details> popup can expand upward without clipping.
       -->
       <div id="fc-toolbar" class="fc-toolbar" hidden aria-label="Analysis controls">
+        <!--
+          Background-duration progress bar — shown while the 1 s and 7 s
+          models load after the primary 3 s inference. Sits above the
+          controls row inside the fixed toolbar so it remains visible when
+          the user has scrolled down to read the report.
+          aria-hidden: the HUD and duration tab states carry the a11y narrative.
+        -->
+        <div id="fc-bg-progress" class="fc-bg-progress" aria-hidden="true" hidden>
+          <div class="fc-bg-progress__track">
+            <div class="fc-bg-progress__fill"></div>
+          </div>
+          <p class="fc-bg-progress__label">Loading other durations…</p>
+        </div>
         <div id="fc-controls-mount" class="fc-mount fc-mount--controls"></div>
       </div>
     </div>

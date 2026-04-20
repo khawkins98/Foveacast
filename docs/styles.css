@@ -424,14 +424,17 @@ a:hover {
 
 /* -- Background-duration progress bar ------------------------------------ */
 /*
- * Thin strip shown below the status banner while the 1 s and 7 s models
- * are loading automatically after the primary 3 s inference. Hidden at
- * rest (main.js sets `hidden` attribute). The fill width is driven
- * from JS via `showBgProgress(fraction)`.
+ * Thin strip at the top of the fixed toolbar while the 1 s and 7 s models
+ * load after the primary 3 s inference. Positioned inside .fc-toolbar so it
+ * stays visible as the user scrolls the report. Hidden at rest (main.js
+ * sets `hidden` attribute). Fill width driven from JS via showBgProgress().
  */
 
 .fc-bg-progress {
-  padding: 0.5rem var(--fc-main-px, 2rem);
+  /* why: spans the full toolbar width above the controls row; border
+     separates it visually from the topnav border-top of the toolbar */
+  padding: 0.4rem var(--fc-main-px, 2rem) 0.3rem;
+  border-bottom: 1px solid var(--fc-outline-variant);
 }
 
 .fc-bg-progress__track {
@@ -450,7 +453,7 @@ a:hover {
 }
 
 .fc-bg-progress__label {
-  margin: 0.3rem 0 0;
+  margin: 0.25rem 0 0;
   font-size: 0.72rem;
   color: var(--fc-on-surface-dim);
 }
