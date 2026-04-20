@@ -331,6 +331,79 @@ a:hover {
  * before JS initialises the loading state.
  */
 .fc-voxel-bg {
+  /* Default colouring — heerich writes stroke as an SVG presentation
+     attribute, so CSS custom properties (var()) won't resolve inside
+     it. We set `color` here and the heerich style config uses
+     `currentColor` so the design token propagates via the cascade. */
+  color: var(--fc-primary);
+  pointer-events: none;
+}
+
+.fc-voxel-bg svg {
+  /* The heerich SVG is unitless; scale it to a visible size. */
+  width: 260px;
+  height: 260px;
+  display: block;
+}
+
+/*
+ * In-overlay variant — while the model is loading, .fc-voxel-bg lives
+ * inside .fc-busy-overlay__card and IS the loading indicator (no
+ * separate CSS spinner). It sits inline in the card flex flow,
+ * full-opacity, with a slightly brighter colour to read against the
+ * dark backdrop. ui/voxel-bg.js re-parents the element into .fc-main
+ * once the cube→sphere morph completes, at which point the rules
+ * below take over.
+ */
+.fc-busy-overlay__card .fc-voxel-bg {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fc-on-surface);
+  opacity: 1;
+}
+
+.fc-busy-overlay__card .fc-voxel-bg svg {
+  width: 220px;
+  height: 220px;
+}
+
+/*
+ * Inference-time spin — applied to the SVG via the `--spinning` class
+ * by ui/voxel-bg.js when an analysis run starts. Driven by CSS rather
+ * than a JS rAF loop because ONNX inference blocks the main thread,
+ * which would freeze any JS-driven animation. Compositor-thread
+ * `transform` keeps ticking even while the main thread is busy with
+ * the model.
+ */
+@keyframes fc-voxel-spin {
+  to { transform: rotate(360deg); }
+}
+
+.fc-voxel-bg.fc-voxel-bg--spinning svg {
+  transform-origin: 50% 50%;
+  animation: fc-voxel-spin 4s linear infinite;
+  /* will-change is a hint that promotes the SVG to its own layer so
+     the rotation is composited rather than re-rasterised each tick. */
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-voxel-bg.fc-voxel-bg--spinning svg {
+    animation: none;
+  }
+}
+
+/*
+ * Rest-state variant — once the voxel-bg.js controller re-parents the
+ * element into .fc-main, it sits behind the page content as ambient
+ * decoration. Absolute positioning anchors it to the column; opacity
+ * and transform classes drive the loading→ready transition.
+ */
+.fc-main > .fc-voxel-bg {
   position: absolute;
   top: 0;
   left: 0;
@@ -339,14 +412,8 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  pointer-events: none;
   z-index: 0;
   opacity: 0;
-  /* why: heerich writes stroke as SVG presentation attributes, not inline styles,
-     so CSS custom properties (var()) won't resolve there. We set color here and
-     use currentColor in the heerich style config so the design token propagates
-     via the CSS cascade instead. */
-  color: var(--fc-on-surface-dim);
   transition:
     opacity 1s ease,
     transform 1.5s ease;
@@ -354,17 +421,11 @@ a:hover {
   overflow: hidden;
 }
 
-.fc-voxel-bg svg {
-  /* The heerich SVG is unitless; scale it to a visible size. */
-  width: 260px;
-  height: 260px;
-}
-
-.fc-voxel-bg--loading {
+.fc-main > .fc-voxel-bg.fc-voxel-bg--loading {
   opacity: 0.45;
 }
 
-.fc-voxel-bg--ready {
+.fc-main > .fc-voxel-bg.fc-voxel-bg--ready {
   opacity: 0.15;
   transform: scale(0.65) translate(55%, -25%);
 }
@@ -376,7 +437,7 @@ a:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fc-voxel-bg {
+  .fc-main > .fc-voxel-bg {
     transition: none;
   }
 }
@@ -1185,26 +1246,47 @@ body.fc-page-dragover .fc-dropzone {
   gap: 1.25rem;
 }
 
-/* Two-tone spinner ring: --fc-surface-high track, --fc-primary arc. */
-.fc-busy-overlay__spinner {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: 4px solid var(--fc-surface-high);
-  border-top-color: var(--fc-primary);
-  animation: fc-overlay-spin 0.75s linear infinite;
-}
-
-@keyframes fc-overlay-spin {
-  to { transform: rotate(360deg); }
-}
-
 .fc-busy-overlay__label {
   font-size: 0.9375rem;
   font-weight: 700;
   color: var(--fc-on-surface);
   letter-spacing: -0.01em;
   margin: 0;
+}
+
+/*
+ * Slow-load hint — fades in (via the [hidden] removal in main.js) after
+ * FC_SLOW_LOAD_HINT_MS so users on a first-visit/slow-network download
+ * get an explanation rather than a silent wait. Constrained width keeps
+ * it from sprawling on wide viewports.
+ */
+.fc-busy-overlay__hint {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--fc-on-surface-dim);
+  max-width: 32rem;
+  margin: 0;
+  text-align: center;
+  /* Reveal animation. The element starts hidden via the `hidden`
+     attribute, which display:none-s it; main.js removes the attribute
+     when the timer fires, and the opacity transition takes over. */
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+
+.fc-busy-overlay__hint:not([hidden]) {
+  opacity: 1;
+}
+
+.fc-busy-overlay__hint a {
+  color: var(--fc-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.fc-busy-overlay__hint a:hover,
+.fc-busy-overlay__hint a:focus-visible {
+  text-decoration-thickness: 2px;
 }
 
 /* -- Responsive: narrow viewport (< 900 px) ------------------------------ */

@@ -152,14 +152,6 @@
         </header>
 
         <!--
-          Voxel wireframe background — purely decorative, no semantic content.
-          Driven by ui/voxel-bg.js: spins as a cube while the model loads,
-          morphs to a sphere shell when ready, then fades to a low-opacity
-          ambient background decoration. aria-hidden keeps it invisible to AT.
-        -->
-        <div id="fc-voxel-bg" class="fc-voxel-bg" aria-hidden="true"></div>
-
-        <!--
           Empty-state intro — visible before first inference, hidden after.
           Sits in the main reading column so the contextual help is inline.
         -->
@@ -271,8 +263,29 @@
     -->
     <div class="fc-busy-overlay" id="fc-busy-overlay" role="status" aria-atomic="true">
       <div class="fc-busy-overlay__card">
-        <div class="fc-busy-overlay__spinner" aria-hidden="true"></div>
+        <!--
+          Voxel wireframe — doubles as the loading indicator while the
+          model is being fetched/initialised. ui/voxel-bg.js drives it:
+          spinning cube during load, morphs to a sphere when the model
+          is ready, then re-parents into .fc-main and fades to a low-
+          opacity ambient background decoration.
+        -->
+        <div id="fc-voxel-bg" class="fc-voxel-bg" aria-hidden="true"></div>
         <p class="fc-busy-overlay__label" id="fc-busy-overlay-label">Analysing…</p>
+        <!--
+          Slow-load hint. Hidden by default; main.js reveals it after a
+          short delay (FC_SLOW_LOAD_HINT_MS) when the busy overlay is
+          showing the model-load label, so it only appears for users
+          actually waiting on the first download.
+        -->
+        <p class="fc-busy-overlay__hint" id="fc-busy-overlay-hint" hidden>
+          Heads up — Foveacast loads a fairly large model (~57&nbsp;MB) on
+          first visit. After that it is cached locally and starts
+          quickly. Curious how it works?
+          <a href="https://github.com/khawkins98/Foveacast"
+             target="_blank"
+             rel="noopener noreferrer">See it on GitHub</a>.
+        </p>
       </div>
     </div>
 

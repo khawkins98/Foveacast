@@ -6,6 +6,8 @@ All notable changes to Foveacast are recorded here. Format follows [Keep a Chang
 
 ### Added
 
+- **Voxel wireframe loading indicator** — replaces the CSS spinner inside the busy overlay with an isometric wireframe cube (vendored [heerich](https://github.com/meodai/heerich) renderer). The cube spins while the model downloads, morphs into a sphere shell when the model is ready, then re-parents into the main column as a low-opacity ambient background. Subsequent inference runs spin the same sphere as the per-analysis loading indicator. Respects `prefers-reduced-motion`.
+- **Slow-load hint** — after 3 seconds of model-load wait, the busy overlay reveals a short note explaining that the first visit pulls a ~57 MB model and links to the GitHub project (opens in a new tab so the in-flight download is not interrupted).
 - **Persistent model caching via Cache API** — model `.onnx` files are now stored in `CacheStorage` after the first download. GitHub Pages serves these files with `Cache-Control: max-age=600` (10 minutes), causing repeat visitors to re-download the 57 MB model on every return visit after that window. Cache API storage has no TTL; the model stays cached until the user clears site data or the model is updated. Cache hits include a background ETag revalidation so model updates propagate on the next page load without user action. Falls back to normal HTTP caching on browsers where the Cache API is unavailable or in insecure contexts.
 
 ### Added

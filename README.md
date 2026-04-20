@@ -107,6 +107,7 @@ Foveacast stands on two pieces of open-source work:
 
 - **MSI-Net** (Kroner et al. 2020), fine-tuned on UEyes (Jiang et al. 2023) — the saliency model. [github.com/alexanderkroner/saliency](https://github.com/alexanderkroner/saliency)
 - **ONNX Runtime Web** — the inference runtime. MIT. [onnxruntime.ai/docs/tutorials/web/](https://onnxruntime.ai/docs/tutorials/web/)
+- **heerich** by [meodai](https://github.com/meodai) — the tiny voxel/SVG renderer behind the loading-time wireframe cube/sphere animation. MIT. [github.com/meodai/heerich](https://github.com/meodai/heerich)
 
 Prior to V3, UNISAL (Droste et al., Apache 2.0) was the inference model, and heatmap.js by Patrick Wied (MIT) handled the overlay renderer. Both were removed in 0.3.0.
 

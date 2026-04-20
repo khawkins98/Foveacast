@@ -6,6 +6,18 @@ This file is not a changelog (that's `CHANGELOG.md`) and it isn't the spec (that
 
 ---
 
+## 2026-04-20 — Voxel loading indicator: heerich style shape + CSS-vs-rAF for compositor smoothness
+
+Two related gotchas in turning the heerich wireframe cube into Foveacast's loading indicator.
+
+**heerich's `style` constructor option is flat, not keyed by face.** I cribbed an example that used `style: { default: {...} }`, which is valid as a per-voxel `styles` object (where keys are face names like `default`, `front`, `top`). But the constructor option is the *defaultStyle* itself — a flat `{ fill, stroke, strokeWidth }` map. Wrapping it in `default:` made the renderer emit `default="[object Object]"` as the only attribute on every polygon, with no `fill` or `stroke` attribute at all. SVG defaults take over: black fill, no stroke. Result: invisible cube against the dark backdrop. Fix: drop the wrapper. Confirmed by diffing the SVG output of both shapes side-by-side.
+
+**Main-thread inference freezes JS animations; CSS animations on `transform` keep ticking.** Once the cube morphs to a sphere and the user starts an inference run, we want the sphere to keep spinning as the per-analysis loading indicator. The first attempt used the same rAF loop with a per-frame camera-angle update — and it stuttered to a stop the moment ORT started running, because the rAF callback was queued behind the inference work on the main thread. The fix is to render the sphere SVG once, then apply a CSS keyframes `transform: rotate()` animation. Compositor-thread `transform` animations don't block on the main thread, so the spin stays smooth all the way through inference. We add `will-change: transform` so the SVG gets promoted to its own layer up front. Tradeoff: the analyzing-state spin is a 2D in-plane rotation rather than a 3D camera rotation around an axis (which would require per-frame geometry rebuilds). Visually the difference is negligible because the sphere shell is roughly symmetric.
+
+The cube spin during model load *is* still rAF-driven, because that phase is dominated by network I/O (off the main thread) and the rAF cadence stays smooth.
+
+Code in `docs/src/ui/voxel-bg.js`. Vendored renderer at `docs/vendor/heerich.js` (heerich 0.14.0, MIT, [meodai/heerich](https://github.com/meodai/heerich)).
+
 ## 2026-04-20 — GitHub Pages HTTP cache TTL is 10 minutes, not "permanent"
 
 The model `.onnx` files are served by GitHub Pages with `Cache-Control: max-age=600`. That's 10 minutes. After every 10-minute window the browser must revalidate. If a new deployment happened (changing the ETag), the browser re-downloads the full file — 57 MB for each V3 duration model.

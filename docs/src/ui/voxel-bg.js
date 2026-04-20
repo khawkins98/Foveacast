@@ -114,26 +114,47 @@ function isSphereShell(x, y, z) {
  *
  * @param {HTMLElement} containerEl - The element whose innerHTML will be driven
  *   by heerich SVG output. Must already be in the DOM.
+ * @param {Object} [options]
+ * @param {HTMLElement} [options.restContainer] - If provided, the container
+ *   element is moved (DOM re-parented) into this element when the morph
+ *   completes. Used so the loading-time mount (e.g. busy overlay card) is
+ *   different from the rest-state mount (e.g. main column for the ambient
+ *   sphere). Pass null/undefined to keep the element in place.
+ * @param {() => void} [options.onReady] - Fired exactly once, when the morph
+ *   completes (or immediately, in the prefers-reduced-motion case where
+ *   setState('ready') jumps straight to the sphere). Use this to coordinate
+ *   external state — e.g. fading out the busy overlay only after the cube
+ *   has finished morphing inside it.
  * @returns {{ setState: (s: 'loading'|'ready') => void, destroy: () => void }}
  */
-export function createVoxelBg(containerEl) {
+export function createVoxelBg(containerEl, options = {}) {
+  const { restContainer = null, onReady = null } = options;
+  // Captured at construction so activate() can re-parent the element
+  // back to its original loading mount (typically the busy overlay
+  // card) for subsequent inference runs.
+  const loadingParent = containerEl.parentElement;
   const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // why: opaque:false (set per applyGeometry call) lets back faces render; fill:none
+  // why: heerich's `style` option is a flat style object — it becomes
+  // defaultStyle directly and is spread into per-face style objects. Wrapping
+  // it in a `default:` key (as the per-voxel-style API does) breaks
+  // serialisation: every face renders with `default="[object Object]"` and no
+  // fill/stroke at all, so the browser falls back to black-fill/no-stroke.
+  //
+  // opaque:false (set per applyGeometry call) lets back faces render; fill:none
   // makes every face transparent so only the stroke outline is visible — the
   // wireframe aesthetic. We use 'currentColor' rather than a CSS custom property
   // because heerich writes stroke as an SVG presentation attribute, and browsers
-  // do not resolve var() inside SVG presentation attributes. Setting color on the
-  // container element (in CSS) and using currentColor here lets the design token
-  // propagate correctly via the CSS cascade.
+  // do not resolve var() inside SVG presentation attributes. Setting color on
+  // the container element (in CSS) and using currentColor here lets the design
+  // token propagate via the CSS cascade. CSS rules on
+  // `.fc-voxel-bg svg polygon` can still override either property in SVG2.
   const h = new Heerich({
     camera: { type: 'isometric', angle: FINAL_ANGLE_DEG },
     style: {
-      default: {
-        fill: 'none',
-        stroke: 'currentColor',
-        strokeWidth: 1,
-      },
+      fill: 'none',
+      stroke: 'currentColor',
+      strokeWidth: 1,
     },
   });
 
@@ -142,6 +163,27 @@ export function createVoxelBg(containerEl) {
   let spinAngle = FINAL_ANGLE_DEG;
   let morphStartTime = /** @type {number|null} */ (null);
   let lastFrameTime = 0;
+  // why: onReady must fire exactly once even if setState('ready') is called
+  // multiple times or after the element is already in its rest state.
+  let notifiedReady = false;
+
+  /**
+   * Final-state bookkeeping: re-parent into the rest container (if any),
+   * mark the element with the rest-state class, and notify the caller.
+   * Idempotent — safe to call from the morph completion path AND from
+   * setState('ready') in the reduced-motion or already-ready cases.
+   */
+  function notifyReady() {
+    if (notifiedReady) return;
+    notifiedReady = true;
+    if (restContainer && containerEl.parentElement !== restContainer) {
+      // appendChild moves the element rather than copying it, so the
+      // already-rendered SVG content goes with it.
+      restContainer.appendChild(containerEl);
+    }
+    containerEl.classList.add('fc-voxel-bg--ready');
+    onReady?.();
+  }
 
   // ---- scene builders -----------------------------------------------------
 
@@ -241,7 +283,7 @@ export function createVoxelBg(containerEl) {
         cancelAnimationFrame(rafId);
         rafId = null;
         currentState = 'ready';
-        containerEl.classList.add('fc-voxel-bg--ready');
+        notifyReady();
       }
     }
     // 'ready' state: rAF has already been cancelled above — this branch is
@@ -280,7 +322,8 @@ export function createVoxelBg(containerEl) {
      * @param {'loading'|'ready'} newState
      */
     setState(newState) {
-      if (newState === 'ready' && currentState === 'loading') {
+      if (newState !== 'ready') return;
+      if (currentState === 'loading') {
         currentState = 'morphing';
         morphStartTime = null;
         containerEl.classList.remove('fc-voxel-bg--loading');
@@ -289,14 +332,73 @@ export function createVoxelBg(containerEl) {
           buildSphereScene();
           render();
           currentState = 'ready';
-          containerEl.classList.add('fc-voxel-bg--ready');
+          notifyReady();
         } else if (!rafId) {
           // Restart the loop if it was somehow cancelled before morph start.
           rafId = requestAnimationFrame(tick);
         }
         // Otherwise: rAF loop is already running from init and will pick up
         // the new 'morphing' state on the next tick.
+      } else if (currentState === 'ready') {
+        // Reduced-motion init already jumped to 'ready'. The caller still
+        // expects an onReady fire so they can clear loading-state UI.
+        notifyReady();
       }
+    },
+
+    /**
+     * Bring the voxel back into its original loading mount as the
+     * inference-run loading indicator. Used after the initial
+     * cube→sphere morph has completed.
+     *
+     * Implementation note: ONNX inference blocks the main thread, so a
+     * JS/rAF-driven animation would stutter or freeze entirely while
+     * the model runs. Instead, we render the sphere ONCE and let the
+     * compositor-thread CSS animation (`fc-voxel-spin` keyframes,
+     * applied via the `--spinning` class) handle the rotation —
+     * compositor-only `transform` animations keep ticking even while
+     * the main thread is busy.
+     *
+     * No-op unless the morph has completed, the element exists, and
+     * reduced-motion is not preferred.
+     */
+    activate() {
+      if (currentState === 'gone' || prefersReduced) return;
+      if (currentState !== 'ready') return;
+      if (loadingParent && containerEl.parentElement !== loadingParent) {
+        loadingParent.appendChild(containerEl);
+      }
+      // why: --ready styles the rest-state ambient sphere (low opacity,
+      // corner offset). In the overlay, the in-overlay CSS already
+      // forces opacity:1 and centring, but stripping the class keeps
+      // the element semantically clean and lets the overlay variant
+      // win without specificity gymnastics.
+      containerEl.classList.remove('fc-voxel-bg--ready');
+      currentState = 'spinning';
+      // Render the static sphere a single time; CSS animates the spin
+      // from here so we do not need a rAF loop while inference blocks
+      // the main thread.
+      buildSphereScene();
+      render();
+      containerEl.classList.add('fc-voxel-bg--spinning');
+    },
+
+    /**
+     * Stop the inference-time spinner: drop the CSS spin class, return
+     * the element to its rest container, and re-render the static
+     * sphere. Symmetric counterpart to activate(). No-op if not
+     * currently spinning.
+     */
+    deactivate() {
+      if (currentState !== 'spinning') return;
+      containerEl.classList.remove('fc-voxel-bg--spinning');
+      if (restContainer && containerEl.parentElement !== restContainer) {
+        restContainer.appendChild(containerEl);
+      }
+      buildSphereScene();
+      render();
+      currentState = 'ready';
+      containerEl.classList.add('fc-voxel-bg--ready');
     },
 
     /**
