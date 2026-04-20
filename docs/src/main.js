@@ -28,6 +28,7 @@ import { isDemoModeRequested, runDemoMode } from './demo.js';
 import { installPageDrop } from './ui/page-drop.js';
 import { readHasRunSentinel, writeHasRunSentinel } from './ui/has-run-sentinel.js';
 import { computeSaliencyMetrics, computeZoneThresholds, computeRuleOfThirds } from './pipeline/metrics.js';
+import { createReport } from './ui/report.js';
 import { createHud, updateHud, updateHudRuleOfThirds } from './ui/hud.js';
 
 /**
@@ -189,6 +190,7 @@ function boot() {
   const outputCanvasWrap = mustGet('fc-output-canvas-wrap');
   const outputCaption = mustGet('fc-output-caption');
   const hudMount = mustGet('fc-hud-mount');
+  const reportMount = mustGet('fc-report-mount');
 
   // --- Status banner ----------------------------------------------------
   const status = createStatus();
@@ -292,6 +294,9 @@ function boot() {
   // --- HUD stats panel -------------------------------------------------
   const hud = createHud(hudMount);
 
+  // --- Analysis report -------------------------------------------------
+  const report = createReport({ mountEl: reportMount });
+
   /**
    * Reveal the controls panel and hide the sidebar's empty-state intro.
    * Called from both the demo path and the real-inference path so both
@@ -308,6 +313,16 @@ function boot() {
     if (dropRow) dropRow.hidden = true;
     const newUploadRow = document.getElementById('fc-new-upload-row');
     if (newUploadRow) newUploadRow.hidden = false;
+  }
+
+  /**
+   * Refresh the analysis report with the current state. Safe to call
+   * repeatedly — the report module updates in-place without rebuilding DOM.
+   * Called after primary inference and after each background duration arrives.
+   */
+  function updateReport() {
+    if (!state.lastImage) return;
+    report.update({ image: state.lastImage, durationResults: state.durationResults });
   }
 
   /**
@@ -551,6 +566,7 @@ function boot() {
         if (result && state.bgGenId === genId) {
           state.durationResults[dur] = result;
           controls.setDurationStatus(dur, 'ready');
+          updateReport(); // Refresh the report strip with the new duration canvas.
           // Announce the next duration loading, or 100% if this was the last.
           const nextLabel = i + 1 < BG_DURATIONS.length ? DURATION_LABELS[BG_DURATIONS[i + 1]] : undefined;
           showBgProgress((i + 1) / total, nextLabel);
@@ -982,6 +998,7 @@ function boot() {
       });
 
       renderOutput();
+      updateReport();
       // Reveal controls now that there is a real result to operate on
       // (non-demo path). Safe to call repeatedly — no-op after first.
       showControls();

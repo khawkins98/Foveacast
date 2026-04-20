@@ -1567,3 +1567,270 @@ details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
     border-color: var(--fc-primary);
   }
 }
+
+/* ==========================================================================
+   Analysis Report section
+   Appears below the interactive heatmap canvas after inference completes.
+   The report presents findings in narrative order: primary finding, duration
+   comparison strip, and methodology note.
+   ========================================================================== */
+
+.fc-report {
+  border-top: 2px solid var(--fc-outline-variant);
+  padding-top: 2.5rem;
+}
+
+/* Report top heading */
+.fc-report__header {
+  margin-bottom: 2rem;
+}
+
+.fc-report__heading {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--fc-on-surface);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+/* Shared section wrapper */
+.fc-report__section {
+  padding: 2rem 0;
+  border-top: 1px solid var(--fc-outline-variant);
+}
+
+.fc-report__section-heading {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--fc-on-surface-dim);
+  margin: 0 0 1rem;
+}
+
+/* --------------------------------------------------------------------------
+   Section 1 — Primary finding (hero + findings panel)
+   Two-column on wide screens; stacks on narrow.
+   -------------------------------------------------------------------------- */
+
+.fc-report__section--primary {
+  display: grid;
+  grid-template-columns: minmax(0, 55%) minmax(0, 45%);
+  gap: 2rem;
+  align-items: start;
+}
+
+/* Hero figure */
+.fc-report__hero {
+  margin: 0;
+}
+
+.fc-report__hero-canvas canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+/* Findings panel */
+.fc-report__findings {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.fc-report__headline {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--fc-on-surface);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.fc-report__fixation-note {
+  font-size: 0.8rem;
+  color: var(--fc-on-surface-variant);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.fc-report__source-label {
+  font-size: 0.7rem;
+  color: var(--fc-on-surface-dim);
+  margin: 0;
+}
+
+/* Rule-of-thirds grid */
+.fc-report__rot-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.fc-report__rot-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--fc-on-surface-dim);
+  margin: 0;
+}
+
+.fc-report__rot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  max-width: 200px;
+}
+
+.fc-report__rot-cell {
+  background: var(--fc-surface-container);
+  color: var(--fc-on-surface-variant);
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-align: center;
+  padding: 0.4rem 0.25rem;
+  border-radius: 2px;
+  /* why: min-height keeps cells square-ish regardless of percentage string length. */
+  min-height: 2.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Max-attention cell: distinct background + color; NOT colour alone (text
+   already differs as it is the highest value). aria-label on each cell
+   conveys the distinction to screen readers. */
+.fc-report__rot-cell--max {
+  background: var(--fc-primary-container);
+  color: var(--fc-on-primary-container, var(--fc-on-surface));
+  font-weight: 700;
+}
+
+/* --------------------------------------------------------------------------
+   Section 2 — Duration comparison strip
+   -------------------------------------------------------------------------- */
+
+.fc-report__section--durations {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.fc-report__duration-note {
+  font-size: 0.8rem;
+  color: var(--fc-on-surface-variant);
+  margin: 0;
+  line-height: 1.5;
+  max-width: 55ch;
+}
+
+.fc-report__strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.fc-report__dur-item {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.fc-report__dur-canvas {
+  /* Fixed aspect ratio placeholder before the canvas arrives. */
+  aspect-ratio: 16 / 9;
+  background: var(--fc-surface-container);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.fc-report__dur-canvas canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Pending / loading placeholder — fills the aspect-ratio box. */
+.fc-report__dur-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Animated pulse for the loading state. */
+.fc-report__dur-canvas[aria-busy="true"] .fc-report__dur-placeholder {
+  animation: fc-report-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes fc-report-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.fc-report__dur-placeholder--failed::after {
+  content: 'Unavailable';
+  font-size: 0.7rem;
+  color: var(--fc-on-surface-dim);
+}
+
+.fc-report__dur-label {
+  font-size: 0.75rem;
+  color: var(--fc-on-surface-variant);
+}
+
+/* --------------------------------------------------------------------------
+   Section 3 — Methodology note
+   -------------------------------------------------------------------------- */
+
+.fc-report__section--methodology {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.fc-report__method-body {
+  font-size: 0.8rem;
+  color: var(--fc-on-surface-variant);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 65ch;
+}
+
+.fc-report__method-links {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.fc-report__method-link {
+  font-size: 0.75rem;
+  color: var(--fc-primary);
+  text-decoration: none;
+}
+
+.fc-report__method-link:hover,
+.fc-report__method-link:focus-visible {
+  text-decoration: underline;
+  outline-offset: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   Responsive: below the sidebar breakpoint, stack the primary section
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 860px) {
+  .fc-report__section--primary {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Reduced motion: disable the placeholder pulse. */
+@media (prefers-reduced-motion: reduce) {
+  .fc-report__dur-canvas[aria-busy="true"] .fc-report__dur-placeholder {
+    animation: none;
+    opacity: 0.6;
+  }
+}
