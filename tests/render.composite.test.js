@@ -32,6 +32,8 @@ describe('compositeImageAndHeatmap', () => {
       fillText: vi.fn(),
       translate: vi.fn(),
       rotate: vi.fn(),
+      // setLineDash needed by drawFixationSequence / drawCentroidTrajectory.
+      setLineDash: vi.fn(),
       globalCompositeOperation: 'source-over',
       globalAlpha: 1,
       strokeStyle: '',
@@ -150,5 +152,66 @@ describe('compositeImageAndHeatmap', () => {
     // real context; with our stub we can only observe the latest set
     // value, so checking that the code path did not throw is enough.
     expect(ctxStub.drawImage).toHaveBeenCalledTimes(2);
+  });
+
+  it('draws a fixation sequence when fixationSequence is provided with ≥ 1 point', () => {
+    const fakeImage = { naturalWidth: 100, naturalHeight: 100 };
+    const fakeHeatmap = { width: 100, height: 100 };
+    const fixationSequence = [{ x: 20, y: 20 }, { x: 60, y: 40 }, { x: 50, y: 70 }];
+
+    compositeImageAndHeatmap(fakeImage, fakeHeatmap, {
+      showFixation: false,
+      fixationSequence,
+    });
+
+    // drawFixationSequence uses arc() for each numbered circle.
+    expect(ctxStub.arc).toHaveBeenCalled();
+    // And setLineDash for the saccade lines.
+    expect(ctxStub.setLineDash).toHaveBeenCalled();
+  });
+
+  it('draws the attention zone canvas when attentionZoneCanvas is provided', () => {
+    const fakeImage = { naturalWidth: 100, naturalHeight: 100 };
+    const fakeHeatmap = { width: 100, height: 100 };
+    const fakeZoneCanvas = { width: 100, height: 100 };
+
+    compositeImageAndHeatmap(fakeImage, fakeHeatmap, {
+      showFixation: false,
+      attentionZoneCanvas: fakeZoneCanvas,
+    });
+
+    // Zone canvas is drawn via drawImage.
+    expect(ctxStub.drawImage.mock.calls.some((call) => call[0] === fakeZoneCanvas)).toBe(true);
+  });
+
+  it('draws a centroid trajectory when centroidTrajectory has ≥ 2 points', () => {
+    const fakeImage = { naturalWidth: 100, naturalHeight: 100 };
+    const fakeHeatmap = { width: 100, height: 100 };
+    const centroidTrajectory = [{ x: 30, y: 30 }, { x: 70, y: 60 }];
+
+    compositeImageAndHeatmap(fakeImage, fakeHeatmap, {
+      showFixation: false,
+      centroidTrajectory,
+      centroidLabels: ['1s', '3s'],
+    });
+
+    // Trajectory line uses moveTo/lineTo.
+    expect(ctxStub.moveTo).toHaveBeenCalled();
+    expect(ctxStub.lineTo).toHaveBeenCalled();
+    // Labels drawn via fillText.
+    expect(ctxStub.fillText).toHaveBeenCalled();
+  });
+
+  it('skips trajectory when fewer than 2 points', () => {
+    const fakeImage = { naturalWidth: 100, naturalHeight: 100 };
+    const fakeHeatmap = { width: 100, height: 100 };
+
+    compositeImageAndHeatmap(fakeImage, fakeHeatmap, {
+      showFixation: false,
+      centroidTrajectory: [{ x: 50, y: 50 }],
+    });
+
+    // With one point, trajectory should not draw the connecting line.
+    expect(ctxStub.lineTo).not.toHaveBeenCalled();
   });
 });
