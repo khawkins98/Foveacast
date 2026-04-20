@@ -79,37 +79,11 @@ No automated accessibility regression check. The PRD promises WCAG 2.1 AA and Ph
 
 Features derivable from the existing pipeline without changing the model. All operate on the normalised `Float32Array` the postprocess step already produces.
 
-### P2 — Top-N fixation sequence via Inhibition of Return (IoR)
-
-Classic Itti & Koch (2001) technique: find the peak pixel → apply a Gaussian suppression mask → find the next peak → repeat for N fixations. Render as numbered circles (①②③) with connecting saccade lines on the composited canvas.
-
-`firstFixationCentroid` in `pipeline/fixation.js` already computes the first peak via weighted centroid; extending it to return top-N via IoR masking is a natural evolution. Document prominently that these are predicted population-average fixations under free-viewing, not a recording of any individual's scanpath.
-
-**Size:** ~50 lines of pure JS in `pipeline/fixation.js` plus a corresponding overlay render in `render/saliency-canvas.js`.
-
-### P2 — Multi-duration centroid trajectory
-
-Compute `firstFixationCentroid` for each of the 1s, 3s, and 7s saliency maps and draw a connecting arrow path on the heatmap overlay. Shows how the centre of attention shifts as viewing time increases — something no commercial saliency tool currently visualises this way, because our three-duration output is an unusual differentiator.
-
-**Size:** trivial to compute (centroid already runs per duration); needs a render path to draw the connecting path.
-
 ### P2 — Scanpath animation
 
-Animate a dot traversing the IoR fixation sequence with saccade lines drawing in. More legible than static numbered markers in presentations and exports. Depends on the IoR fixation sequence item above.
+Animate a dot traversing the IoR fixation sequence with saccade lines drawing in. More legible than static numbered markers in presentations and exports. Depends on the top-N fixation sequence (now shipped).
 
 **Size:** ~1 day.
-
-### P2 — Attention zones / threshold contour overlay
-
-Concentric boundaries at the 10%, 25%, 50% saliency-mass thresholds — a topographic map of attention. More actionable than the diffuse heatmap for questions like "is this CTA inside the top-25% attention zone?". Threshold-filled semi-transparent regions are cheaper to implement than true contour lines.
-
-**Size:** half a day.
-
-### P2 — Rule-of-thirds grid breakdown
-
-Score each cell of a 3×3 overlay by total saliency mass ("top-right third captures 28% of predicted attention"). Low-cost to compute; useful for compositional analysis. May be redundant once multi-duration trajectory is implemented.
-
-**Size:** ~30 minutes.
 
 ---
 
