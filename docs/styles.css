@@ -1578,26 +1578,26 @@ details.fc-sidebar__credits[open] .fc-sidebar__credits-summary::before {
 }
 
 .fc-report__rot-cell {
+  /* Background is set inline by renderRotGrid on the heat scale;
+     fallback here in case JS hasn't run yet. */
   background: var(--fc-surface-container);
   color: var(--fc-on-surface-variant);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 600;
   text-align: center;
   padding: 0.4rem 0.25rem;
   border-radius: 2px;
   /* why: min-height keeps cells square-ish regardless of percentage string length. */
-  min-height: 2.2rem;
+  min-height: 2.4rem;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background var(--fc-dur-fast);
 }
 
-/* Max-attention cell: distinct background + color; NOT colour alone (text
-   already differs as it is the highest value). aria-label on each cell
-   conveys the distinction to screen readers. */
+/* Max-attention cell: bold weight; background/color come from inline heat scale.
+   aria-label on each cell conveys the maximum distinction to screen readers. */
 .fc-report__rot-cell--max {
-  background: var(--fc-primary-container);
-  color: var(--fc-on-primary-container, var(--fc-on-surface));
   font-weight: 700;
 }
 

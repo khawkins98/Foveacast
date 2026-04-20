@@ -199,8 +199,10 @@ export function rotHeadline(rot) {
 
 /**
  * Populate a 3×3 rule-of-thirds grid container.
- * The cell with maximum attention receives a distinct class AND a descriptive
- * aria-label — so the distinction is not conveyed by colour alone.
+ * Each cell is tinted on a heat scale (dark → warm orange → bright) proportional
+ * to its share of attention, so the grid reads as a mini intensity map.
+ * Text labels are always present so the distinction is not colour-only (WCAG 1.4.1).
+ * The highest cell also gets a distinct aria-label for screen readers.
  *
  * @param {HTMLElement} container
  * @param {number[]} rot Nine-value row-major array (0–100 integers summing to 100).
@@ -209,13 +211,42 @@ export function renderRotGrid(container, rot) {
   const maxVal = Math.max(...rot);
   container.textContent = '';
 
+  // Heat ramp: 0% → dark surface → warm amber → hot orange-red at max.
+  // Three-stop interpolation: stop0 → stop1 at t=0.5 → stop2 at t=1.
+  const stop0 = [25,  33,  52];   // near --fc-surface-container (dark navy)
+  const stop1 = [160, 90,  10];   // warm amber mid-tone
+  const stop2 = [230, 60,   0];   // hot orange-red
+
   for (let i = 0; i < 9; i++) {
-    // why: values are already integer percentages (0–100); no multiplication needed.
     const pct  = rot[i];
     const cell = document.createElement('div');
     cell.className = 'fc-report__rot-cell';
 
-    if (rot[i] >= maxVal) {
+    // t = intensity relative to the max cell (0–1).
+    const t = maxVal > 0 ? pct / maxVal : 0;
+
+    // Two-segment linear interpolation through the three stops.
+    let r, g, b;
+    if (t <= 0.5) {
+      const u = t / 0.5;
+      r = Math.round(stop0[0] + u * (stop1[0] - stop0[0]));
+      g = Math.round(stop0[1] + u * (stop1[1] - stop0[1]));
+      b = Math.round(stop0[2] + u * (stop1[2] - stop0[2]));
+    } else {
+      const u = (t - 0.5) / 0.5;
+      r = Math.round(stop1[0] + u * (stop2[0] - stop1[0]));
+      g = Math.round(stop1[1] + u * (stop2[1] - stop1[1]));
+      b = Math.round(stop1[2] + u * (stop2[2] - stop1[2]));
+    }
+
+    cell.style.background = `rgb(${r},${g},${b})`;
+
+    // Flip text to dark on bright cells so contrast is maintained.
+    // Perceived brightness (ITU-R BT.601): (R*299+G*587+B*114)/1000.
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    cell.style.color = brightness > 110 ? 'rgba(10,15,30,0.9)' : '';
+
+    if (pct >= maxVal) {
       cell.classList.add('fc-report__rot-cell--max');
       cell.setAttribute('aria-label', `${POSITION_NAMES[i]}: ${pct}% — highest attention area`);
     } else {
