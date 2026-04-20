@@ -147,9 +147,9 @@ Score each cell of a 3×3 overlay by total saliency mass ("top-right third captu
 
 ## Items explicitly not going into this TODO
 
-- Anything the PRD's §Out of Scope lists (mobile support, URL input, webcam gaze tracking, video).
+- Mobile support, URL input, webcam gaze tracking, and video — explicitly out of scope.
 - Anything that would require a build step — the "unzip and open" promise still stands.
-- V2 (UNISAL) or V3 (SUM). Those belong in PRD updates and `LEARNINGS.md`, not here.
+- Architectural debates about future model versions. Those belong in `LEARNINGS.md`, not here.
 
 ---
 

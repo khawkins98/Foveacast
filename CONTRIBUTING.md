@@ -9,10 +9,10 @@ Foveacast is a small, single-maintainer project at the moment. That means low ce
 Read these in order:
 
 1. [README.md](README.md) — what Foveacast is and how to run it.
-2. [docs/PRD.md](docs/PRD.md) — scope, non-goals, model roadmap, and the architectural contracts each module must honour.
+2. [docs/methodology.md](docs/methodology.md) — how the model works, its training data, and its known limitations.
 3. [LEARNINGS.md](LEARNINGS.md) — prior dead ends and decisions. Especially useful if your change touches the model layer, the render layer, or testing.
 
-If your change is larger than a bug fix or a documentation tweak, please open an issue first so we can agree on the approach before code is written. The PRD is the source of truth for scope — "it'd be neat if Foveacast also did X" probably belongs as a follow-up issue or a PRD update, not as a scope creep inside another PR.
+If your change is larger than a bug fix or a documentation tweak, please open an issue first so we can agree on the approach before code is written.
 
 ## Development setup
 
@@ -30,7 +30,7 @@ Playwright needs its browser bundle once:
 pnpm exec playwright install chromium
 ```
 
-The UNISAL ONNX artefact is committed to the repo at `docs/models/unisal/model.onnx` (~12.5 MB). No `pnpm weights` step is needed, no fetch-at-deploy workflow — the file is part of the checkout. If you want to regenerate it from the PyTorch source, the recipe is at the top of `scripts/unisal-onnx-export.py`; that script is only run when bumping UNISAL, not on every dev setup.
+The V3 ONNX model files are **not committed** — they are gitignored due to their size (57 MB each). Three duration variants (1 s, 3 s, 7 s) live at `docs/models/v3/{1s,3s,7s}/model.onnx`. For local dev, run `scripts/fetch-v3-model.sh`. The deploy workflow fetches all three before the Pages upload.
 
 Foveacast is buildless on purpose — the `docs/` folder you edit is the folder GitHub Pages publishes, which is the folder a user unzips and opens. There is no bundler step between edit and publish. Vite is a dev-time convenience, not a dependency of the shipped artefact. If your change introduces a build step, please flag that in the PR description; the bar for reintroducing tooling is high.
 
@@ -66,7 +66,7 @@ If your change is a bug fix, include a test that fails without the fix. Regressi
 Update every document affected by your change. At minimum, check:
 
 - **README.md** — if you added a command, a flag, a run mode, a dependency, or a supported browser, it probably needs a line here.
-- **docs/PRD.md** — if you're changing scope, non-goals, the error-message set, accessibility commitments, or the model roadmap, update the PRD in the same PR. The PRD is the spec; drift between PRD and code is a bug.
+- **docs/methodology.md** — if you're changing how the model works, the limitations stated, or the user-facing description of the inference. The methodology page is the user-facing spec for the model; drift between it and actual behaviour is a bug.
 - **CHANGELOG.md** — every user-visible change gets an entry under the `[Unreleased]` heading (add one if missing). Follow [Keep a Changelog](https://keepachangelog.com/) conventions.
 - **CONTRIBUTING.md** (this file) — if your change alters the expectations in this document, update it.
 - **LEARNINGS.md** — add an entry for any non-obvious decision, any dead end, any "oh, that's how that actually works" moment. See the next section.

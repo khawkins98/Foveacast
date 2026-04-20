@@ -2,13 +2,13 @@
 
 Predicted attention heatmaps, right in your browser.
 
-![version 0.2.0](https://img.shields.io/badge/version-0.2.0-blue) ![status V2](https://img.shields.io/badge/status-V2-green) ![licence MIT](https://img.shields.io/badge/licence-MIT-lightgrey)
+![version 0.2.0](https://img.shields.io/badge/version-0.2.0-blue) ![status V3](https://img.shields.io/badge/status-V3-green) ![licence MIT](https://img.shields.io/badge/licence-MIT-lightgrey)
 
 ## What it is
 
 Foveacast takes a screenshot of a web page and shows you where a typical viewer is likely to look first. It runs entirely in the browser on your own machine, so nothing you drop on it ever leaves the device — no account, no upload, no server. It is free and open source.
 
-It is aimed at comms staff, web officers, and UX-aware developers who want a quick sanity check on a layout before publish, without signing up for a commercial predictive-eye-tracking service. Foveacast is a predictive tool, not a real eye-tracking study; the full positioning, and a short list of commercial alternatives worth knowing, lives in [docs/PRD.md](docs/PRD.md).
+It is aimed at comms staff, web officers, and UX-aware developers who want a quick sanity check on a layout before publish, without signing up for a commercial predictive-eye-tracking service. Foveacast is a predictive tool, not a real eye-tracking study; the [Reading your results](docs/reading-your-results.md) guide covers what the output can and cannot tell you.
 
 ## Try it
 
@@ -22,7 +22,7 @@ Don't want to wait on the one-time ~13 MB model download just to see what the to
 https://khawkins98.github.io/Foveacast/?demo=1
 ```
 
-Demo mode loads a committed example screenshot and renders a synthetic saliency map through the real postprocess → fixation → heatmap → composite pipeline. You see output in under a second, no network round-trip to the model file. The banner above the output says plainly that demo output is a synthetic preview, not a real UNISAL prediction — drop your own screenshot or remove `?demo=1` to run real inference.
+Demo mode loads a committed example screenshot and renders a synthetic saliency map through the real postprocess → fixation → heatmap → composite pipeline. You see output in under a second, no network round-trip to the model file. The banner above the output says plainly that demo output is a synthetic preview, not a real model prediction — drop your own screenshot or remove `?demo=1` to run real inference.
 
 Demo mode also doubles as the target for the Playwright end-to-end test suite (see [Run the tests](#run-the-tests)).
 
@@ -91,15 +91,15 @@ Four layers, laid out so the model backend can be swapped without touching anyth
                                    (inferno colormap)
 ```
 
-The full architecture notes — including the exported contracts each layer must honour — are in [docs/PRD.md](docs/PRD.md) under "Code architecture". The rule that matters in practice: nothing outside `model/` imports `onnxruntime-web`. That is what let V2 swap the model backend without touching anything below — see the 0.2.0 diff in [CHANGELOG.md](CHANGELOG.md) and the long-form account in [LEARNINGS.md](LEARNINGS.md).
+The full architecture notes — including the exported contracts each layer must honour — are in [CONTRIBUTING.md](CONTRIBUTING.md) under "Architecture, briefly". The rule that matters in practice: nothing outside `model/` imports `onnxruntime-web`. That is what let V2 swap the model backend without touching anything below — see the 0.2.0 diff in [CHANGELOG.md](CHANGELOG.md) and the long-form account in [LEARNINGS.md](LEARNINGS.md).
 
 ## Model history
 
-V1 (0.1.0 / 0.1.1) shipped with MSI-Net through TensorFlow.js — the path the model's author had already proven with a working TF.js Graph Model and five quality presets. V2 (0.2.0) swapped to UNISAL through ONNX Runtime Web. The migration was smaller than a reader of the PRD might expect: every change lived inside `model/`, `pipeline/`, or the boot wiring, and the `render/` + `ui/` layers came through untouched. That outcome is the best-case argument for the layer boundaries the PRD specifies.
+V1 (0.1.0 / 0.1.1) shipped with MSI-Net through TensorFlow.js — the path the model's author had already proven with a working TF.js Graph Model and five quality presets. V2 (0.2.0) swapped to UNISAL through ONNX Runtime Web. The migration was smaller than expected: every change lived inside `model/`, `pipeline/`, or the boot wiring, and the `render/` + `ui/` layers came through untouched. That outcome is the best-case argument for layer boundary discipline.
 
 The desk-research and hands-on export spike that preceded the V2 merge is preserved at [docs/spikes/unisal-onnx-research.md](docs/spikes/unisal-onnx-research.md). It documents the questions the swap answered and the ones it deliberately left open — most notably, the qualitative comparison between MSI-Net and UNISAL on Foveacast's target content, which the roadmap flags as its own work item. [LEARNINGS.md](LEARNINGS.md) carries the running commentary for both versions.
 
-V3, per the PRD, is SUM. That one is blocked upstream on Mamba's CUDA-kernel dependency; see the entry in [LEARNINGS.md](LEARNINGS.md) before starting on it.
+V3 (0.3.0) switched the model to MSI-Net fine-tuned on UEyes — a web page eye-tracking dataset — still via ORT Web. Three duration variants (1 s / 3 s / 7 s) run in parallel; the Precision Lens redesign rebuilt the UI around the results. The V2 → V3 layer discipline held: again only `model/` and the inference wiring changed; everything below was untouched.
 
 ## Attribution
 
@@ -115,10 +115,10 @@ Full licence text for Foveacast itself is in [LICENSE](LICENSE) (MIT, Ken Hawkin
 ## Limitations
 
 - Desktop Chrome and Firefox only. Mobile browsers are out of scope; they do not have the working memory for this kind of inference, and users get a friendly "use a desktop" message instead (now dismissible via a "Proceed anyway" button, at the user's own risk).
-- UNISAL was trained on SALICON — natural scenes and photographs. Accuracy drops on dense text, data tables, maps, and other content types underrepresented in the training set. That was true of MSI-Net too; it is the reason "qualitative benchmarking on Foveacast's target content" is still a live roadmap item.
+- The model was fine-tuned on the UEyes web eye-tracking dataset (six web page categories). Accuracy drops on dense text, data tables, maps, and other content types underrepresented in the training set.
 - Output is a probabilistic estimate based on population-average gaze patterns, not measured eye-tracking data. Saliency models have documented biases that reflect their training distribution; the UI carries a non-dismissible note to that effect.
 - Images above 20 MB are rejected at the drop zone, and anything wider than 2560 px is downsampled before inference to keep memory behaviour predictable on modest hardware.
-- Recommended machine is 8 GB RAM with a reasonably modern CPU. V2 inference is single-threaded on GitHub Pages (the origin cannot set the `Cross-Origin-Embedder-Policy` header that ORT Web threading needs), so performance on an older CPU is slower than V1 was in comparable settings.
+- Recommended machine is 8 GB RAM with a reasonably modern CPU. V3 inference is single-threaded on GitHub Pages (the origin cannot set the `Cross-Origin-Embedder-Policy` header that ORT Web threading needs), so performance on an older CPU is slower than V1 was in comparable settings.
 
 ## How this was built
 
@@ -134,4 +134,4 @@ If you're curious about the shape of AI-assisted development on a small, opinion
 
 If you work on Foveacast with [Claude Code](https://claude.com/claude-code) or another AI coding assistant, [CLAUDE.md](CLAUDE.md) carries the project-specific instructions for the assistant — testing defaults, commit conventions, pitfalls to avoid, and what needs explicit user confirmation. The assistant reads that file automatically.
 
-A running log of technical decisions, dead ends, and notes for future work lives in [LEARNINGS.md](LEARNINGS.md). [TODO.md](TODO.md) is the prioritised list of known follow-ups — the cheap ones, the ones that matter for resilience, and the ones we explicitly declined. Release history is in [CHANGELOG.md](CHANGELOG.md). The PRD at [docs/PRD.md](docs/PRD.md) is the source of truth for scope, non-goals, and the model roadmap — read it before proposing anything larger than a bug fix.
+A running log of technical decisions, dead ends, and notes for future work lives in [LEARNINGS.md](LEARNINGS.md). [TODO.md](TODO.md) is the prioritised list of known follow-ups — the cheap ones, the ones that matter for resilience, and the ones we explicitly declined. Release history is in [CHANGELOG.md](CHANGELOG.md). [CONTRIBUTING.md](CONTRIBUTING.md) carries the architectural contracts. [docs/methodology.md](docs/methodology.md) is the user-facing explanation of how the model works.
