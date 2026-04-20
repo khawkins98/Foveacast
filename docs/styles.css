@@ -301,7 +301,7 @@ a:hover {
    user-visible benefit. The <details> element now lives in .fc-page-footer
    inside <main>. */
 
-/* -- Main workspace -------------------------------------------------------
+/* -- Main workspace ------------------------------------------------------- */
 
 .fc-main {
   /* why: no sidebar offset in the single-column design; centred instead. */
