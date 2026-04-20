@@ -61,16 +61,6 @@ The CONTRIBUTING.md section titled "Style" has a line — `"— the project is e
 
 ## Deferred from the maintainer batch
 
-### Critical — Branch protection rules are not in version control
-
-**Source:** maintainer bus-factor table.
-
-GitHub branch protection requires "CI must pass before merge to main". Nobody else on the project can see those rules; they live in GitHub's UI. A successor taking over would not know the rules exist.
-
-**Fix:** adopt a tool like `probot-settings` or maintain a `docs/BRANCH_PROTECTION.md` that names the required checks (ci.yml / deploy.yml test gate / linear history / dismiss stale reviews etc.). Second-best: a comment at the top of CONTRIBUTING.md.
-
-**Size:** 1 hour to document, up to half a day to adopt a configuration-as-code tool.
-
 ### Medium — No subresource-integrity (SRI) hashes on any vendored script
 
 Vendoring closes the immediate jsDelivr supply-chain risk, but an attacker who compromises the repo could silently replace `docs/vendor/tf.min.js`. SRI hashes don't fix that — git history does — but computed hashes in a checked-in `docs/vendor/manifest.json` or as `integrity=` attributes on the script tags would let a review catch surprise changes at PR time.
@@ -82,12 +72,6 @@ Vendoring closes the immediate jsDelivr supply-chain risk, but an attacker who c
 No automated accessibility regression check. The PRD promises WCAG 2.1 AA and Phase D walked through this manually. A scheduled Playwright + `@axe-core/playwright` run against `?demo=1` (and perhaps a mocked loaded-model state) would catch future a11y drift without needing a manual pass every time.
 
 **Size:** 1 hour.
-
-### Low — Smoke script runs on port 5199 with no lock
-
-If two developers run `pnpm smoke` simultaneously on the same machine (hi, CI matrix), they race on 5199. Add a PID file or pick a random high port per run.
-
-**Size:** 15 minutes. Not urgent.
 
 ---
 
@@ -109,12 +93,6 @@ Compute `firstFixationCentroid` for each of the 1s, 3s, and 7s saliency maps and
 
 **Size:** trivial to compute (centroid already runs per duration); needs a render path to draw the connecting path.
 
-### P2 — "Reading your results" documentation
-
-A plain-language guide covering: what the inferno colour scale means, how to read spread/concentration, what the three duration windows represent in practice (first glance → quick scan → full viewing), common attention patterns (centre bias, face and text magnets, F/Z reading layout patterns), and what not to conclude from saliency output. Targets designers and researchers who have not used a saliency tool before.
-
-**Size:** half a day (writing + a simple HTML page under `docs/`).
-
 ### P2 — Scanpath animation
 
 Animate a dot traversing the IoR fixation sequence with saccade lines drawing in. More legible than static numbered markers in presentations and exports. Depends on the IoR fixation sequence item above.
@@ -134,14 +112,6 @@ Score each cell of a 3×3 overlay by total saliency mass ("top-right third captu
 **Size:** ~30 minutes.
 
 ---
-
-## Housekeeping
-
-### P2 — ROADMAP.md needs a trim pass
-
-`docs/ROADMAP.md` still describes items that have shipped (V2 UNISAL) and a V3 path superseded by the UEyes fine-tune approach documented in LEARNINGS.md. Several forward-looking items have since migrated into TODO.md. The file is referenced from README.md and `docs/spikes/` so it cannot simply be deleted, but a 30-minute trim pass would remove the shipped items, correct the V3 description, and point readers at TODO.md for the near-term queue.
-
-**Size:** 30 minutes.
 
 ---
 
