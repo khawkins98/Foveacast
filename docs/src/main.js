@@ -241,9 +241,6 @@ function boot() {
 
   // --- Controls ---------------------------------------------------------
   const controls = createControls({
-    onDurationChange: (duration) => {
-      switchDuration(duration);
-    },
     onOpacityChange: (value) => {
       state.opacity = value;
       recomposite();
@@ -296,7 +293,10 @@ function boot() {
   const hud = createHud(hudMount);
 
   // --- Analysis report -------------------------------------------------
-  const report = createReport({ mountEl: reportMount });
+  const report = createReport({
+    mountEl: reportMount,
+    onDurationChange: (dur) => switchDuration(dur),
+  });
 
   /**
    * Reveal the bottom toolbar and hide the pre-inference intro section.
@@ -330,7 +330,7 @@ function boot() {
    */
   function updateReport() {
     if (!state.lastImage) return;
-    report.update({ image: state.lastImage, durationResults: state.durationResults });
+    report.update({ image: state.lastImage, durationResults: state.durationResults, activeDuration: state.activeDuration });
   }
 
   /**

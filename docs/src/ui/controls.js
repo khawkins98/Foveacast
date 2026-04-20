@@ -1,14 +1,13 @@
-// Controls: duration picker, opacity slider, view toggle, download button.
+// Controls: opacity slider, view toggle, overlay checkboxes, download button.
 //
-// This module owns *only* the controls that live alongside the output
-// — the dropzone, status banner, and mobile guard are separate
-// modules glued together in main.js. Every input element gets a
-// proper <label for="…"> pairing so screen readers announce them
-// correctly, and every handler fires with a normalised value shape
-// so the caller never has to sniff event.target.
+// Duration selection was moved to the report section (duration tabs above the
+// hero canvas) so it lives next to the thing it controls. This module owns
+// the interactive canvas controls only.
+// Every input element gets a proper <label for="…"> pairing so screen readers
+// announce them correctly, and every handler fires with a normalised value
+// shape so the caller never has to sniff event.target.
 
-import { DURATIONS, DURATION_LABELS, DEFAULT_DURATION } from '../model/loader.js';
-import { iconTimer, iconTune, iconLayers, iconDownload } from './icons.js';
+import { iconTune, iconLayers, iconDownload } from './icons.js';
 
 /**
  * @typedef {'overlay'|'original'|'sidebyside'} ViewMode
@@ -40,7 +39,6 @@ let instanceCount = 0;
 
 /**
  * @typedef {Object} ControlsOptions
- * @property {(duration: Duration) => void} [onDurationChange]
  * @property {(opacity: number) => void} [onOpacityChange]
  * @property {(view: ViewMode) => void} [onViewChange]
  * @property {(blendMode: string) => void} [onBlendModeChange]
@@ -51,14 +49,14 @@ let instanceCount = 0;
 /**
  * @typedef {Object} ControlsController
  * @property {HTMLElement} element
- * @property {(duration: Duration) => void} setDuration
+ * @property {(duration: Duration) => void} setDuration        - No-op; duration tabs moved to report.
  * @property {(view: ViewMode) => void} setView
  * @property {(value: number) => void} setOpacity
  * @property {(mode: string) => void} setBlendMode
  * @property {(disabled: boolean) => void} setDisabled
  * @property {(visible: boolean) => void} setVisible
- * @property {(loading: boolean) => void} setDurationLoading
- * @property {(duration: Duration, status: 'idle' | 'loading' | 'ready' | 'failed') => void} setDurationStatus
+ * @property {(loading: boolean) => void} setDurationLoading   - No-op; duration tabs moved to report.
+ * @property {(duration: Duration, status: 'idle' | 'loading' | 'ready' | 'failed') => void} setDurationStatus - No-op; duration tabs moved to report.
  * @property {(available: boolean) => void} setTrajectoryAvailable
  */
 
@@ -74,7 +72,7 @@ let instanceCount = 0;
  * @returns {ControlsController}
  */
 export function createControls(options = {}) {
-  const { onDurationChange, onOpacityChange, onViewChange, onBlendModeChange, onDownload, onOverlayChange } = options;
+  const { onOpacityChange, onViewChange, onBlendModeChange, onDownload, onOverlayChange } = options;
 
   const id = ++instanceCount;
   const prefix = `fc-ctl-${id}`;
@@ -82,68 +80,6 @@ export function createControls(options = {}) {
   const root = document.createElement('section');
   root.className = 'fc-controls';
   root.setAttribute('aria-label', 'Heatmap controls');
-
-  // --- Duration picker -------------------------------------------------
-  //
-  // Three viewing-window options. Radio buttons (not a select) because
-  // the user will likely compare results across durations and keeping
-  // all options visible reduces the click cost of switching.
-
-  const durationWrap = document.createElement('fieldset');
-  durationWrap.className = 'fc-controls__field fc-controls__field--group fc-controls__duration';
-
-  const durationLegend = document.createElement('legend');
-  const durationIcon = document.createElement('span');
-  durationIcon.className = 'fc-controls__icon';
-  durationIcon.setAttribute('aria-hidden', 'true');
-  durationIcon.innerHTML = iconTimer;
-  durationLegend.appendChild(durationIcon);
-  durationLegend.appendChild(document.createTextNode('Viewing duration'));
-  durationWrap.appendChild(durationLegend);
-
-  /** @type {HTMLInputElement[]} */
-  const durationInputs = [];
-  /** @type {Map<string, HTMLElement>} */
-  const durationOptionEls = new Map();
-  const durationGroupName = `${prefix}-duration`;
-
-  for (const dur of DURATIONS) {
-    const option = document.createElement('label');
-    option.className = 'fc-controls__radio';
-    // Store a reference to each duration label so setDurationStatus can
-    // add a data-status attribute for the loading/ready/failed indicators.
-    durationOptionEls.set(dur, option);
-
-    const radio = document.createElement('input');
-    radio.type = 'radio';
-    radio.name = durationGroupName;
-    radio.value = dur;
-    radio.id = `${prefix}-dur-${dur}`;
-    if (dur === DEFAULT_DURATION) radio.checked = true;
-    radio.addEventListener('change', () => {
-      if (radio.checked && onDurationChange) {
-        onDurationChange(/** @type {Duration} */ (radio.value));
-      }
-    });
-    durationInputs.push(radio);
-
-    option.appendChild(radio);
-    option.appendChild(document.createTextNode(` ${DURATION_LABELS[dur]}`));
-    durationWrap.appendChild(option);
-  }
-
-  // Loading indicator shown while a new model is downloading.
-  // why: we toggle textContent rather than the hidden attribute so the
-  // element stays in the accessibility tree — screen readers only
-  // announce aria-live changes on elements they can see, and hidden
-  // removes the element entirely.
-  const durationLoadingHint = document.createElement('span');
-  durationLoadingHint.className = 'fc-controls__duration-loading';
-  durationLoadingHint.textContent = '';
-  durationLoadingHint.setAttribute('aria-live', 'polite');
-  durationWrap.appendChild(durationLoadingHint);
-
-  root.appendChild(durationWrap);
 
   // --- Opacity slider ------------------------------------------------
   //
@@ -432,11 +368,7 @@ export function createControls(options = {}) {
   // --- Controller API -----------------------------------------------
 
   /** @param {Duration} duration */
-  function setDuration(duration) {
-    for (const input of durationInputs) {
-      input.checked = input.value === duration;
-    }
-  }
+  function setDuration(_duration) {} // no-op: duration tabs moved to report section
 
   /** @param {ViewMode} view */
   function setView(view) {
@@ -466,7 +398,6 @@ export function createControls(options = {}) {
     downloadBtn.disabled = d;
     blendSelect.disabled = d;
     for (const input of viewInputs) input.disabled = d;
-    for (const input of durationInputs) input.disabled = d;
     for (const [key, input] of overlayInputs) {
       // Trajectory input obeys its own availability flag — only disable it
       // if it's already available (otherwise it stays disabled by default).
@@ -493,32 +424,13 @@ export function createControls(options = {}) {
     root.hidden = !visible;
   }
 
-  /**
-   * Show or hide the "Loading model…" hint next to the duration picker.
-   * Communicates that a model switch is in progress without disabling
-   * the entire controls panel.
-   *
-   * @param {boolean} loading
-   */
-  function setDurationLoading(loading) {
-    durationLoadingHint.textContent = loading ? 'Loading model…' : '';
-  }
+  function setDurationLoading(_loading) {} // no-op: duration tabs moved to report section
 
   /**
-   * Set the status indicator for a specific duration option.
-   * Used by the background-loading path to signal which durations have
-   * cached results available without a model reload.
-   *
-   * @param {Duration} duration
-   * @param {'idle' | 'loading' | 'ready' | 'failed'} statusValue
+   * @param {Duration} _duration
+   * @param {'idle' | 'loading' | 'ready' | 'failed'} _status
    */
-  function setDurationStatus(duration, statusValue) {
-    const el = durationOptionEls.get(duration);
-    if (!el) return;
-    // Setting via dataset lets CSS use [data-status="…"] attribute selectors
-    // to show/hide the spinner or checkmark pseudo-element.
-    el.dataset.status = statusValue;
-  }
+  function setDurationStatus(_duration, _status) {} // no-op: duration tabs moved to report section
 
   /**
    * Enable or disable the duration trajectory overlay checkbox.

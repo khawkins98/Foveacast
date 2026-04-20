@@ -5,7 +5,7 @@
  * interactive heatmap canvas after inference completes.
  *
  * The report presents findings in narrative order:
- *   1. Primary finding — hero canvas + rule-of-thirds breakdown + first-fixation note
+ *   1. Primary finding — duration tabs + hero canvas + rule-of-thirds breakdown + first-fixation note
  *   2. Duration comparison strip — thumbnail canvases for all three viewing durations
  *   3. Methodology note — what the model is, what it isn't, links to docs
  *
@@ -13,8 +13,12 @@
  * `update()` call, avoiding layout shift and focus churn as background
  * duration results arrive.
  *
+ * The duration tabs drive both the hero canvas and the main interactive
+ * output canvas (via `onDurationChange`). State ownership lives in main.js
+ * — the report only receives the resolved `activeDuration` on each update.
+ *
  * Exports:
- *   createReport({ mountEl }) → { update }
+ *   createReport({ mountEl, onDurationChange }) → { update }
  */
 
 /** Duration labels shared with the main app. */
@@ -150,10 +154,10 @@ function pickHero(durationResults) {
 /**
  * Creates and manages the analysis report section.
  *
- * @param {{ mountEl: HTMLElement }} opts
- * @returns {{ update: (data: { image: any, durationResults: Record<string, any> }) => void }}
+ * @param {{ mountEl: HTMLElement, onDurationChange?: (duration: string) => void }} opts
+ * @returns {{ update: (data: { image: any, durationResults: Record<string, any>, activeDuration?: string }) => void }}
  */
-export function createReport({ mountEl }) {
+export function createReport({ mountEl, onDurationChange }) {
   // --- Root section --------------------------------------------------------
   const section = document.createElement('section');
   section.className = 'fc-report';
@@ -174,6 +178,72 @@ export function createReport({ mountEl }) {
   // =========================================================================
   const primarySection = document.createElement('div');
   primarySection.className = 'fc-report__section fc-report__section--primary';
+
+  // --- Duration tab bar -----------------------------------------------
+  //
+  // Tabs drive which result is shown in both the hero canvas here and the
+  // interactive #fc-output canvas (via onDurationChange). Clicking a tab
+  // calls onDurationChange so main.js owns the resolved activeDuration —
+  // the report does not maintain its own selection state.
+  //
+  // Accessibility: full WAI-ARIA Tabs pattern.
+  //   - tablist contains tab elements with aria-selected and tabindex
+  //   - roving tabindex: active tab is tabindex=0, others are tabindex=-1
+  //   - Arrow keys move focus among enabled tabs; Home/End jump to ends
+  //   - Disabled tabs (result not yet loaded) are aria-disabled="true"
+  //     and excluded from keyboard cycling
+
+  const heroTabs = document.createElement('div');
+  heroTabs.className = 'fc-report__hero-tabs';
+  heroTabs.setAttribute('role', 'tablist');
+  heroTabs.setAttribute('aria-label', 'Viewing duration');
+
+  /** @type {Map<string, HTMLButtonElement>} */
+  const tabButtons = new Map();
+
+  for (const dur of DURATIONS) {
+    const btn = document.createElement('button');
+    btn.className = 'fc-report__hero-tab';
+    btn.setAttribute('role', 'tab');
+    btn.setAttribute('aria-selected', dur === '3s' ? 'true' : 'false');
+    btn.setAttribute('tabindex', dur === '3s' ? '0' : '-1');
+    btn.setAttribute('aria-disabled', 'true'); // enabled as results arrive
+    btn.textContent = DURATION_LABELS[dur] ?? dur;
+    btn.dataset.duration = dur;
+
+    btn.addEventListener('click', () => {
+      if (btn.getAttribute('aria-disabled') === 'true') return;
+      if (onDurationChange) onDurationChange(dur);
+    });
+
+    heroTabs.appendChild(btn);
+    tabButtons.set(dur, btn);
+  }
+
+  // Keyboard navigation: Arrow keys cycle through enabled tabs; Home/End
+  // jump to the first/last. Focus follows the active tab (roving tabindex).
+  heroTabs.addEventListener('keydown', (e) => {
+    const enabled = DURATIONS.map((d) => tabButtons.get(d)).filter(
+      (b) => b?.getAttribute('aria-disabled') !== 'true',
+    );
+    if (enabled.length === 0) return;
+
+    const current = enabled.findIndex((b) => b === document.activeElement);
+    let next = -1;
+    if (e.key === 'ArrowRight') next = (current + 1) % enabled.length;
+    else if (e.key === 'ArrowLeft') next = (current - 1 + enabled.length) % enabled.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = enabled.length - 1;
+
+    if (next >= 0 && enabled[next]) {
+      e.preventDefault();
+      enabled[next].focus();
+      const dur = enabled[next].dataset.duration;
+      if (dur && onDurationChange) onDurationChange(dur);
+    }
+  });
+
+  primarySection.appendChild(heroTabs);
 
   // Hero figure: image canvas with a figcaption label below.
   const heroFigure = document.createElement('figure');
@@ -337,13 +407,41 @@ export function createReport({ mountEl }) {
    * Populate or refresh report slots with the latest inference data.
    * The shell DOM is stable; only canvas and text nodes are replaced.
    *
-   * @param {{ image: any, durationResults: Record<string, any> }} data
+   * @param {{ image: any, durationResults: Record<string, any>, activeDuration?: string }} data
    */
-  function update({ image, durationResults }) {
-    const hero = pickHero(durationResults);
+  function update({ image, durationResults, activeDuration }) {
+    // Update tab states first, before deciding what the hero shows.
+    // A tab is enabled once its result is available (not loading or failed).
+    for (const dur of DURATIONS) {
+      const btn = tabButtons.get(dur);
+      if (!btn) continue;
+      const result = durationResults[dur];
+      const ready = result && result !== 'loading' && result !== 'failed';
+      btn.setAttribute('aria-disabled', ready ? 'false' : 'true');
+    }
+
+    // Determine which duration to show in the hero.
+    // Prefer the caller-supplied activeDuration if its result is available,
+    // otherwise fall back to pickHero so the report isn't blank while the
+    // user's preferred duration is still loading.
+    const activeResult = activeDuration ? durationResults[activeDuration] : null;
+    const heroReady = activeResult && activeResult !== 'loading' && activeResult !== 'failed';
+    const hero = heroReady
+      ? { dur: activeDuration, result: activeResult }
+      : pickHero(durationResults);
+
     if (!hero) return;
 
     section.hidden = false;
+
+    // Sync tab selection to the resolved hero duration.
+    for (const dur of DURATIONS) {
+      const btn = tabButtons.get(dur);
+      if (!btn) continue;
+      const selected = dur === hero.dur;
+      btn.setAttribute('aria-selected', selected ? 'true' : 'false');
+      btn.setAttribute('tabindex', selected ? '0' : '-1');
+    }
 
     // ----- Hero section ------------------------------------------------
     const { dur: heroDur, result: heroResult } = hero;

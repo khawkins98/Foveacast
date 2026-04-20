@@ -294,3 +294,84 @@ describe('createReport — update()', () => {
     expect(slot.querySelector('.fc-report__dur-placeholder')).toBeTruthy();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Duration tabs
+// ---------------------------------------------------------------------------
+
+describe('createReport — duration tabs', () => {
+  it('renders a tablist with 3 tabs', () => {
+    const mount = document.createElement('div');
+    createReport({ mountEl: mount });
+    const tablist = mount.querySelector('[role="tablist"]');
+    expect(tablist).toBeTruthy();
+    const tabs = tablist.querySelectorAll('[role="tab"]');
+    expect(tabs.length).toBe(3);
+  });
+
+  it('all tabs start as aria-disabled (no results yet)', () => {
+    const mount = document.createElement('div');
+    createReport({ mountEl: mount });
+    const tabs = Array.from(mount.querySelectorAll('[role="tab"]'));
+    for (const tab of tabs) {
+      expect(tab.getAttribute('aria-disabled')).toBe('true');
+    }
+  });
+
+  it('enables the tab for a duration that has a ready result', () => {
+    const mount = document.createElement('div');
+    const { update } = createReport({ mountEl: mount });
+    update({ image: fakeImage(), durationResults: only3s() });
+    const tab3s = mount.querySelector('[role="tab"][data-duration="3s"]');
+    const tab1s = mount.querySelector('[role="tab"][data-duration="1s"]');
+    expect(tab3s.getAttribute('aria-disabled')).toBe('false');
+    expect(tab1s.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('marks activeDuration tab as aria-selected="true"', () => {
+    const mount = document.createElement('div');
+    const { update } = createReport({ mountEl: mount });
+    update({ image: fakeImage(), durationResults: allReady(), activeDuration: '1s' });
+    const tab1s = mount.querySelector('[role="tab"][data-duration="1s"]');
+    const tab3s = mount.querySelector('[role="tab"][data-duration="3s"]');
+    expect(tab1s.getAttribute('aria-selected')).toBe('true');
+    expect(tab3s.getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('calls onDurationChange with the clicked duration', () => {
+    const mount = document.createElement('div');
+    let called = null;
+    const { update } = createReport({ mountEl: mount, onDurationChange: (d) => { called = d; } });
+    update({ image: fakeImage(), durationResults: allReady() });
+    const tab7s = mount.querySelector('[role="tab"][data-duration="7s"]');
+    tab7s.click();
+    expect(called).toBe('7s');
+  });
+
+  it('does not call onDurationChange when clicking a disabled tab', () => {
+    const mount = document.createElement('div');
+    let called = null;
+    const { update } = createReport({ mountEl: mount, onDurationChange: (d) => { called = d; } });
+    update({ image: fakeImage(), durationResults: only3s() });
+    const tab1s = mount.querySelector('[role="tab"][data-duration="1s"]');
+    tab1s.click();
+    expect(called).toBeNull();
+  });
+
+  it('shows the hero for activeDuration when that result is ready', () => {
+    const mount = document.createElement('div');
+    const { update } = createReport({ mountEl: mount });
+    update({ image: fakeImage(), durationResults: allReady(), activeDuration: '7s' });
+    const sourceLabel = mount.querySelector('.fc-report__source-label');
+    expect(sourceLabel.textContent).toMatch(/Full viewing \(7 seconds\)/);
+  });
+
+  it('falls back to pickHero when activeDuration result is not ready', () => {
+    const mount = document.createElement('div');
+    const { update } = createReport({ mountEl: mount });
+    // activeDuration is 7s but only 3s is ready — should fall back to 3s
+    update({ image: fakeImage(), durationResults: only3s(), activeDuration: '7s' });
+    const sourceLabel = mount.querySelector('.fc-report__source-label');
+    expect(sourceLabel.textContent).toMatch(/Quick scan \(3 seconds\)/);
+  });
+});
