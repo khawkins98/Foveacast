@@ -12,7 +12,7 @@
       name="description"
       content="Foveacast predicts where people will look on a screenshot. Free, open source, runs entirely in your browser — nothing leaves your machine."
     />
-    <title>Foveacast — predicted attention heatmaps</title>
+    <title>Foveacast: predicted attention heatmaps</title>
 
     <!--
       Buildless by design. Plain <script> tags rather than ES module imports so
@@ -118,7 +118,7 @@
         <!-- Workspace header: page title + HUD stats. -->
         <header class="fc-workspace-header">
           <div class="fc-workspace-header__title-wrap">
-            <h1 class="fc-workspace-header__title">Predicted Attention</h1>
+            <h1 class="fc-workspace-header__title">Foveacast: Predicted Eye Attention Heatmaps</h1>
             <!-- Updated by renderOutput() to show the active viewing duration. Hidden until first inference. -->
             <p class="fc-workspace-header__duration-label" id="fc-duration-label" hidden></p>
             <!--
@@ -160,6 +160,7 @@
             Drop or paste a screenshot to generate a predicted attention
             heatmap. Controls appear after the first analysis.
           </p>
+          <p class="fc-trust-note">Runs locally: your image never leaves this tab.</p>
           <ul class="fc-intro__tips">
             <li>PNG or JPEG · up to 20&nbsp;MB</li>
             <li>Cmd-V / Ctrl-V to paste from clipboard</li>
@@ -225,7 +226,6 @@
           showControls() hides the intro. Credits and secondary links follow.
         -->
         <div class="fc-page-footer">
-          <p class="fc-trust-note">Runs locally — your image never leaves this tab.</p>
           <!--
             Model credits and bias note — mounted by main.js via mountFooter.
           -->

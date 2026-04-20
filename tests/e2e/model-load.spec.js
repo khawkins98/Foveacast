@@ -53,9 +53,10 @@ test.describe('Foveacast — real model load end-to-end', () => {
     const ariaDisabled = await dropzone.getAttribute('aria-disabled');
     expect(ariaDisabled === null || ariaDisabled === 'false').toBeTruthy();
 
-    // Duration picker should be visible with the default (3s) selected.
-    const durationRadio3s = page.locator('input[type="radio"][value="3s"]');
-    await expect(durationRadio3s).toBeChecked();
+    // Duration tabs are only visible after inference; in the model-ready
+    // state (no image yet) there is no report section to check. The
+    // meaningful signal here is that the app reached ready without errors.
+    // (The tab-selection behaviour is exercised in the demo-render test below.)
 
     // @ts-expect-error — stashed in beforeEach.
     const { pageErrors, consoleErrors } = page.__foveacastErrors;
@@ -83,11 +84,14 @@ test.describe('Foveacast — real model load end-to-end', () => {
       page.locator('#fc-output[data-foveacast-ready="true"]'),
     ).toBeVisible({ timeout: 15_000 });
 
-    // All three duration radios must be present and enabled.
+    // All three duration tabs must be present in the report.
     for (const dur of ['1s', '3s', '7s']) {
-      const radio = page.locator(`input[type="radio"][value="${dur}"]`);
-      await expect(radio).toBeVisible();
-      await expect(radio).toBeEnabled();
+      const tab = page.locator(`.fc-report__hero-tab[data-duration="${dur}"]`);
+      await expect(tab).toBeVisible();
     }
+    // The 3s tab should be selected and enabled (demo mode provides a 3s result).
+    const tab3s = page.locator('.fc-report__hero-tab[data-duration="3s"]');
+    await expect(tab3s).toHaveAttribute('aria-selected', 'true');
+    await expect(tab3s).toHaveAttribute('aria-disabled', 'false');
   });
 });

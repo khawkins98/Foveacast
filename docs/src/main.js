@@ -87,7 +87,6 @@ const FIRST_RUN_THRESHOLD_MS = 800;
  *   lastFixation: { x: number, y: number } | null,
  *   lastOrigDims: [number, number] | null,
  *   opacity: number,
- *   blendMode: string,
  *   view: 'overlay' | 'original' | 'sidebyside',
  *   queuedFile: File | null,
  *   lastDiagnostics: {
@@ -129,8 +128,6 @@ const state = {
   lastFixation: null,
   lastOrigDims: null,
   opacity: 0.6,
-  /** Canvas 2D globalCompositeOperation for the heatmap overlay layer. */
-  blendMode: 'source-over',
   view: 'overlay',
   /** File dropped before the model finished loading (demo-mode race). */
   queuedFile: /** @type {File | null} */ (null),
@@ -179,7 +176,7 @@ function boot() {
   // Mount points — these exist in index.html.
   const statusMount = mustGet('fc-status-mount');
   const dropzoneMount = mustGet('fc-dropzone-mount');
-  const controlsMount = mustGet('fc-controls-mount');
+  const controlsMount = mustGet('fc-canvas-controls-mount');
   const outputSection = mustGet('fc-output');
   const outputCanvasWrap = mustGet('fc-output-canvas-wrap');
   const outputCaption = mustGet('fc-output-caption');
@@ -243,10 +240,6 @@ function boot() {
       state.view = view;
       renderOutput();
     },
-    onBlendModeChange: (mode) => {
-      state.blendMode = mode;
-      recomposite();
-    },
     onDownload: () => {
       // why: state.lastCompositeCanvas is always the most recent composite,
       // even in side-by-side view where querySelector('canvas') would return
@@ -295,11 +288,7 @@ function boot() {
    */
   function showControls() {
     controls.setVisible(true);
-    // Reveal the bottom toolbar (was `hidden` in HTML).
-    toolbarEl.hidden = false;
-    // Add padding so content at the bottom of the column isn't obscured
-    // by the fixed toolbar bar.
-    document.getElementById('fc-main')?.classList.add('fc-main--has-toolbar');
+    // Controls now live inline in the output section; no toolbar reveal needed.
     // Hide the empty-state intro (renamed from fc-sidebar-intro in the
     // single-column redesign).
     const intro = document.getElementById('fc-intro');
@@ -371,6 +360,9 @@ function boot() {
   function showBgProgress(fraction, currentLabel) {
     const bar = document.getElementById('fc-bg-progress');
     if (!bar) return;
+    // Show the toolbar (which now only contains this progress bar) so it
+    // docks at the bottom of the viewport during background loading.
+    toolbarEl.hidden = false;
     bar.hidden = false;
     const fill = /** @type {HTMLElement | null} */ (bar.querySelector('.fc-bg-progress__fill'));
     if (fill) fill.style.width = `${Math.round(fraction * 100)}%`;
@@ -387,10 +379,12 @@ function boot() {
     }
   }
 
-  /** Hide the background-loading progress bar. */
+  /** Hide the background-loading progress bar and collapse the toolbar. */
   function hideBgProgress() {
     const bar = document.getElementById('fc-bg-progress');
     if (bar) bar.hidden = true;
+    // why: collapse toolbar when not loading so it doesn't obstruct the page
+    toolbarEl.hidden = true;
   }
 
   /**
@@ -612,7 +606,22 @@ function boot() {
       outputSection,
       onBanner: (message) => status.showDemoBanner(message),
     })
-      .then(() => {
+      .then((demoResult) => {
+        // Populate state so the report renders with demo data.
+        // Only the 3s slot gets a result (one synthetic map for the
+        // primary model); 1s and 7s stay null so their placeholders
+        // show "Not yet loaded" — an honest representation of demo mode.
+        state.lastImage = demoResult.workCanvas;
+        state.lastHeatmapCanvas = demoResult.heatmapCanvas;
+        state.lastFixation = demoResult.fixation;
+        state.lastOrigDims = demoResult.origDims;
+        state.displayedDuration = '3s';
+        state.durationResults['3s'] = {
+          heatmapCanvas: demoResult.heatmapCanvas,
+          fixation: demoResult.fixation,
+          origDims: demoResult.origDims,
+        };
+        updateReport();
         // As soon as the demo renders, the user has a canvas to
         // control — enable and reveal the controls plus the dropzone
         // right away even though the background model is still
@@ -1087,7 +1096,7 @@ function boot() {
         heatmapCanvas: state.lastHeatmapCanvas,
         view: state.view,
         opacity: state.opacity,
-        blendMode: state.blendMode,
+        blendMode: 'source-over',
         fixation: state.lastFixation,
         origDims: state.lastOrigDims,
         duration: DURATION_LABELS[state.displayedDuration],
