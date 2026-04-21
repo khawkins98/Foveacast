@@ -6,6 +6,8 @@ Predicted attention heatmaps, right in your browser.
 
 ## What it is
 
+*fovea centralis*: the retina's point of sharpest focus + *cast*, to project and predict.
+
 Foveacast takes a screenshot of a web page and shows you where a typical viewer is likely to look first. It runs entirely in the browser on your own machine, so nothing you drop on it ever leaves the device — no account, no upload, no server. It is free and open source.
 
 It is aimed at comms staff, web officers, and UX-aware developers who want a quick sanity check on a layout before publish, without signing up for a commercial predictive-eye-tracking service. Foveacast is a predictive tool, not a real eye-tracking study; the [Reading your results](docs/reading-your-results.md) guide covers what the output can and cannot tell you.
