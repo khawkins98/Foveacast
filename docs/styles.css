@@ -502,9 +502,9 @@ a:hover {
 /* Hero logo lockup — displayed before the h1 in the workspace header. */
 .fc-hero-logo {
   display: block;
-  width: 220px;
+  width: 320px;
   height: auto;
-  margin-bottom: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 .fc-workspace-header__title {
