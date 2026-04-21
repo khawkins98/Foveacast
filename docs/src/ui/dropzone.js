@@ -78,13 +78,20 @@ export function createDropzone({ onFile, onError }) {
   // Default visible copy. Caller can swap this out via setEnabled(false).
   const label = document.createElement('p');
   label.className = 'fc-dropzone__label';
-  label.textContent = 'Drop a screenshot here, click to choose a file, or paste one from the clipboard.';
+  label.textContent = 'Drop or paste a screenshot (Cmd-V\u00a0/\u00a0Ctrl-V) to generate a predicted attention heatmap.';
   element.appendChild(label);
 
   const hint = document.createElement('p');
   hint.className = 'fc-dropzone__hint';
-  hint.textContent = 'PNG or JPEG, up to 20 MB.';
+  hint.textContent = 'PNG or JPEG, up to 20\u00a0MB. Controls appear after the first analysis.';
   element.appendChild(hint);
+
+  // why: reinforces the privacy promise at the point of action, where
+  // users are most likely to have concerns about uploading an image.
+  const privacy = document.createElement('p');
+  privacy.className = 'fc-dropzone__hint';
+  privacy.textContent = 'Runs locally \u2014 your image never leaves this tab.';
+  element.appendChild(privacy);
 
   // Hidden file input — cloned-and-replaced on each pick so the same
   // file can be chosen twice in a row. (Browsers suppress a `change`
@@ -232,5 +239,17 @@ export function createDropzone({ onFile, onError }) {
     input.click();
   }
 
-  return { element, setEnabled, setBusy, openPicker };
+  /**
+   * Override the visible label text without changing the enabled/disabled
+   * state. Used after model load to surface "Model ready" inside the
+   * drop zone instead of showing a separate status banner.
+   * Automatically reset on the next {@link setEnabled} call.
+   *
+   * @param {string} text
+   */
+  function setLabel(text) {
+    label.textContent = text;
+  }
+
+  return { element, setEnabled, setBusy, openPicker, setLabel };
 }

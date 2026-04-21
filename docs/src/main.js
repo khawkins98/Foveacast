@@ -16,7 +16,7 @@ import { createStatus } from './ui/status.js';
 import { createDropzone } from './ui/dropzone.js';
 import { createControls } from './ui/controls.js';
 import { renderOutput as renderOutputView } from './ui/output-view.js';
-import { loadModel, DEFAULT_DURATION, DURATION_LABELS } from './model/loader.js';
+import { loadModel, clearModelCache, DEFAULT_DURATION, DURATION_LABELS } from './model/loader.js';
 import { runInference } from './model/inference.js';
 import { downsampleIfLarge } from './ui/image-resize.js';
 import { postprocess } from './pipeline/postprocess.js';
@@ -841,11 +841,22 @@ function boot() {
       throw err;
     }
     state.loadedModel = loaded;
+    // Successful load: clear any OOM-retry sentinel set by a previous failed attempt.
+    sessionStorage.removeItem('fc-oom-cache-cleared');
     writeHasRunSentinel(); // Flip the bit after a successful load.
     dropzone.setEnabled(true);
     controls.setDisabled(false);
     controls.setDurationLoading(false);
-    if (!silent) status.showReady();
+    if (!silent) {
+      // Show "Model ready" inside the drop zone rather than in a
+      // separate banner above it — the two messages were redundant.
+      // The label resets to the default on the next setEnabled(true)
+      // call (i.e. after inference completes), so it only appears once.
+      dropzone.setLabel(
+        'Model ready \u2014 drop a screenshot here, click to choose a file, or paste from the clipboard.',
+      );
+      status.clear();
+    }
     // Trigger the cube→sphere morph now that the model is ready. The
     // overlay stays up until voxelBg fires onReady (above), which then
     // calls setAppBusy(false). If voxelBg is missing, fall back to the
@@ -975,16 +986,52 @@ function boot() {
       structuredCode === 'MODEL_DOWNLOAD_FAILED' || structuredCode === 'MODEL_LOAD_FAILED'
         ? structuredCode
         : 'MODEL_LOAD_FAILED';
-    status.showError({
-      code,
-      onRetry: () => {
-        if (code === 'MODEL_LOAD_FAILED') {
+
+    const errMsg = String((/** @type {any} */ (err) && /** @type {any} */ (err).message) || err);
+    // OOM during WASM compilation/instantiation — distinct from a model-bytes
+    // failure. The WASM binary is 12 MB and requires several times that to
+    // compile; browser extensions consuming RAM are the most common cause.
+    // Private/incognito windows disable most extensions, which is why the
+    // same machine can load fine there.
+    const isOom = /out of memory|aborted/i.test(errMsg);
+
+    // Track whether we already tried clearing the cache and reloading.
+    // If the OOM persists after a cache-clear reload, the problem is memory
+    // pressure (usually extensions), not a stale/corrupt cache entry — and
+    // the right advice is "open a private window", not "retry".
+    const alreadyRetried = sessionStorage.getItem('fc-oom-cache-cleared') === '1';
+
+    let message;
+    let onRetry;
+
+    if (code === 'MODEL_LOAD_FAILED') {
+      if (isOom && alreadyRetried) {
+        // Cache-clear reload didn't help → memory pressure, not a cache issue.
+        message =
+          'Still out of memory after clearing the cache. Each open Foveacast tab holds the model in memory \u2014 close all other Foveacast tabs, then open a fresh one. If that doesn\u2019t help, try restarting Firefox or opening Foveacast in a private window.';
+        // No retry button; there's nothing more the app can do automatically.
+        onRetry = undefined;
+      } else if (isOom) {
+        message =
+          'The inference engine ran out of memory. The quickest fix is to close any other Foveacast tabs and open a fresh one \u2014 each tab holds the model in memory. You can also try clearing cached data and reloading below.';
+        onRetry = async () => {
+          sessionStorage.setItem('fc-oom-cache-cleared', '1');
+          await clearModelCache();
           window.location.reload();
-          return;
-        }
-        reloadModel().catch(surfaceModelError);
-      },
-    });
+        };
+      } else {
+        // Non-OOM load failure: clearing the cache is the right first step.
+        onRetry = async () => {
+          await clearModelCache();
+          window.location.reload();
+        };
+      }
+    } else {
+      // MODEL_DOWNLOAD_FAILED: retry the download without reloading.
+      onRetry = () => reloadModel().catch(surfaceModelError);
+    }
+
+    status.showError({ code, message, onRetry });
   }
 
   /**
