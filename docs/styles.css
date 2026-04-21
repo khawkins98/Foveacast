@@ -491,6 +491,17 @@ a:hover {
   gap: 1rem;
 }
 
+/*
+ * Title-wrap stacking context — required so that the hero logo (z-index:-1)
+ * stays BEHIND the heading text but still ABOVE the page background.
+ * Without an explicit z-index here, z-index:-1 would fall below the nearest
+ * ancestor stacking context and disappear behind the page background.
+ */
+.fc-workspace-header__title-wrap {
+  position: relative;
+  z-index: 0;
+}
+
 .fc-workspace-header__eyebrow {
   font-size: 0.7rem;
   font-weight: 800;
@@ -499,15 +510,23 @@ a:hover {
   margin: 0 0 0.25rem;
 }
 
-/* Hero logo lockup — displayed before the h1 in the workspace header. */
-/* Animated voxel logo mark in the hero — square container so the SVG fills
-   without letterboxing. currentColor inherits --fc-primary from the
-   parent, giving the voxel strokes a consistent primary-blue tint. */
+/*
+ * Background voxel logo — absolute positioned behind hero text on the left.
+ * z-index:-1 places it below the in-flow heading/body text within the
+ * title-wrap stacking context (see .fc-workspace-header__title-wrap above).
+ * opacity:0.7 lets the dark page background show through so the text above
+ * stays readable. pointer-events:none keeps it non-interactive.
+ */
 .fc-hero-logo {
-  display: block;
-  width: 140px;
-  height: 140px;
-  margin: 0 auto 1.25rem;
+  position: absolute;
+  left: -60px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 380px;
+  height: 380px;
+  z-index: -1;
+  opacity: 0.7;
+  pointer-events: none;
   color: var(--fc-primary);
 }
 
