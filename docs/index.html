@@ -233,21 +233,9 @@
           <div id="fc-hud-mount"></div>
         </header>
 
-        <!--
-          Empty-state intro — visible before first inference, hidden after.
-          Sits in the main reading column so the contextual help is inline.
-        -->
-        <div id="fc-intro" class="fc-intro" aria-label="Getting started">
-          <p class="fc-intro__text">
-            Drop or paste a screenshot (Cmd-V / Ctrl-V) to generate a
-            predicted attention heatmap. PNG or JPEG, up to 20&nbsp;MB.
-            Controls appear after the first analysis.
-          </p>
-        </div>
-
         <!-- Mount point: status banner (model loading, errors, etc.).
-             Placed after the intro so the H1→description reading line
-             stays uninterrupted on first load. -->
+             Placed after the workspace header so the H1→description reading
+             line stays uninterrupted on first load. -->
         <div id="fc-status-mount" class="fc-mount fc-mount--status"></div>
 
         <!--

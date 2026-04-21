@@ -78,12 +78,12 @@ export function createDropzone({ onFile, onError }) {
   // Default visible copy. Caller can swap this out via setEnabled(false).
   const label = document.createElement('p');
   label.className = 'fc-dropzone__label';
-  label.textContent = 'Drop a screenshot here, click to choose a file, or paste one from the clipboard.';
+  label.textContent = 'Drop or paste a screenshot (Cmd-V\u00a0/\u00a0Ctrl-V) to generate a predicted attention heatmap.';
   element.appendChild(label);
 
   const hint = document.createElement('p');
   hint.className = 'fc-dropzone__hint';
-  hint.textContent = 'PNG or JPEG, up to 20 MB.';
+  hint.textContent = 'PNG or JPEG, up to 20\u00a0MB. Controls appear after the first analysis.';
   element.appendChild(hint);
 
   // why: reinforces the privacy promise at the point of action, where
