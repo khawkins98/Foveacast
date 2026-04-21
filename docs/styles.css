@@ -552,6 +552,12 @@ a:hover {
   outline-offset: 4px;
 }
 
+/* Dimmed when auto-spin is paused via click/tap. */
+.fc-hero-logo--paused {
+  opacity: 0.45;
+  transition: opacity 0.3s ease;
+}
+
 .fc-workspace-header__title {
   font-size: clamp(1.5rem, 2vw + 1rem, 2.5rem);
   font-weight: 900;

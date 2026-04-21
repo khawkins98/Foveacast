@@ -180,9 +180,17 @@ export function createVoxelLogo(containerEl) {
   // prefersReduced starts at 0 (no auto-spin); normal mode starts at DEG_PER_FRAME.
   let velocity = prefersReduced ? 0 : DEG_PER_FRAME;
 
+  // Pause state — toggled by a single click/tap.
+  // Not applicable in reduced-motion mode (there is no auto-spin to pause).
+  let paused = false;
+
   // Drag state
-  let isDragging = false;
-  let dragLastX  = 0;
+  let isDragging    = false;
+  let dragLastX     = 0;
+  // why: tracks whether the pointer moved enough to count as a drag.
+  // Reset on pointerdown; set once movement exceeds 3 px. Prevents a
+  // short tap from being treated as a drag (which would skip the pause toggle).
+  let pointerHasMoved = false;
 
   // Exponential friction: fraction of velocity that survives each frame.
   // 0.94 gives a natural-feeling ~1.5 s coast from a fast flick.
@@ -252,23 +260,59 @@ export function createVoxelLogo(containerEl) {
     rafId = requestAnimationFrame(frame);
   }
 
+  // ── Pause toggle ────────────────────────────────────────────────────────────
+
+  /**
+   * Toggle auto-spin on/off. A single click/tap (no drag) calls this.
+   * In reduced-motion mode there is no auto-spin, so the toggle is a no-op.
+   */
+  function togglePause() {
+    if (prefersReduced) return;
+    paused = !paused;
+    containerEl.classList.toggle('fc-hero-logo--paused', paused);
+    // Update the accessible label so screen readers announce the new state.
+    containerEl.setAttribute(
+      'aria-label',
+      paused
+        ? 'Foveacast logo — paused. Click or press Space to resume.'
+        : 'Foveacast logo — drag or use arrow keys to spin. Click or press Space to pause.',
+    );
+    if (paused) {
+      velocity = 0;
+      if (rafAlive) {
+        cancelAnimationFrame(rafId);
+        rafId    = null;
+        rafAlive = false;
+      }
+    } else {
+      velocity = DEG_PER_FRAME;
+      startRaf();
+    }
+  }
+
   // ── Pointer interaction ─────────────────────────────────────────────────────
 
   function onPointerDown(e) {
-    isDragging = true;
-    dragLastX  = e.clientX;
-    velocity   = 0; // pause momentum while actively grabbing
+    isDragging      = true;
+    pointerHasMoved = false;
+    dragLastX       = e.clientX;
+    velocity        = 0; // pause momentum while actively grabbing
     containerEl.style.cursor = 'grabbing';
     // why: setPointerCapture keeps pointermove/up firing on this element even
     // if the pointer leaves the element bounds during the drag.
     containerEl.setPointerCapture(e.pointerId);
-    startRaf(); // ensure rAF is running so renders happen
+    startRaf(); // ensure rAF is running so renders happen during drag
     e.preventDefault();
   }
 
   function onPointerMove(e) {
     if (!isDragging) return;
     const dx = e.clientX - dragLastX;
+    // Mark as a drag once the pointer has moved more than 3 px, so a
+    // stationary tap does not accidentally suppress the pause toggle.
+    if (!pointerHasMoved && Math.abs(e.clientX - dragLastX) > 3) {
+      pointerHasMoved = true;
+    }
     // Update angle directly (rendered in the next rAF frame) and store the
     // instantaneous velocity so momentum works on release.
     angle     = (angle + dx * DEG_PER_PX + 360) % 360;
@@ -280,12 +324,51 @@ export function createVoxelLogo(containerEl) {
     if (!isDragging) return;
     isDragging = false;
     containerEl.style.cursor = '';
-    // velocity retains the last drag delta; frame() will decay it from here.
+
+    if (!pointerHasMoved) {
+      // Tap/click with no meaningful movement → toggle pause.
+      togglePause();
+      velocity = 0;
+      return;
+    }
+
+    // Drag release: if paused, stop rAF so the logo goes static again.
+    if (paused) {
+      velocity = 0;
+      if (rafAlive) {
+        cancelAnimationFrame(rafId);
+        rafId    = null;
+        rafAlive = false;
+      }
+    }
+    // else: velocity from drag decays naturally via frame().
+  }
+
+  function onPointerCancel() {
+    // Interrupted gesture (e.g. another pointer took priority). Mark as
+    // "has moved" so the cancel is never mistaken for a click.
+    pointerHasMoved = true;
+    isDragging      = false;
+    containerEl.style.cursor = '';
+    if (paused) {
+      velocity = 0;
+      if (rafAlive) {
+        cancelAnimationFrame(rafId);
+        rafId    = null;
+        rafAlive = false;
+      }
+    }
   }
 
   // ── Keyboard interaction ────────────────────────────────────────────────────
 
   function onKeyDown(e) {
+    // Space / Enter: toggle pause (same as a click).
+    if (e.key === ' ' || e.key === 'Enter') {
+      togglePause();
+      e.preventDefault();
+      return;
+    }
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     const delta = e.key === 'ArrowLeft' ? -5 : 5;
     angle    = (angle + delta + 360) % 360;
@@ -299,11 +382,11 @@ export function createVoxelLogo(containerEl) {
 
   // ── Setup ───────────────────────────────────────────────────────────────────
 
-  containerEl.addEventListener('pointerdown',  onPointerDown);
-  containerEl.addEventListener('pointermove',  onPointerMove);
-  containerEl.addEventListener('pointerup',    onPointerUp);
-  containerEl.addEventListener('pointercancel', onPointerUp);
-  containerEl.addEventListener('keydown',      onKeyDown);
+  containerEl.addEventListener('pointerdown',   onPointerDown);
+  containerEl.addEventListener('pointermove',   onPointerMove);
+  containerEl.addEventListener('pointerup',     onPointerUp);
+  containerEl.addEventListener('pointercancel', onPointerCancel);
+  containerEl.addEventListener('keydown',       onKeyDown);
 
   if (prefersReduced) {
     render(); // one static frame; rAF starts only when user interacts
@@ -322,7 +405,7 @@ export function createVoxelLogo(containerEl) {
       containerEl.removeEventListener('pointerdown',   onPointerDown);
       containerEl.removeEventListener('pointermove',   onPointerMove);
       containerEl.removeEventListener('pointerup',     onPointerUp);
-      containerEl.removeEventListener('pointercancel', onPointerUp);
+      containerEl.removeEventListener('pointercancel', onPointerCancel);
       containerEl.removeEventListener('keydown',       onKeyDown);
     },
   };
