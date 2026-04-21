@@ -841,6 +841,8 @@ function boot() {
       throw err;
     }
     state.loadedModel = loaded;
+    // Successful load: clear any OOM-retry sentinel set by a previous failed attempt.
+    sessionStorage.removeItem('fc-oom-cache-cleared');
     writeHasRunSentinel(); // Flip the bit after a successful load.
     dropzone.setEnabled(true);
     controls.setDisabled(false);
@@ -985,30 +987,51 @@ function boot() {
         ? structuredCode
         : 'MODEL_LOAD_FAILED';
 
-    // Surface a memory-specific hint when ORT's WASM heap OOMs.
-    // This happens when total RAM pressure (model buffer + WASM heap) is too high,
-    // e.g. many tabs open or a stale/corrupted compiled-WASM browser cache.
     const errMsg = String((/** @type {any} */ (err) && /** @type {any} */ (err).message) || err);
-    const isOom = /out of memory|oom|aborted/i.test(errMsg);
-    const message = isOom
-      ? 'The inference engine ran out of memory. Try closing other browser tabs, then click below to clear cached data and reload.'
-      : undefined;
+    // OOM during WASM compilation/instantiation — distinct from a model-bytes
+    // failure. The WASM binary is 12 MB and requires several times that to
+    // compile; browser extensions consuming RAM are the most common cause.
+    // Private/incognito windows disable most extensions, which is why the
+    // same machine can load fine there.
+    const isOom = /out of memory|aborted/i.test(errMsg);
 
-    status.showError({
-      code,
-      message,
-      onRetry: async () => {
-        if (code === 'MODEL_LOAD_FAILED') {
-          // Clear the model Cache API store before reloading. The cached 57 MB
-          // buffer may be contributing to memory pressure, or the entry may be
-          // corrupted. A fresh download after reload starts from a clean slate.
+    // Track whether we already tried clearing the cache and reloading.
+    // If the OOM persists after a cache-clear reload, the problem is memory
+    // pressure (usually extensions), not a stale/corrupt cache entry — and
+    // the right advice is "open a private window", not "retry".
+    const alreadyRetried = sessionStorage.getItem('fc-oom-cache-cleared') === '1';
+
+    let message;
+    let onRetry;
+
+    if (code === 'MODEL_LOAD_FAILED') {
+      if (isOom && alreadyRetried) {
+        // Cache-clear reload didn't help → memory pressure, not a cache issue.
+        message =
+          'Clearing the cache didn\u2019t resolve the memory issue. Browser extensions are likely using too much RAM. Open Foveacast in a private or incognito window \u2014 most extensions are disabled there.';
+        // No retry button; there's nothing more the app can do automatically.
+        onRetry = undefined;
+      } else if (isOom) {
+        message =
+          'The inference engine ran out of memory \u2014 browser extensions may be using too much RAM. Clearing cached data and reloading may help. If the problem persists, try opening Foveacast in a private or incognito window.';
+        onRetry = async () => {
+          sessionStorage.setItem('fc-oom-cache-cleared', '1');
           await clearModelCache();
           window.location.reload();
-          return;
-        }
-        reloadModel().catch(surfaceModelError);
-      },
-    });
+        };
+      } else {
+        // Non-OOM load failure: clearing the cache is the right first step.
+        onRetry = async () => {
+          await clearModelCache();
+          window.location.reload();
+        };
+      }
+    } else {
+      // MODEL_DOWNLOAD_FAILED: retry the download without reloading.
+      onRetry = () => reloadModel().catch(surfaceModelError);
+    }
+
+    status.showError({ code, message, onRetry });
   }
 
   /**
