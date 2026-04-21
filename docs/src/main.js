@@ -189,6 +189,19 @@ function boot() {
   const outputSection = mustGet('fc-output');
   const outputCanvasWrap = mustGet('fc-output-canvas-wrap');
   const outputCaption = mustGet('fc-output-caption');
+
+  // Diagnostics panel — created once here so output-view.js never needs
+  // to reach into document.getElementById. Starts hidden; shown only
+  // when a render pass includes diagnostics data.
+  const diagEl = document.createElement('details');
+  diagEl.id = 'fc-diagnostics';
+  diagEl.style.cssText = 'margin:0.5rem 0; font-size:0.75rem; color:#666; max-width:600px;';
+  diagEl.hidden = true;
+  const diagSummary = document.createElement('summary');
+  diagSummary.textContent = 'Diagnostics';
+  diagSummary.style.cursor = 'pointer';
+  diagEl.appendChild(diagSummary);
+  outputCaption.parentNode.insertBefore(diagEl, outputCaption.nextSibling);
   const hudMount = mustGet('fc-hud-mount');
   const reportMount = mustGet('fc-report-mount');
   const toolbarEl = mustGet('fc-toolbar');
@@ -1271,7 +1284,7 @@ function boot() {
         diagnostics: state.lastDiagnostics,
         overlays: { fixationSequence: false, attentionZones: false, centroidTrajectory: false },
       },
-      { outputSection, outputCanvasWrap, outputCaption },
+      { outputSection, outputCanvasWrap, outputCaption, diagEl },
     );
 
     // Update the workspace heading with the active viewing duration so
