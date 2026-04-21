@@ -66,7 +66,7 @@ Anything humans read (README, CHANGELOG, LEARNINGS, CONTRIBUTING, PRD, in-UI cop
 
 ### Buildless ship model
 
-The files in `docs/` are what GitHub Pages publishes and what a user unzips and opens. No bundler step, no transforms. Runtime dependencies (`onnxruntime-web`, `heatmap.js`) are vendored under `docs/vendor/`. The UNISAL ONNX model (`docs/models/unisal/model.onnx`, ~12.5 MB) is committed directly to the repo — no fetch-at-deploy, no CDN dependency. If your change would require introducing a build step to the shipped artefact, stop and discuss first — the "unzip and open index.html" promise is load-bearing for the product positioning.
+The files in `docs/` are what GitHub Pages publishes. No bundler step, no transforms. Runtime dependencies (`onnxruntime-web`) are vendored under `docs/vendor/`, and `docs/coi-sw.js` is the service worker shim at the repo root. The V3 MSI-Net ONNX models live at `docs/models/v3/{1s,3s,7s}/model.onnx` (gitignored; see `scripts/fetch-v3-model.sh`). If your change would require a build step for the shipped artefact, stop and discuss first. Note: the app requires a real HTTP/S origin — `file://` is no longer supported because the service worker cannot register from a `file://` URL.
 
 Vite is in the project as a dev-time convenience only. It is never asked to produce a `dist/`.
 
@@ -141,7 +141,7 @@ If the user asks for a "review", "audit", or "critique" of the project, they usu
 These have burned us before. Learn from the scars.
 
 - **macOS Vite binds IPv6-only by default.** Playwright `webServer.url` must use `localhost`, not `127.0.0.1`.
-- **ORT Web runs single-threaded on GitHub Pages.** Pages cannot set `Cross-Origin-Embedder-Policy: require-corp`, which WASM threading requires. ORT Web detects the missing `crossOriginIsolated` and falls back automatically, but performance is the permanent floor. Do not "optimise" by shipping the `.jsep.wasm` WebGPU build — its WebGPU EP also needs COEP, and the WASM file is larger.
+- **WASM threading requires cross-origin isolation.** `docs/coi-sw.js` (coi-serviceworker v0.1.7) registers as a service worker and injects `Cross-Origin-Embedder-Policy: require-corp` + `Cross-Origin-Opener-Policy: same-origin` response headers, making `crossOriginIsolated = true`. On first visit the SW installs, triggers one page reload, then `crossOriginIsolated` is true for all subsequent loads. The site therefore **requires an HTTP/S origin** — `file://` URLs are not supported. Do not remove `coi-sw.js` without a replacement COEP strategy. The `<script src="./coi-sw.js">` tag must remain the FIRST script in `<head>`. Do not "optimise" by shipping the `.jsep.wasm` WebGPU build — its WebGPU EP also needs COEP and cross-origin isolation, but the WASM file is larger.
 - **`ort.env.wasm.wasmPaths` must be set before `InferenceSession.create`.** If you leave it default, ORT resolves wasm relative to the document base, which breaks when the site is served from a subpath (GitHub Pages does this). `loader.js` pins it to `./vendor/`.
 - **Vite's import-analysis plugin 500s on extensionless binary files** (the MSI-Net ONNX is named `model.onnx`, which works, but any shard-style layout would trip this). The fix is the custom middleware in `vite.config.js` — don't remove it. It also serves `/vendor/*` raw so SRI hashes on the ORT Web scripts survive dev.
 - **jsdom does not implement `HTMLCanvasElement.prototype.getContext`.** Tests that rely on this must mock it or be routed via Playwright.

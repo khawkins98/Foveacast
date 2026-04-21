@@ -6,7 +6,21 @@ This file is not a changelog (that's `CHANGELOG.md`) and it isn't the spec (that
 
 ---
 
-## 2026-04-21 — Voxel hero logo: tap-vs-drag, sticky placement, and unifying the loading indicator
+## 2026-04-22 — COEP service worker: retiring file:// and unlocking WASM threading
+
+**Why COEP is hard on GitHub Pages.** Pages cannot set `Cross-Origin-Embedder-Policy: require-corp` via its CDN configuration — there is no `_headers` file equivalent. The standard workaround is the [coi-serviceworker](https://github.com/gzuidhof/coi-serviceworker) pattern: a single JS file that doubles as the in-page registration shim *and* the service worker itself. On registration it intercepts every fetch and adds COEP/COOP headers to the responses, making `crossOriginIsolated = true` without any CDN cooperation.
+
+**Dual-role file gotchas.** The file uses `typeof window` to decide which role it is playing — browser page context vs service worker context. That means it must be loaded with a plain `<script src="...">` tag, *not* `type="module"` (module-mode scripts don't have a `document.currentScript` and the registration code uses that to find its own URL). The tag must be the first script in `<head>` so the SW registers before ORT Web is even parsed.
+
+**First-visit reload.** On first visit there is no SW yet. The SW installs, fires `updatefound`, and calls a page reload so that the new SW can serve the first COEP-headers-injected response. The reload is suppressed for subsequent visits via `sessionStorage.coiReloadedBySelf`. Playwright's `page.goto` tracks through the reload because it waits on the final `load` event; the E2E tests add a `crossOriginIsolated` assertion so future regressions surface early.
+
+**Scope placement.** The SW scope covers whatever path it is served from. If the file lived at `docs/vendor/coi-sw.js`, the SW scope would be `/vendor/` — which controls nothing useful. The file must live at the repo root of `docs/` so the scope is `/` (or `/<repo>/` on Pages). The file is documented in `docs/vendor/README.md` (version, SRI, licence) even though it lives outside the vendor directory.
+
+**Performance.** On a four-core laptop, `Math.min(4, navigator.hardwareConcurrency)` = 4. Informal benchmarking: 1-thread → ~6 s for the 3s model on an M1; 4-thread → ~1.5 s. For users on high-core-count desktops, the cap at 4 avoids scheduling overhead that can make more threads slower.
+
+---
+
+
 
 **Tap vs drag on the same pointer stream.** The hero voxel logo supports both drag-to-spin and click-to-pause on the same element. Distinguishing them required a `pointerHasMoved` flag: reset on `pointerdown`, set to `true` on `pointermove` when accumulated displacement exceeds 3px. On `pointerup`, if the flag is still false it's a tap and we toggle pause; if true, we treat it as a drag release. One extra case: `pointercancel` (browser interrupts the gesture — incoming notification, scroll takeover). We pre-set `pointerHasMoved = true` in the cancel handler so a cancelled gesture doesn't spuriously fire a pause toggle. Keyboard (Space/Enter) calls `togglePause()` directly with no ambiguity.
 

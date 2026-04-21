@@ -6,6 +6,18 @@ All notable changes to Foveacast are recorded here. Format follows [Keep a Chang
 
 ### Added
 
+- **COEP/COOP service worker (coi-serviceworker v0.1.7)** — `docs/coi-sw.js` registers as a service worker and injects `Cross-Origin-Embedder-Policy: require-corp` + `Cross-Origin-Opener-Policy: same-origin` headers on every response. This makes the page `crossOriginIsolated = true`, which unlocks `SharedArrayBuffer` and WASM multi-threading for ORT Web. On first visit the SW installs and triggers one transparent page reload; subsequent visits run with full cross-origin isolation from the start.
+
+### Changed
+
+- **ORT Web WASM thread count** — previously hardcoded to 1 (permanent single-thread due to missing COEP on Pages). Now computed as `crossOriginIsolated ? Math.max(1, Math.min(4, navigator.hardwareConcurrency ?? 1)) : 1`. On a typical 8-core laptop this is 4 threads, delivering a 2–4× inference speedup on Pages and local dev.
+
+### Removed
+
+- **`file://` / "unzip and open" support** — a service worker cannot register from a `file://` URL, so opening `docs/index.html` directly no longer works. The app now requires a real HTTP/S origin (localhost or GitHub Pages). README and CONTRIBUTING updated accordingly.
+
+### Added
+
 - **Heatmap voxel hero logo** — the hero section features a draggable isometric eye-shaped voxel structure that sticks to the side of the page as the user scrolls. Faces are solid-filled with a heatmap gradient (green at the inner shell, red at the outer edge) that shimmers as the structure rotates. Users can drag or use arrow keys to spin it; a click or Space pauses and resumes the auto-spin. Momentum carries the rotation after a drag and decays back to the auto-spin speed. Fully respects `prefers-reduced-motion` (no auto-spin; rAF halts when velocity settles).
 - **Heatmap voxel loading indicator** — replaces the CSS spinner inside the busy overlay with the same isometric heatmap eye used in the hero logo (vendored [heerich](https://github.com/meodai/heerich) renderer). The eye spins while the model downloads, then re-parents into the main column at low opacity once ready. Subsequent inference runs spin the same eye as the per-analysis loading indicator via a CSS compositor animation, keeping the spin smooth even when the main thread is blocked by ORT inference. Respects `prefers-reduced-motion`.
 - **Slow-load hint** — after 3 seconds of model-load wait, the busy overlay reveals a short note explaining that the first visit pulls a ~57 MB model and links to the GitHub project (opens in a new tab so the in-flight download is not interrupted).

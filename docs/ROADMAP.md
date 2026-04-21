@@ -20,8 +20,8 @@ The PRD's "Version 1 / 2 / 3" numbering referred to **model generations** — MS
 
 ## Decision principles
 
-- **Preserve the "unzip and open `index.html`" promise.** Anything that introduces a build step or a server-side dependency has a higher bar than anything that doesn't.
 - **Preserve the "nothing leaves your machine" positioning.** Anything that adds a network round-trip beyond the first-run weight download is a scope change that needs a deliberate conversation, not a drive-by.
+- **Require a real HTTP/S origin.** `coi-sw.js` registers a service worker that injects COEP/COOP headers, enabling WASM multi-threading. This means `file://` URLs no longer work. The bar for removing this requirement is high.
 - **Prefer compounding improvements.** A change that makes the next change easier is worth more than a change that closes a specific P1 finding in isolation.
 - **Rough size is noisy.** The estimates below are "gut, informed by the V1 build." Anything above "half a day" should be re-sized before committing to it.
 
