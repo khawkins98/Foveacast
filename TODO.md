@@ -67,6 +67,34 @@ Main concerns before committing:
 
 ---
 
+## CSS refactoring
+
+### P2 — Refactor CSS to use custom properties as design tokens
+
+The codebase targets a modern baseline that fully supports CSS custom properties. Right now, colours, font sizes, spacing, and similar values are largely repeated as literals. Centralising them as `--fc-*` custom properties on `:root` (or on a scoping selector) would:
+
+- make global rescaling (e.g. fluid type, compact layout for smaller viewports) a single-line change rather than a grep-and-replace pass;
+- give future contributors a self-documenting catalogue of the design tokens in one place;
+- make theming (dark mode, high-contrast) straightforward — swap the custom properties, the rest inherits.
+
+Start with font sizes and the core palette; spacing and border-radius are a natural second pass. Keep property names under a `--fc-` namespace to avoid collisions with any third-party CSS.
+
+**Source:** engineering observation, 2026-04-21.  
+**Size:** ~2 hours for the first pass (font sizes + palette); ~1 additional hour for spacing/radii.
+
+### P2 — Many UI font sizes are too small; lift the floor
+
+`styles.css` has a long tail of sub-`0.8rem` values — `0.75rem`, `0.72rem`, `0.7rem`, `0.65rem` — used for labels, captions, tags, and helper text. At a `16px` root that puts the smallest text at `10–12px`, which fails WCAG AA for normal-weight body copy and is uncomfortable on non-retina screens.
+
+As part of the custom-properties refactor above, define a small set of named size tokens (e.g. `--fc-text-xs`, `--fc-text-sm`, `--fc-text-base`) with a sensible floor — `0.8125rem` (`13px`) is a reasonable minimum for supporting text; `0.875rem` (`14px`) for anything the user reads rather than just glances at. Replacing the one-off values with tokens makes the floor enforceable and easy to adjust globally.
+
+Note: the `0.65rem` instances (lines 719, 780, 809, 1514, 1843 in `styles.css`) are the most egregious and should be prioritised.
+
+**Source:** engineering observation, 2026-04-21.  
+**Size:** Absorbed into the custom-properties refactor pass; no meaningful extra cost once the token layer exists.
+
+---
+
 ## Items explicitly not going into this TODO
 
 - Mobile support, URL input, webcam gaze tracking, and video — explicitly out of scope.
