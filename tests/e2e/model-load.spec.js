@@ -29,8 +29,27 @@
 // and no threading warnings are emitted.
 
 import { test, expect } from '@playwright/test';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+// Preflight: the real-model tests require the ONNX artefact to be present
+// locally. The file is gitignored (57 MB FP16 weights). Without this check,
+// a missing model produces a silent Playwright timeout that is hard to
+// diagnose. This check fails fast with a human-readable message instead.
+const MODEL_PATH = resolve(new URL('../../docs/models/v3/3s/model.onnx', import.meta.url).pathname);
+const MODEL_PRESENT = existsSync(MODEL_PATH);
 
 test.describe('Foveacast — real model load end-to-end', () => {
+  test.beforeAll(() => {
+    if (!MODEL_PRESENT) {
+      throw new Error(
+        `Missing ONNX model file: ${MODEL_PATH}\n` +
+        `Run scripts/fetch-v3-model.sh first, then re-run pnpm test:e2e.\n` +
+        `(The demo-only suite — pnpm test:e2e -- --grep demo — works without it.)`,
+      );
+    }
+  });
+
   test.beforeEach(async ({ page }) => {
     const pageErrors = [];
     const consoleErrors = [];
