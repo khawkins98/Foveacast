@@ -18,31 +18,18 @@ import { createControls } from './ui/controls.js';
 import { renderOutput as renderOutputView } from './ui/output-view.js';
 import { loadModel, clearModelCache, DEFAULT_DURATION, DURATION_LABELS } from './model/loader.js';
 import { runInference } from './model/inference.js';
-import { downsampleIfLarge } from './ui/image-resize.js';
 import { postprocess } from './pipeline/postprocess.js';
 import { firstFixationCentroid, topNFixations } from './pipeline/fixation.js';
 import { renderSaliencyCanvas, renderAttentionZoneCanvas } from './render/saliency-canvas.js';
 import { downloadCompositeAsPng } from './render/download.js';
 import { isDemoModeRequested, runDemoMode } from './demo.js';
 import { installPageDrop } from './ui/page-drop.js';
-import { readHasRunSentinel, writeHasRunSentinel } from './ui/has-run-sentinel.js';
 import { computeSaliencyMetrics, computeZoneThresholds, computeRuleOfThirds } from './pipeline/metrics.js';
 import { createReport } from './ui/report.js';
 import { createHud, updateHud, updateHudRuleOfThirds } from './ui/hud.js';
 import { createVoxelBg } from './ui/voxel-bg.js';
 import { createVoxelLogo } from './ui/voxel-logo.js';
-
-/**
- * Threshold (ms) above which we treat the first onProgress tick as a
- * genuine network download rather than a cache hit. WHY a time-based
- * heuristic is still here alongside the localStorage sentinel below:
- * the sentinel is authoritative when it is present, but it can be
- * absent for a returning user who cleared site data or who came in
- * via incognito. The time heuristic is the safety net for those
- * cases — it starts with the cache-load banner and upgrades to the
- * first-run banner once a slow progress tick arrives.
- */
-const FIRST_RUN_THRESHOLD_MS = 800;
+import { reloadModel, handleFile } from './boot-handlers.js';
 
 /**
  * Delay before the slow-load hint inside the busy overlay appears.
@@ -272,7 +259,7 @@ function boot() {
     onFile: (file) => {
       // Kick off async work but don't await — we want the event handler
       // to return promptly.
-      handleFile(file).catch((err) => {
+      boundHandleFile(file).catch((err) => {
         console.error('Foveacast: unexpected error handling file.', err);
         status.showError({
           code: 'INFERENCE_FAILED',
@@ -301,8 +288,8 @@ function boot() {
   // one pixel outside the drop-zone element navigated the browser away
   // from Foveacast and opened the file in the tab — the worst failure
   // mode for a one-purpose tool. The document-level handler also gates
-  // on the same enabled/busy state (via the shared callbacks: the
-  // handleFile below will reject early if the model isn't ready).
+  // on the same enabled/busy state (via the shared callbacks: boundHandleFile
+  // will reject early if the model isn't ready).
   installPageDrop(fileCallbacks);
 
   // --- Controls ---------------------------------------------------------
@@ -719,6 +706,30 @@ function boot() {
     }
   }
 
+  // --- Bind boot-handlers to this boot instance's deps -----------------
+  // reloadModel and handleFile are exported from boot-handlers.js so they
+  // can be unit-tested with injected deps. These bound wrappers let the
+  // rest of boot() call them as zero-arg or single-arg functions, exactly
+  // as before. runInferenceOnImage is a function declaration below so it
+  // is hoisted and safe to reference here.
+  const handleFileDeps = {
+    state,
+    status,
+    /** @param {HTMLImageElement | ImageBitmap | HTMLCanvasElement} c */
+    runInferenceOnImage: (c) => runInferenceOnImage(c),
+  };
+  const boundHandleFile = (file) => handleFile(file, handleFileDeps);
+  const reloadModelDeps = {
+    state,
+    dropzone,
+    controls,
+    status,
+    setAppBusy: (busy, label) => setAppBusy(busy, label),
+    voxelBg,
+    handleFileFn: boundHandleFile,
+  };
+  const boundReloadModel = (opts) => reloadModel(opts, reloadModelDeps);
+
   // --- Demo mode short-circuit ------------------------------------------
   // When `?demo=1` is present, skip the model download entirely and run
   // a synthetic saliency map through the render pipeline. Normal flow
@@ -778,124 +789,12 @@ function boot() {
     // (via the queued-drop path). Surfacing an error banner now would
     // confuse the demo experience and fail E2E tests that assert no
     // console errors during demo render.
-    reloadModel({ silent: true }).catch((err) => {
+    boundReloadModel({ silent: true }).catch((err) => {
       console.warn('Foveacast: background model load failed in demo mode.', err);
     });
   } else {
     // --- Kick off model load (normal path) ------------------------------
-    reloadModel().catch((err) => surfaceModelError(err));
-  }
-
-  // --- Exposed helpers (closures over `state`) --------------------------
-
-  /**
-   * Load the saliency model with a first-run-vs-cache banner heuristic
-   * (see `FIRST_RUN_THRESHOLD_MS`).
-   *
-   * `silent` suppresses the cache-load / first-run / ready banners so
-   * the demo-mode background load does not stomp the demo banner. The
-   * dropzone enable / controls enable / error surfacing all still run
-   * normally — only the chatty status transitions are skipped.
-   *
-   * @param {{ silent?: boolean, duration?: import('./model/loader.js').Duration }} [options]
-   */
-  async function reloadModel(options = {}) {
-    const { silent = false, duration = state.activeDuration } = options;
-    // why: ORT sessions hold WASM heap memory for the graph (~57 MB).
-    // Without an explicit release, switching durations repeatedly would
-    // accumulate unreclaimable memory until GC collects the orphaned
-    // JS wrapper — and WASM linear memory is never returned to the OS.
-    if (state.loadedModel && state.loadedModel.session) {
-      try { state.loadedModel.session.release(); } catch { /* best-effort */ }
-    }
-    state.loadedModel = null;
-    state.activeDuration = duration;
-    dropzone.setEnabled(false);
-    controls.setDisabled(true);
-
-    const startedAt = performance.now();
-    let firstRunShown = false;
-
-    // The sentinel is the authoritative signal. If it's absent, this
-    // browser has never completed a model load before, so show the
-    // first-run banner immediately — no 800ms wait contradicting the
-    // user's experience. If it's present we still default to the
-    // cache-load banner and upgrade via the time heuristic, which
-    // covers users who cleared site data since their last visit.
-    const hasRunBefore = readHasRunSentinel();
-
-    if (!silent) {
-      if (!hasRunBefore) {
-        status.showFirstRun({ fraction: 0, loaded: undefined, total: undefined });
-        firstRunShown = true;
-      } else {
-        status.showCacheLoad();
-      }
-    }
-
-    setAppBusy(true, 'Loading model\u2026');
-    let loaded;
-    try {
-      loaded = await loadModel({
-        duration,
-        onProgress: (progress) => {
-          if (silent) return;
-          const elapsed = performance.now() - startedAt;
-          if (!firstRunShown && elapsed > FIRST_RUN_THRESHOLD_MS && progress.fraction < 0.95) {
-            firstRunShown = true;
-          }
-          if (firstRunShown) {
-            status.showFirstRun(progress);
-          }
-        },
-      });
-    } catch (err) {
-      setAppBusy(false);
-      throw err;
-    }
-    state.loadedModel = loaded;
-    // Successful load: clear any OOM-retry sentinel set by a previous failed attempt.
-    sessionStorage.removeItem('fc-oom-cache-cleared');
-    writeHasRunSentinel(); // Flip the bit after a successful load.
-    dropzone.setEnabled(true);
-    controls.setDisabled(false);
-    controls.setDurationLoading(false);
-    if (!silent) {
-      // Show "Model ready" inside the drop zone rather than in a
-      // separate banner above it — the two messages were redundant.
-      // The label resets to the default on the next setEnabled(true)
-      // call (i.e. after inference completes), so it only appears once.
-      dropzone.setLabel(
-        'Model ready \u2014 drop a screenshot here, click to choose a file, or paste from the clipboard.',
-      );
-      status.clear();
-    }
-    // Trigger the cube→sphere morph now that the model is ready. The
-    // overlay stays up until voxelBg fires onReady (above), which then
-    // calls setAppBusy(false). If voxelBg is missing, fall back to the
-    // immediate fade so the user is not stuck behind the overlay.
-    if (voxelBg) {
-      voxelBg.setState('ready');
-    } else {
-      setAppBusy(false);
-    }
-
-    // Drain any file the user dropped while we were still loading.
-    // This is the second half of the demo-mode queued-drop flow.
-    if (state.queuedFile) {
-      const pending = state.queuedFile;
-      state.queuedFile = null;
-      status.element.removeAttribute('data-foveacast-queued');
-      // Don't await — same reason the dropzone onFile doesn't await:
-      // we want the caller to return promptly.
-      handleFile(pending).catch((err) => {
-        console.error('Foveacast: queued-file inference failed.', err);
-        status.showError({
-          code: 'INFERENCE_FAILED',
-          onRetry: () => status.clear(),
-        });
-      });
-    }
+    boundReloadModel().catch((err) => surfaceModelError(err));
   }
 
   /**
@@ -945,7 +844,7 @@ function boot() {
       // if this is a first download, but suppress if user already has
       // a result showing (the duration-loading hint is enough feedback).
       const hasExistingResult = !!state.lastImage;
-      await reloadModel({
+      await boundReloadModel({
         duration,
         silent: hasExistingResult,
       });
@@ -1041,7 +940,7 @@ function boot() {
       }
     } else {
       // MODEL_DOWNLOAD_FAILED: retry the download without reloading.
-      onRetry = () => reloadModel().catch(surfaceModelError);
+      onRetry = () => boundReloadModel().catch(surfaceModelError);
     }
 
     status.showError({ code, message, onRetry });
@@ -1205,55 +1104,6 @@ function boot() {
   }
 
   /**
-   * Handle a user-dropped file through the full pipeline.
-   *
-   * In demo mode the dropzone goes live as soon as the synthetic
-   * preview renders, which may be well before the real model has
-   * finished downloading. A drop that arrives in that window gets
-   * queued: we show the first-run banner so the user knows why the
-   * wait, and `reloadModel()` picks up the queued file when it
-   * resolves. The user never sees a "model still loading, try again"
-   * dead end.
-   *
-   * @param {File} file
-   */
-  async function handleFile(file) {
-    if (!state.loadedModel) {
-      state.queuedFile = file;
-      // Surface the real download/cache banner so the user sees that
-      // something is happening. The visible banner depends on whether
-      // the silent background load has passed the first-run threshold.
-      status.showFirstRun({ fraction: 0, loaded: undefined, total: undefined });
-      status.element.setAttribute('data-foveacast-queued', 'true');
-      return;
-    }
-
-    try {
-      // `createImageBitmap` is the right path — it decodes off the main
-      // thread when the browser supports it. Falling back to an
-      // HTMLImageElement keeps the flow alive on older engines.
-      let bitmap;
-      try {
-        bitmap = await createImageBitmap(file);
-      } catch {
-        bitmap = await loadFileAsImage(file);
-      }
-
-      // PRD §Memory: images wider than 2560px are downsampled before
-      // preprocessing to dodge OOM on retina screenshots.
-      const workCanvas = downsampleIfLarge(bitmap, 2560);
-
-      await runInferenceOnImage(workCanvas);
-    } catch (err) {
-      console.error('Foveacast: inference failed.', err);
-      status.showError({
-        code: 'INFERENCE_FAILED',
-        onRetry: () => status.clear(),
-      });
-    }
-  }
-
-  /**
    * Recompose the current image + heatmap with the current opacity.
    * Called when the opacity slider moves.
    */
@@ -1298,30 +1148,6 @@ function boot() {
     }
   }
 
-}
-
-/**
- * Load a File via an HTMLImageElement as a fallback when
- * `createImageBitmap` isn't available or refuses the input.
- * @param {File} file
- * @returns {Promise<HTMLImageElement>}
- */
-function loadFileAsImage(file) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      // Keep the URL alive long enough for downstream canvas draws — we
-      // revoke after a tick.
-      setTimeout(() => URL.revokeObjectURL(url), 0);
-      resolve(img);
-    };
-    img.onerror = (e) => {
-      URL.revokeObjectURL(url);
-      reject(e instanceof Error ? e : new Error('Failed to load image.'));
-    };
-    img.src = url;
-  });
 }
 
 /** @param {string} id */
