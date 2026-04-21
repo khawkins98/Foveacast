@@ -48,14 +48,15 @@ test.describe('Foveacast — real model load end-to-end', () => {
   test('boots, loads the default (3s) model, and reaches the ready state without errors', async ({ page }) => {
     await page.goto('/');
 
-    // The ready banner is the single observable signal that `loadModel`
-    // resolved cleanly. The banner text is defined in ui/status.js and
-    // includes "drop a screenshot to start". That phrasing is stable
-    // enough to assert on; if it changes we want this test to fail and
-    // force a conscious update.
-    const status = page.locator('.fc-status--ready');
-    await expect(status).toBeVisible({ timeout: 30_000 });
-    await expect(status).toContainText(/drop a screenshot/i);
+    // The drop-zone label switches to "Model ready — drop a screenshot…"
+    // once `loadModel` resolves cleanly (see main.js boot path; the old
+    // `.fc-status--ready` banner was consolidated into the drop zone in
+    // commit 6dbaf0a). The "Model ready" + "drop a screenshot" phrasing
+    // is stable enough to assert on; if it changes we want this test to
+    // fail and force a conscious update.
+    const label = page.locator('.fc-dropzone__label');
+    await expect(label).toContainText(/model ready/i, { timeout: 30_000 });
+    await expect(label).toContainText(/drop a screenshot/i);
 
     // Dropzone must be enabled — main.js flips `setEnabled(true)` in
     // the same code path that writes the ready banner.
