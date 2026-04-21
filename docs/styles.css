@@ -546,6 +546,38 @@ a:hover {
   transition: opacity 0.3s ease;
 }
 
+/* Hide on narrow viewports where 380 px would crowd content. */
+@media (max-width: 719px) {
+  .fc-hero-logo {
+    display: none;
+  }
+}
+
+/* -- Landing state layout -------------------------------------------------
+ *
+ * When the drop zone is visible (pre-inference), align the content column
+ * with the hero logo and vertically centre it so the page feels balanced.
+ *
+ * Right-padding formula: max(2rem, 840px − 50vw)
+ * The hero logo host spans the full viewport and positions the logo with
+ * right: -20px (380 px wide). Its left edge is always at vw − 360 px.
+ * The .fc-main content box right edge = (vw − 960)/2 + 960 − pr.
+ * Setting those equal: pr = 840px − 50vw. max(2rem, …) floors at the
+ * default side padding so the formula does nothing on viewports > 1680 px.
+ *
+ * justify-content: center collapses the large blank area below the drop
+ * zone by vertically centring the compact landing content in the viewport.
+ * padding-top: var(--fc-topnav-h) just clears the fixed nav bar; the 2 rem
+ * breathing room comes from the centering algorithm instead of padding.
+ */
+@media (min-width: 960px) {
+  .fc-main:has(.fc-drop-row:not([hidden])) {
+    padding-right: max(2rem, calc(840px - 50vw));
+    justify-content: center;
+    padding-top: var(--fc-topnav-h);
+  }
+}
+
 .fc-workspace-header__title {
   font-size: clamp(1.5rem, 2vw + 1rem, 2.5rem);
   font-weight: 900;
