@@ -161,6 +161,11 @@ export function createVoxelBg(containerEl, options = {}) {
   let currentState = 'loading';
   let rafId = /** @type {number|null} */ (null);
   let spinAngle = FINAL_ANGLE_DEG;
+  // why: restAngle is the camera angle used for the sphere in all non-loading
+  // states. Initialises to FINAL_ANGLE_DEG (the morph snap angle) and is
+  // updated by setAngle() during scroll-driven rotation so the sphere follows
+  // the page position rather than always resetting to 45°.
+  let restAngle = FINAL_ANGLE_DEG;
   let morphStartTime = /** @type {number|null} */ (null);
   let lastFrameTime = 0;
   // why: onReady must fire exactly once even if setState('ready') is called
@@ -231,10 +236,13 @@ export function createVoxelBg(containerEl, options = {}) {
     });
   }
 
-  /** Update the Heerich scene to the final static sphere shell. */
+  /**
+   * Update the Heerich scene to the static sphere shell at the current
+   * `restAngle`. Call `setAngle()` before this to render at a specific angle.
+   */
   function buildSphereScene() {
     h.clear();
-    h.setCamera({ type: 'isometric', angle: FINAL_ANGLE_DEG });
+    h.setCamera({ type: 'isometric', angle: restAngle });
     h.applyGeometry({
       type: 'fill',
       bounds: [[0, 0, 0], [SIZE, SIZE, SIZE]],
@@ -415,6 +423,27 @@ export function createVoxelBg(containerEl, options = {}) {
       containerEl.innerHTML = '';
       containerEl.classList.remove('fc-voxel-bg--loading', 'fc-voxel-bg--ready');
       currentState = 'gone';
+    },
+
+    /**
+     * Rotate the resting sphere to the given camera angle.
+     *
+     * No-op unless the voxel is in the 'ready' state (i.e., the cube→sphere
+     * morph has completed and the element is in its ambient background mount).
+     * Also a no-op when `prefers-reduced-motion: reduce` is set — we do not
+     * want even scroll-driven geometry updates for users who have opted out of
+     * motion.
+     *
+     * Callers should batch updates with requestAnimationFrame to avoid
+     * rebuilding the SVG geometry on every scroll event.
+     *
+     * @param {number} deg - Camera azimuth angle in degrees.
+     */
+    setAngle(deg) {
+      if (currentState !== 'ready' || prefersReduced) return;
+      restAngle = deg % 360;
+      buildSphereScene();
+      render();
     },
   };
 }

@@ -215,6 +215,24 @@ function boot() {
       })
     : null;
 
+  // Scroll-driven rotation for the ambient sphere.
+  // Advances the camera angle 1° per 20 px of scroll so the sphere
+  // drifts gently as the user reads down the page without dominating the
+  // visual. setAngle() is a no-op unless the sphere is in its 'ready'
+  // rest state, so the handler is safe to attach unconditionally.
+  // Batched via rAF to avoid rebuilding the SVG geometry on every event.
+  if (voxelBg) {
+    let scrollRafPending = false;
+    window.addEventListener('scroll', () => {
+      if (scrollRafPending) return;
+      scrollRafPending = true;
+      requestAnimationFrame(() => {
+        scrollRafPending = false;
+        voxelBg.setAngle(45 + window.scrollY * 0.05);
+      });
+    }, { passive: true });
+  }
+
   // --- Status banner ----------------------------------------------------
   const status = createStatus();
   statusMount.appendChild(status.element);
