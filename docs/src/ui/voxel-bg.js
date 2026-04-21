@@ -1,19 +1,19 @@
 /**
- * voxel-bg.js — Wireframe voxel background decoration.
+ * voxel-bg.js — Heatmap voxel loading indicator.
  *
- * Renders an isometric wireframe cube while the model loads, then runs a
- * stochastic morph to a sphere shell once the model is ready. After that the
- * sphere rests as a low-opacity background element until the caller destroys it.
+ * Renders the same oblate-spheroid heatmap eye as the hero logo mark while the
+ * model loads, then parks invisibly once the model is ready. During inference
+ * runs it reappears in the busy overlay and spins via a CSS compositor
+ * animation (keeping it alive even while the main thread is blocked by ONNX).
  *
  * States:
- *   loading  → spinning cube, rAF-driven at 30 fps
- *   morphing → stochastic cube→sphere transition over ~1.5 s
- *   ready    → static sphere shell (rAF stopped); CSS transitions handle
- *              the opacity/position change to background
+ *   loading  → auto-spinning heatmap eye, JS rAF-driven at 30 fps
+ *   ready    → rAF stopped; element hidden in rest container (opacity: 0)
+ *   spinning → static rendered frame + CSS spin class (inference indicator)
  *   gone     → rAF cancelled, container cleared (destroy() was called)
  *
  * Design rules respected:
- *   - prefers-reduced-motion: no rAF, jump straight to final sphere state
+ *   - prefers-reduced-motion: no rAF, static frame shown during loading
  *   - aria-hidden="true" on the container (set in HTML); pointer-events: none
  *     (set in CSS) — purely decorative, invisible to AT
  *
@@ -22,353 +22,255 @@
 
 import { Heerich } from '../../vendor/heerich.js';
 
-// ----- constants -----------------------------------------------------------
-
-/** How fast the cube spins: degrees advanced per rendered frame at 30 fps. */
-const SPIN_DEG_PER_FRAME = 0.8;
-
-/** Duration of the cube→sphere morph animation in milliseconds. */
-const MORPH_DURATION_MS = 1500;
-
-/**
- * Camera angle for the resting sphere (degrees). Snapping to this at morph
- * start ensures the final orientation is always the same regardless of where
- * the spin stopped — so screenshots and visual tests are deterministic.
- */
-const FINAL_ANGLE_DEG = 45;
+// ----- constants (mirrored from voxel-logo.js) ----------------------------
+// These mirror the hero logo geometry so the loading indicator and hero logo
+// look identical. If the hero shape changes, update both files.
 
 /** Grid size — geometry lives in [0, SIZE) on each axis. */
-const SIZE = 8;
+const SIZE   = 11;
 
-/** Center of the grid (used for sphere distance calculations). */
-const CENTER = (SIZE - 1) / 2; // 3.5
+/** Centre of the grid on each axis. */
+const CENTER = SIZE / 2; // 5.5
 
-/**
- * Sphere shell inner / outer radii. Tuned so the shell has roughly the same
- * visual density as the cube cage (~60 vs ~80 visible voxels), making the
- * morph look balanced rather than suddenly expanding or contracting.
- */
-const SPHERE_INNER_R = 2.9;
-const SPHERE_OUTER_R = 3.6;
+/** Horizontal semi-axis (x and z) of the oblate spheroid. */
+const A = CENTER * 0.86;
+
+/** Vertical semi-axis (y) of the oblate spheroid. */
+const B = CENTER * 0.44;
+
+/** Inner normalised ellipsoidal radius — voxels below this are hollow. */
+const R_INNER = 0.82;
+
+/** Outer normalised ellipsoidal radius — keeps voxels within the surface. */
+const R_OUTER = 1.0;
+
+/** Auto-spin speed: degrees per ~16 ms frame. */
+const DEG_PER_FRAME = 0.35;
+
+/** Starting and canonical resting camera angle (degrees). */
+const FINAL_ANGLE_DEG = 45;
 
 /** Frame-rate cap in Hz for the rAF loop. */
 const TARGET_FPS = 30;
 
+/**
+ * How long (ms) to keep the element in the overlay after onReady fires so the
+ * spinner stays visible while the overlay fades out (200 ms CSS transition).
+ * A small buffer (50 ms) is added over the transition duration.
+ */
+const REPAENT_DELAY_MS = 250;
+
 // ----- geometry helpers ----------------------------------------------------
 
 /**
- * Deterministic positional noise in [0, 1). Used to stagger the per-voxel
- * departure/arrival timing during the morph so it looks organic rather than a
- * uniform wavefront sweep.
- *
- * @param {number} x
- * @param {number} y
- * @param {number} z
- * @returns {number} value in [0, 1)
- */
-function positionalNoise(x, y, z) {
-  // why: simple integer hash — no floating-point drift, O(1), repeatable.
-  return ((x * 7 + y * 11 + z * 13) % 17) / 17;
-}
-
-/**
- * Returns true for voxels on the wireframe cage of the cube.
- * An edge voxel has at least 2 of its 3 coordinates at the grid boundary
- * (0 or SIZE-1), which selects the 12 edges of the cube.
+ * Returns true for voxels in the hollow oblate spheroid shell.
  *
  * @param {number} x
  * @param {number} y
  * @param {number} z
  * @returns {boolean}
  */
-function isCubeEdge(x, y, z) {
-  const atBound = (v) => v === 0 || v === SIZE - 1;
-  return [x, y, z].filter(atBound).length >= 2;
+function isOblateShell(x, y, z) {
+  const cx = x - CENTER;
+  const cy = y - CENTER;
+  const cz = z - CENTER;
+  const d2 = (cx / A) ** 2 + (cy / B) ** 2 + (cz / A) ** 2;
+  return d2 >= R_INNER * R_INNER && d2 <= R_OUTER * R_OUTER;
 }
 
 /**
- * Returns true for voxels in the sphere shell band.
+ * Compute the SVG fill/stroke style for one voxel face.
+ * Identical to faceStyle() in voxel-logo.js — heatmap green→red with shimmer.
  *
  * @param {number} x
  * @param {number} y
  * @param {number} z
- * @returns {boolean}
+ * @param {number} lightBonus - Extra lightness for overhead illumination.
+ * @param {number} currentAngle - Current camera angle in degrees.
+ * @returns {{ fill: string, stroke: string, strokeWidth: number }}
  */
-function isSphereShell(x, y, z) {
-  const dx = x - CENTER;
-  const dy = y - CENTER;
-  const dz = z - CENTER;
-  const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-  return dist >= SPHERE_INNER_R && dist <= SPHERE_OUTER_R;
+function faceStyle(x, y, z, lightBonus, currentAngle) {
+  const cx = x - CENTER;
+  const cy = y - CENTER;
+  const cz = z - CENTER;
+  const d  = Math.sqrt((cx / A) ** 2 + (cy / B) ** 2 + (cz / A) ** 2);
+  const t  = Math.max(0, Math.min(1, (d - R_INNER) / (R_OUTER - R_INNER)));
+  const wave = Math.sin(currentAngle * (Math.PI / 180) * 1.5 + x * 0.8 + z * 0.55) * 0.5 + 0.5;
+  const hue  = Math.round(120 * (1 - t) + (wave - 0.5) * 20);
+  const sat  = 80;
+  const lit  = Math.round(48 + t * 18 + lightBonus);
+  return {
+    fill:        `hsl(${hue}deg ${sat}% ${lit}%)`,
+    stroke:      `hsl(${hue}deg ${sat}% ${Math.max(0, lit - 14)}%)`,
+    strokeWidth: 0.5,
+  };
 }
 
 // ----- public API ----------------------------------------------------------
 
 /**
- * Create and start the voxel background for a given container element.
+ * Create and start the voxel loading indicator for a given container element.
  *
- * Call `setState('ready')` when the model finishes loading to trigger the
- * morph. Call `destroy()` once the background is no longer needed (e.g., the
- * user has dropped their first image and the voxel element is about to be
- * hidden anyway).
+ * Call `setState('ready')` when the model finishes loading. Call `destroy()`
+ * once the element is permanently removed.
  *
- * @param {HTMLElement} containerEl - The element whose innerHTML will be driven
- *   by heerich SVG output. Must already be in the DOM.
+ * @param {HTMLElement} containerEl - Element whose innerHTML is driven by
+ *   heerich SVG output. Must already be in the DOM.
  * @param {Object} [options]
- * @param {HTMLElement} [options.restContainer] - If provided, the container
- *   element is moved (DOM re-parented) into this element when the morph
- *   completes. Used so the loading-time mount (e.g. busy overlay card) is
- *   different from the rest-state mount (e.g. main column for the ambient
- *   sphere). Pass null/undefined to keep the element in place.
- * @param {() => void} [options.onReady] - Fired exactly once, when the morph
- *   completes (or immediately, in the prefers-reduced-motion case where
- *   setState('ready') jumps straight to the sphere). Use this to coordinate
- *   external state — e.g. fading out the busy overlay only after the cube
- *   has finished morphing inside it.
- * @returns {{ setState: (s: 'loading'|'ready') => void, destroy: () => void }}
+ * @param {HTMLElement} [options.restContainer] - Element to re-parent into
+ *   once the loading phase ends (e.g. `.fc-main`).
+ * @param {() => void} [options.onReady] - Fired exactly once when the model
+ *   is ready. Triggers the busy-overlay fade-out in main.js.
+ * @returns {{ setState, activate, deactivate, setAngle, destroy }}
  */
 export function createVoxelBg(containerEl, options = {}) {
   const { restContainer = null, onReady = null } = options;
-  // Captured at construction so activate() can re-parent the element
-  // back to its original loading mount (typically the busy overlay
-  // card) for subsequent inference runs.
+  // Captured at construction so activate() can re-parent the element back
+  // to the busy overlay card for subsequent inference runs.
   const loadingParent = containerEl.parentElement;
   const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // why: heerich's `style` option is a flat style object — it becomes
-  // defaultStyle directly and is spread into per-face style objects. Wrapping
-  // it in a `default:` key (as the per-voxel-style API does) breaks
-  // serialisation: every face renders with `default="[object Object]"` and no
-  // fill/stroke at all, so the browser falls back to black-fill/no-stroke.
-  //
-  // opaque:false (set per applyGeometry call) lets back faces render; fill:none
-  // makes every face transparent so only the stroke outline is visible — the
-  // wireframe aesthetic. We use 'currentColor' rather than a CSS custom property
-  // because heerich writes stroke as an SVG presentation attribute, and browsers
-  // do not resolve var() inside SVG presentation attributes. Setting color on
-  // the container element (in CSS) and using currentColor here lets the design
-  // token propagate via the CSS cascade. CSS rules on
-  // `.fc-voxel-bg svg polygon` can still override either property in SVG2.
+  // why: constructor style is a flat fallback (heerich-notes.md §Gotcha 1).
+  // Per-voxel style on applyGeometry overrides this for all active voxels.
   const h = new Heerich({
+    tile: 7,
     camera: { type: 'isometric', angle: FINAL_ANGLE_DEG },
-    style: {
-      fill: 'none',
-      stroke: 'currentColor',
-      strokeWidth: 1,
-    },
+    style: { fill: '#1a3a1a', stroke: '#0d200d', strokeWidth: 0.5 },
   });
 
   let currentState = 'loading';
-  let rafId = /** @type {number|null} */ (null);
-  let spinAngle = FINAL_ANGLE_DEG;
-  // why: restAngle is the camera angle used for the sphere in all non-loading
-  // states. Initialises to FINAL_ANGLE_DEG (the morph snap angle) and is
-  // updated by setAngle() during scroll-driven rotation so the sphere follows
-  // the page position rather than always resetting to 45°.
-  let restAngle = FINAL_ANGLE_DEG;
-  let morphStartTime = /** @type {number|null} */ (null);
+  let rafId        = /** @type {number|null} */ (null);
+  let spinAngle    = FINAL_ANGLE_DEG;
+  // why: restAngle keeps the last angle used so activate() renders at
+  // whatever the scroll-driven angle was, not always the canonical angle.
+  let restAngle    = FINAL_ANGLE_DEG;
   let lastFrameTime = 0;
   // why: onReady must fire exactly once even if setState('ready') is called
   // multiple times or after the element is already in its rest state.
   let notifiedReady = false;
 
-  /**
-   * Final-state bookkeeping: re-parent into the rest container (if any),
-   * mark the element with the rest-state class, and notify the caller.
-   * Idempotent — safe to call from the morph completion path AND from
-   * setState('ready') in the reduced-motion or already-ready cases.
-   */
-  function notifyReady() {
-    if (notifiedReady) return;
-    notifiedReady = true;
-    if (restContainer && containerEl.parentElement !== restContainer) {
-      // appendChild moves the element rather than copying it, so the
-      // already-rendered SVG content goes with it.
-      restContainer.appendChild(containerEl);
-    }
-    containerEl.classList.add('fc-voxel-bg--ready');
-    onReady?.();
-  }
-
-  // ---- scene builders -----------------------------------------------------
-
-  /** Update the Heerich scene to the spinning cube at the current spinAngle. */
-  function buildCubeScene() {
-    h.clear();
-    h.setCamera({ type: 'isometric', angle: spinAngle });
-    h.applyGeometry({
-      type: 'fill',
-      bounds: [[0, 0, 0], [SIZE, SIZE, SIZE]],
-      test: isCubeEdge,
-      opaque: false,
-    });
-  }
+  // ---- scene builder -------------------------------------------------------
 
   /**
-   * Update the Heerich scene to the stochastic morph state.
+   * Rebuild the oblate-spheroid heatmap scene at the given angle and inject
+   * SVG. Identical to the render() in voxel-logo.js.
    *
-   * At t=0 only cube-edge voxels are visible; at t=1 only sphere-shell
-   * voxels are visible. In between, each voxel's positional noise value
-   * determines when it transitions, producing an organic scatter effect.
-   *
-   * @param {number} t - Smoothstepped morph progress in [0, 1].
+   * @param {number} angle - Camera azimuth in degrees.
    */
-  function buildMorphScene(t) {
+  function renderAt(angle) {
     h.clear();
-    // why: snap camera to final angle at morph start so the cube's residual
-    // spin angle does not carry over into the resting sphere orientation.
-    h.setCamera({ type: 'isometric', angle: FINAL_ANGLE_DEG });
-    const ease = t * t * (3 - 2 * t); // smoothstep
+    h.setCamera({ type: 'isometric', angle });
     h.applyGeometry({
-      type: 'fill',
+      type:   'fill',
       bounds: [[0, 0, 0], [SIZE, SIZE, SIZE]],
-      test: (x, y, z) => {
-        const inCube = isCubeEdge(x, y, z);
-        const inSphere = isSphereShell(x, y, z);
-        if (!inCube && !inSphere) return false;
-        const n = positionalNoise(x, y, z);
-        // Cube voxels depart as ease rises above their noise threshold.
-        // Sphere voxels arrive as ease rises past their noise threshold.
-        // Shared voxels satisfy both conditions so they stay throughout.
-        return (inCube && n > ease) || (inSphere && n <= ease);
+      test:   isOblateShell,
+      style: {
+        default: (x, y, z) => faceStyle(x, y, z, 0, angle),
+        top:     (x, y, z) => faceStyle(x, y, z, 14, angle),
       },
-      opaque: false,
     });
+    containerEl.innerHTML = h.toSVG({ padding: 6 });
   }
+
+  // ---- animation loop ------------------------------------------------------
 
   /**
-   * Update the Heerich scene to the static sphere shell at the current
-   * `restAngle`. Call `setAngle()` before this to render at a specific angle.
-   */
-  function buildSphereScene() {
-    h.clear();
-    h.setCamera({ type: 'isometric', angle: restAngle });
-    h.applyGeometry({
-      type: 'fill',
-      bounds: [[0, 0, 0], [SIZE, SIZE, SIZE]],
-      test: isSphereShell,
-      opaque: false,
-    });
-  }
-
-  /** Write the current Heerich scene into the container as an SVG string. */
-  function render() {
-    containerEl.innerHTML = h.toSVG({ padding: 8 });
-  }
-
-  // ---- animation loop -----------------------------------------------------
-
-  /**
-   * requestAnimationFrame callback. Advances the current animation state and
-   * re-renders. Self-cancels when the 'morphing' state reaches completion.
+   * requestAnimationFrame callback. Advances the spin angle and re-renders.
+   * Capped at TARGET_FPS so high-refresh displays don't burn unnecessary CPU.
    *
    * @param {number} timestamp - DOMHighResTimeStamp from rAF.
    */
   function tick(timestamp) {
     rafId = requestAnimationFrame(tick);
-
-    // Cap frame rate to TARGET_FPS to avoid unnecessary CPU/GPU work on
-    // high-refresh displays where the background animation would otherwise
-    // render at 120/144 fps.
     if (timestamp - lastFrameTime < 1000 / TARGET_FPS) return;
     lastFrameTime = timestamp;
-
-    if (currentState === 'loading') {
-      spinAngle = (spinAngle + SPIN_DEG_PER_FRAME) % 360;
-      buildCubeScene();
-      render();
-    } else if (currentState === 'morphing') {
-      if (!morphStartTime) morphStartTime = timestamp;
-      const raw = (timestamp - morphStartTime) / MORPH_DURATION_MS;
-      const t = Math.min(raw, 1);
-      buildMorphScene(t);
-      render();
-      if (t >= 1) {
-        // Morph complete. Render the final sphere and stop the rAF loop.
-        // CSS handles the transition to the background (opacity + position).
-        buildSphereScene();
-        render();
-        cancelAnimationFrame(rafId);
-        rafId = null;
-        currentState = 'ready';
-        notifyReady();
-      }
-    }
-    // 'ready' state: rAF has already been cancelled above — this branch is
-    // unreachable but explicit for clarity.
+    spinAngle = (spinAngle + DEG_PER_FRAME) % 360;
+    renderAt(spinAngle);
   }
 
-  // ---- init ---------------------------------------------------------------
+  // ---- ready bookkeeping ---------------------------------------------------
 
-  buildCubeScene();
-  render();
+  /**
+   * Fire onReady immediately (so the overlay starts fading), then re-parent
+   * the element into restContainer after the overlay fade completes.
+   * Idempotent — safe to call multiple times.
+   */
+  function notifyReady() {
+    if (notifiedReady) return;
+    notifiedReady = true;
+
+    // Stop rAF and render one canonical static frame before re-parenting.
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    renderAt(FINAL_ANGLE_DEG);
+    containerEl.classList.add('fc-voxel-bg--ready');
+    currentState = 'ready';
+
+    // Fire onReady now — the overlay starts its 200 ms fade-out with the
+    // spinner still visible in it.
+    onReady?.();
+
+    // Delay the DOM re-parent until the overlay fade finishes so the spinner
+    // stays visible inside the overlay throughout the transition.
+    if (restContainer) {
+      setTimeout(() => {
+        // Guard: activate() may have already re-parented for a queued inference
+        // run — skip the rest-container move if that has happened.
+        if (currentState === 'ready' && containerEl.parentElement !== restContainer) {
+          restContainer.appendChild(containerEl);
+        }
+      }, REPAENT_DELAY_MS);
+    }
+  }
+
+  // ---- init ----------------------------------------------------------------
+
   containerEl.classList.add('fc-voxel-bg--loading');
 
   if (prefersReduced) {
-    // Reduced motion: skip all animation. Jump straight to the final sphere so
-    // the element is visible as a static decoration without any motion.
-    buildSphereScene();
-    render();
-    containerEl.classList.remove('fc-voxel-bg--loading');
-    containerEl.classList.add('fc-voxel-bg--ready');
-    currentState = 'ready';
+    // Reduced motion: skip animation. Render a static frame at the canonical
+    // angle so the element is visible without any motion.
+    renderAt(FINAL_ANGLE_DEG);
   } else {
+    renderAt(spinAngle);
     rafId = requestAnimationFrame(tick);
   }
 
-  // ---- public interface ---------------------------------------------------
+  // ---- public interface ----------------------------------------------------
 
   return {
     /**
      * Transition to a new state.
      *
-     * Only the 'loading' → 'ready' transition is externally meaningful:
-     * call this with 'ready' once the model finishes loading to trigger the
-     * cube→sphere morph. Calling 'ready' from any state other than 'loading'
-     * is a no-op (idempotent).
+     * Call with 'ready' once the model finishes loading. Any other value is a
+     * no-op. Calling 'ready' multiple times is idempotent.
      *
      * @param {'loading'|'ready'} newState
      */
     setState(newState) {
       if (newState !== 'ready') return;
       if (currentState === 'loading') {
-        currentState = 'morphing';
-        morphStartTime = null;
         containerEl.classList.remove('fc-voxel-bg--loading');
-        if (prefersReduced) {
-          // Skip the morph entirely — go straight to sphere.
-          buildSphereScene();
-          render();
-          currentState = 'ready';
-          notifyReady();
-        } else if (!rafId) {
-          // Restart the loop if it was somehow cancelled before morph start.
-          rafId = requestAnimationFrame(tick);
-        }
-        // Otherwise: rAF loop is already running from init and will pick up
-        // the new 'morphing' state on the next tick.
+        notifyReady();
       } else if (currentState === 'ready') {
-        // Reduced-motion init already jumped to 'ready'. The caller still
-        // expects an onReady fire so they can clear loading-state UI.
+        // Already ready (e.g. reduced-motion init). Fire onReady so callers
+        // that depend on it (e.g. setAppBusy(false)) still receive the signal.
         notifyReady();
       }
     },
 
     /**
-     * Bring the voxel back into its original loading mount as the
-     * inference-run loading indicator. Used after the initial
-     * cube→sphere morph has completed.
+     * Bring the voxel into its original loading mount as the inference-run
+     * loading indicator. Used after setState('ready') has been called.
      *
-     * Implementation note: ONNX inference blocks the main thread, so a
-     * JS/rAF-driven animation would stutter or freeze entirely while
-     * the model runs. Instead, we render the sphere ONCE and let the
-     * compositor-thread CSS animation (`fc-voxel-spin` keyframes,
-     * applied via the `--spinning` class) handle the rotation —
-     * compositor-only `transform` animations keep ticking even while
-     * the main thread is busy.
+     * ONNX inference blocks the main thread, so JS rAF animations would
+     * freeze. Instead we render one static frame then apply a CSS compositor
+     * animation (`fc-voxel-spin` keyframes) so rotation continues on the
+     * compositor thread while inference runs.
      *
-     * No-op unless the morph has completed, the element exists, and
-     * reduced-motion is not preferred.
+     * No-op unless in 'ready' state and reduced-motion is not set.
      */
     activate() {
       if (currentState === 'gone' || prefersReduced) return;
@@ -376,26 +278,18 @@ export function createVoxelBg(containerEl, options = {}) {
       if (loadingParent && containerEl.parentElement !== loadingParent) {
         loadingParent.appendChild(containerEl);
       }
-      // why: --ready styles the rest-state ambient sphere (low opacity,
-      // corner offset). In the overlay, the in-overlay CSS already
-      // forces opacity:1 and centring, but stripping the class keeps
-      // the element semantically clean and lets the overlay variant
-      // win without specificity gymnastics.
       containerEl.classList.remove('fc-voxel-bg--ready');
       currentState = 'spinning';
-      // Render the static sphere a single time; CSS animates the spin
-      // from here so we do not need a rAF loop while inference blocks
-      // the main thread.
-      buildSphereScene();
-      render();
+      // Render at restAngle so the inference spinner starts from wherever the
+      // scroll-driven angle last left it rather than always snapping to 45°.
+      renderAt(restAngle);
       containerEl.classList.add('fc-voxel-bg--spinning');
     },
 
     /**
-     * Stop the inference-time spinner: drop the CSS spin class, return
-     * the element to its rest container, and re-render the static
-     * sphere. Symmetric counterpart to activate(). No-op if not
-     * currently spinning.
+     * Stop the inference-time spinner: remove the CSS spin class, return the
+     * element to its rest container, and re-render a static frame.
+     * Symmetric counterpart to activate(). No-op if not currently spinning.
      */
     deactivate() {
       if (currentState !== 'spinning') return;
@@ -403,17 +297,13 @@ export function createVoxelBg(containerEl, options = {}) {
       if (restContainer && containerEl.parentElement !== restContainer) {
         restContainer.appendChild(containerEl);
       }
-      buildSphereScene();
-      render();
+      renderAt(restAngle);
       currentState = 'ready';
       containerEl.classList.add('fc-voxel-bg--ready');
     },
 
     /**
      * Stop all animation and clear the container.
-     *
-     * Intended to be called after a CSS fade-out completes so the rAF loop
-     * does not keep running in the background once the element is invisible.
      */
     destroy() {
       if (rafId !== null) {
@@ -426,24 +316,20 @@ export function createVoxelBg(containerEl, options = {}) {
     },
 
     /**
-     * Rotate the resting sphere to the given camera angle.
+     * Update the camera angle used for rest-state and inference renders.
      *
-     * No-op unless the voxel is in the 'ready' state (i.e., the cube→sphere
-     * morph has completed and the element is in its ambient background mount).
-     * Also a no-op when `prefers-reduced-motion: reduce` is set — we do not
-     * want even scroll-driven geometry updates for users who have opted out of
-     * motion.
-     *
-     * Callers should batch updates with requestAnimationFrame to avoid
-     * rebuilding the SVG geometry on every scroll event.
+     * Callers should batch with requestAnimationFrame to avoid re-rendering
+     * on every scroll event. No-op in reduced-motion mode. Keeps internal
+     * angle state up to date even when the element is hidden.
      *
      * @param {number} deg - Camera azimuth angle in degrees.
      */
     setAngle(deg) {
-      if (currentState !== 'ready' || prefersReduced) return;
+      if (prefersReduced) return;
       restAngle = deg % 360;
-      buildSphereScene();
-      render();
+      // Only re-render while in rest state (element visible at opacity:0 in
+      // fc-main — not worth rebuilding the SVG while it's invisible, but the
+      // angle is preserved for the next activate() call).
     },
   };
 }

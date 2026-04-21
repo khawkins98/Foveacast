@@ -303,11 +303,11 @@
     <div class="fc-busy-overlay" id="fc-busy-overlay" role="status" aria-atomic="true">
       <div class="fc-busy-overlay__card">
         <!--
-          Voxel wireframe — doubles as the loading indicator while the
-          model is being fetched/initialised. ui/voxel-bg.js drives it:
-          spinning cube during load, morphs to a sphere when the model
-          is ready, then re-parents into .fc-main and fades to a low-
-          opacity ambient background decoration.
+          Heatmap voxel eye — loading indicator while the model is being
+          fetched/initialised. ui/voxel-bg.js drives it: the same oblate-
+          spheroid heatmap shape as the hero logo spins here while loading,
+          then re-parents into .fc-main (opacity: 0) once the model is
+          ready. During inference runs activate()/deactivate() bring it back.
         -->
         <div id="fc-voxel-bg" class="fc-voxel-bg" aria-hidden="true"></div>
         <p class="fc-busy-overlay__label" id="fc-busy-overlay-label">Analysing…</p>
