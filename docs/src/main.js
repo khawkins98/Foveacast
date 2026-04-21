@@ -30,6 +30,7 @@ import { computeSaliencyMetrics, computeZoneThresholds, computeRuleOfThirds } fr
 import { createReport } from './ui/report.js';
 import { createHud, updateHud, updateHudRuleOfThirds } from './ui/hud.js';
 import { createVoxelBg } from './ui/voxel-bg.js';
+import { createVoxelLogo } from './ui/voxel-logo.js';
 
 /**
  * Threshold (ms) above which we treat the first onProgress tick as a
@@ -191,6 +192,18 @@ function boot() {
   const hudMount = mustGet('fc-hud-mount');
   const reportMount = mustGet('fc-report-mount');
   const toolbarEl = mustGet('fc-toolbar');
+
+  // --- Voxel hero logo --------------------------------------------------
+  // Auto-rotating oblate spheroid in the hero area. Purely decorative;
+  // failure is non-fatal — the hero text still reads correctly without it.
+  const heroLogoEl = document.getElementById('fc-hero-logo-voxel');
+  if (heroLogoEl) {
+    try {
+      createVoxelLogo(heroLogoEl);
+    } catch (err) {
+      console.warn('voxel-logo init failed:', err);
+    }
+  }
 
   // --- Voxel background -------------------------------------------------
   // While the model is loading, the voxel cube lives inside the busy

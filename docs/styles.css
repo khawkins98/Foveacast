@@ -500,11 +500,15 @@ a:hover {
 }
 
 /* Hero logo lockup — displayed before the h1 in the workspace header. */
+/* Animated voxel logo mark in the hero — square container so the SVG fills
+   without letterboxing. currentColor inherits --fc-primary from the
+   parent, giving the voxel strokes a consistent primary-blue tint. */
 .fc-hero-logo {
   display: block;
-  width: 320px;
-  height: auto;
-  margin-bottom: 1rem;
+  width: 140px;
+  height: 140px;
+  margin: 0 auto 1.25rem;
+  color: var(--fc-primary);
 }
 
 .fc-workspace-header__title {

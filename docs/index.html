@@ -139,15 +139,17 @@
         <header class="fc-workspace-header">
           <div class="fc-workspace-header__title-wrap">
             <!--
-              Hero logo lockup — large brand mark shown at the top of the
-              workspace before any inference has been run. The SVG carries
-              its own dark/light media query so it renders correctly when
-              loaded via <img> (no CSS context).
+              Hero logo — animated voxel oblate spheroid that auto-rotates
+              to give the impression of a 3D eye orbiting. Replaced the
+              static SVG so the brand mark uses the same heerich voxel tool
+              as the rest of the page. Falls back gracefully if JS is off.
+              ARIA: role+label describe it as the brand mark; the heading
+              below provides the actual page title.
             -->
-            <img src="assets/logo.svg"
+            <div id="fc-hero-logo-voxel"
                  class="fc-hero-logo"
-                 alt="Foveacast"
-                 width="320" height="64">
+                 role="img"
+                 aria-label="Foveacast animated logo mark"></div>
             <h1 class="fc-workspace-header__title">Predicted Eye Attention Heatmaps</h1>
             <!-- Etymology — what "Foveacast" means. Static copy; purely informational. -->
             <p class="fc-workspace-header__etymology">
