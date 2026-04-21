@@ -17,6 +17,7 @@ Read these before making substantive changes:
 - [CONTRIBUTING.md](CONTRIBUTING.md) — coding guide, testing tiers, documentation expectations.
 - [LEARNINGS.md](LEARNINGS.md) — prior decisions and dead ends. Check this before re-deriving something.
 - [TODO.md](TODO.md) — known follow-ups, prioritised.
+- [docs/heerich-notes.md](docs/heerich-notes.md) — heerich.js (voxel → SVG engine) API cheatsheet, gotchas, and patterns. Read before touching anything under `docs/src/ui/voxel-*.js` or the vendored `docs/vendor/heerich.js`.
 
 ---
 

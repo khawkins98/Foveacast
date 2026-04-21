@@ -515,7 +515,7 @@ a:hover {
  * z-index:-1 places it below the in-flow heading/body text within the
  * title-wrap stacking context (see .fc-workspace-header__title-wrap above).
  * opacity:0.7 lets the dark page background show through so the text above
- * stays readable. pointer-events:none keeps it non-interactive.
+ * stays readable. Pointer events are enabled so the user can drag to spin.
  */
 .fc-hero-logo {
   position: absolute;
@@ -525,9 +525,20 @@ a:hover {
   width: 380px;
   height: 380px;
   z-index: -1;
-  opacity: 0.7;
-  pointer-events: none;
+  opacity: 0.85;
+  cursor: grab;
+  /* why: prevent the page scrolling during a horizontal drag gesture */
+  touch-action: none;
+  /* why: prevent text becoming selected while dragging over the element */
+  user-select: none;
   color: var(--fc-primary);
+}
+
+/* Raise above text on keyboard focus so the outline is actually visible. */
+.fc-hero-logo:focus-visible {
+  z-index: 1;
+  outline: 2px solid var(--fc-primary);
+  outline-offset: 4px;
 }
 
 .fc-workspace-header__title {
