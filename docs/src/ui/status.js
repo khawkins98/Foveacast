@@ -258,11 +258,21 @@ export function createStatus() {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'fc-status__retry';
-      btn.textContent = RETRY_LABELS[code] || 'Try again';
+      const defaultLabel = RETRY_LABELS[code] || 'Try again';
+      btn.textContent = defaultLabel;
       btn.addEventListener('click', () => {
-        // Caller is responsible for whatever state follows (e.g.
-        // calling showFirstRun again). We just fire the hook.
-        params.onRetry();
+        // Disable immediately so double-clicks don't fire twice.
+        btn.disabled = true;
+        btn.textContent = 'Clearing\u2026';
+        const result = params.onRetry();
+        // If onRetry is async (e.g. cache clear + reload), wait for it;
+        // re-enable only on error so the user can retry if it fails.
+        if (result && typeof result.then === 'function') {
+          result.catch(() => {
+            btn.disabled = false;
+            btn.textContent = defaultLabel;
+          });
+        }
       });
       children.push(btn);
     }

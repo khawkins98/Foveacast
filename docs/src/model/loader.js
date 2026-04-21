@@ -101,6 +101,25 @@ export function modelUrlForDuration(duration) {
 const CACHE_NAME = 'foveacast-models-v1';
 
 /**
+ * Delete all entries from the model cache so the next page load forces
+ * a fresh download. Call this before reloading when a MODEL_LOAD_FAILED
+ * error suggests the cached bytes may be corrupted or are contributing
+ * to memory pressure.
+ *
+ * Errors are silently swallowed — cache unavailability is not fatal.
+ *
+ * @returns {Promise<void>}
+ */
+export async function clearModelCache() {
+  if (typeof caches === 'undefined') return;
+  try {
+    await caches.delete(CACHE_NAME);
+  } catch {
+    // Cache API unavailable or quota error — not fatal.
+  }
+}
+
+/**
  * Revalidate a cached model entry in the background using an ETag HEAD
  * check. If the server ETag has changed (i.e. a new model was deployed),
  * evict the stale entry so the *next* page load re-downloads the updated

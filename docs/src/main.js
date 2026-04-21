@@ -16,7 +16,7 @@ import { createStatus } from './ui/status.js';
 import { createDropzone } from './ui/dropzone.js';
 import { createControls } from './ui/controls.js';
 import { renderOutput as renderOutputView } from './ui/output-view.js';
-import { loadModel, DEFAULT_DURATION, DURATION_LABELS } from './model/loader.js';
+import { loadModel, clearModelCache, DEFAULT_DURATION, DURATION_LABELS } from './model/loader.js';
 import { runInference } from './model/inference.js';
 import { downsampleIfLarge } from './ui/image-resize.js';
 import { postprocess } from './pipeline/postprocess.js';
@@ -984,10 +984,25 @@ function boot() {
       structuredCode === 'MODEL_DOWNLOAD_FAILED' || structuredCode === 'MODEL_LOAD_FAILED'
         ? structuredCode
         : 'MODEL_LOAD_FAILED';
+
+    // Surface a memory-specific hint when ORT's WASM heap OOMs.
+    // This happens when total RAM pressure (model buffer + WASM heap) is too high,
+    // e.g. many tabs open or a stale/corrupted compiled-WASM browser cache.
+    const errMsg = String((/** @type {any} */ (err) && /** @type {any} */ (err).message) || err);
+    const isOom = /out of memory|oom|aborted/i.test(errMsg);
+    const message = isOom
+      ? 'The inference engine ran out of memory. Try closing other browser tabs, then click below to clear cached data and reload.'
+      : undefined;
+
     status.showError({
       code,
-      onRetry: () => {
+      message,
+      onRetry: async () => {
         if (code === 'MODEL_LOAD_FAILED') {
+          // Clear the model Cache API store before reloading. The cached 57 MB
+          // buffer may be contributing to memory pressure, or the entry may be
+          // corrupted. A fresh download after reload starts from a clean slate.
+          await clearModelCache();
           window.location.reload();
           return;
         }
