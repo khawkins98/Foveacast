@@ -1,21 +1,32 @@
-# Foveacast
+<div align="center">
+  <img src="docs/assets/logo.svg" alt="Foveacast logo" width="220">
+  <h1>Foveacast</h1>
+  <p>Predicted attention heatmaps, right in your browser.</p>
 
-![version 0.2.0](https://img.shields.io/badge/version-0.2.0-blue) ![status V3](https://img.shields.io/badge/status-V3-green) ![licence MIT](https://img.shields.io/badge/licence-MIT-lightgrey)
+  [![version 0.3.0](https://img.shields.io/badge/version-0.3.0-blue)](CHANGELOG.md) [![model MSI-Net V3](https://img.shields.io/badge/model-MSI--Net_V3-green)](docs/methodology.md) [![licence MIT](https://img.shields.io/badge/licence-MIT-lightgrey)](LICENSE)
 
-Predicted attention heatmaps, right in your browser.
-<p align="center">
-  <img src="docs/assets/logo.svg" alt="Foveacast" width="240">
-</p>
+  **[Try it live →](https://khawkins98.github.io/Foveacast/)**
+</div>
+
+---
 
 *fovea centralis*: the retina's point of sharpest focus + *cast*, to project and predict.
 
-Give Foveacast a screenshot of a web page and it wills show you where a "typical" viewer is likely to look first. It runs entirely in the browser on your own machine, so nothing you drop on it ever leaves the device — no account, no upload, no server. It is free and open source.
+Drop a screenshot of a web page and Foveacast shows you where a "typical" viewer is likely to look first. It runs entirely in the browser — nothing you drop ever leaves your device. No account, no upload, no server. Free and open source.
 
-It is aimed at those who want a quick sanity check on a layout before publish, without signing up for a commercial predictive-eye-tracking service. Foveacast is a predictive tool, not a real eye-tracking study; the [Reading your results](docs/reading-your-results.md) guide covers what the output can and cannot tell you.
+Aimed at those who want a quick sanity check on a layout before publishing, without signing up for a commercial predictive eye-tracking service. The [Reading your results](docs/reading-your-results.md) guide covers what the output can and cannot tell you.
 
-## Try it
+<p align="center">
+  <img src="docs/assets/example-screenshot.jpg" alt="Foveacast — screenshot with predicted attention heatmap overlay" width="700">
+</p>
 
-**Live at <https://khawkins98.github.io/Foveacast/>**
+## Highlights
+
+- **Runs offline** — model inference happens in your browser; nothing is uploaded
+- **Three viewing durations** — first glance (1 s), quick scan (3 s), full viewing (7 s)
+- **MSI-Net V3** — fine-tuned on real UI eye-tracking data from the [UEyes dataset](https://doi.org/10.1145/3544548.3581096)
+- **Full analysis report** — rule-of-thirds breakdown, fixation sequence, attention zones, centroid trajectory
+- **No account needed** — free, open source, drop and go
 
 ## Run locally
 
@@ -63,7 +74,7 @@ Four layers, laid out so the model backend can be swapped without touching anyth
                                    (inferno colormap)
 ```
 
-The full architecture notes — including the exported contracts each layer must honour — are in [CONTRIBUTING.md](CONTRIBUTING.md) under "Architecture, briefly". The rule that matters in practice: nothing outside `model/` imports `onnxruntime-web`. That is what let V2 swap the model backend without touching anything below — see the 0.2.0 diff in [CHANGELOG.md](CHANGELOG.md) and the long-form account in [LEARNINGS.md](LEARNINGS.md).
+The full architecture notes — including the exported contracts each layer must honour — are in [CONTRIBUTING.md](CONTRIBUTING.md) under "Architecture, briefly". The rule that matters in practice: nothing outside `model/` imports `onnxruntime-web`. The [CHANGELOG.md](CHANGELOG.md) and [LEARNINGS.md](LEARNINGS.md) have the long-form account of how the V2 model swap validated the boundary.
 
 ## Attribution
 
