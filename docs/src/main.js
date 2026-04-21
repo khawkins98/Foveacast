@@ -1008,12 +1008,12 @@ function boot() {
       if (isOom && alreadyRetried) {
         // Cache-clear reload didn't help → memory pressure, not a cache issue.
         message =
-          'Clearing the cache didn\u2019t resolve the memory issue. Browser extensions are likely using too much RAM. Open Foveacast in a private or incognito window \u2014 most extensions are disabled there.';
+          'Still out of memory after clearing the cache. Each open Foveacast tab holds the model in memory \u2014 close all other Foveacast tabs, then open a fresh one. If that doesn\u2019t help, try restarting Firefox or opening Foveacast in a private window.';
         // No retry button; there's nothing more the app can do automatically.
         onRetry = undefined;
       } else if (isOom) {
         message =
-          'The inference engine ran out of memory \u2014 browser extensions may be using too much RAM. Clearing cached data and reloading may help. If the problem persists, try opening Foveacast in a private or incognito window.';
+          'The inference engine ran out of memory. The quickest fix is to close any other Foveacast tabs and open a fresh one \u2014 each tab holds the model in memory. You can also try clearing cached data and reloading below.';
         onRetry = async () => {
           sessionStorage.setItem('fc-oom-cache-cleared', '1');
           await clearModelCache();
