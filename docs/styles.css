@@ -440,18 +440,14 @@ a:hover {
 }
 
 .fc-main > .fc-voxel-bg.fc-voxel-bg--ready {
-  /* Pin to bottom-right; ~70 px bleed so the sphere sits half-cropped
-     at the corner rather than floating as an island. */
-  top: auto;
-  left: auto;
-  right: -70px;
-  bottom: -70px;
-  /* Auto-size to the SVG instead of stretching to fill the viewport. */
-  width: auto;
-  height: auto;
-  overflow: visible;
-  opacity: 0.12;
-  transform: none;
+  /* why: ambient decoration removed — the sticky hero logo now fills this
+     role. The element stays in the DOM for the analysis-run spinner below. */
+  opacity: 0;
+}
+
+/* Restore visibility during active inference so the spin indicator works. */
+.fc-main > .fc-voxel-bg.fc-voxel-bg--ready.fc-voxel-bg--spinning {
+  opacity: 0.45;
 }
 
 /* Ensure flex children stacked after .fc-voxel-bg sit on top of it. */
@@ -511,32 +507,47 @@ a:hover {
 }
 
 /*
- * Background voxel logo — absolute positioned behind hero text on the left.
- * z-index:-1 places it below the in-flow heading/body text within the
- * title-wrap stacking context (see .fc-workspace-header__title-wrap above).
- * opacity:0.7 lets the dark page background show through so the text above
- * stays readable. Pointer events are enabled so the user can drag to spin.
+ * Sticky hero logo host — zero-height position:sticky wrapper.
+ * Sits in the document flow between the topnav and <main>; because it has
+ * no height, it creates no layout gap. As the user scrolls, the host locks
+ * at `top` (just below the topnav) and the logo inside it stays in view for
+ * the rest of the page. pointer-events:none lets clicks fall through to
+ * content behind; the .fc-hero-logo child re-enables its own events.
+ */
+.fc-hero-logo-host {
+  position: sticky;
+  top: calc(var(--fc-topnav-h) + 20px);
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+  /* z-index:0 keeps the host in the normal stacking order so content
+     painted after it (main) naturally renders on top. */
+  z-index: 0;
+}
+
+/*
+ * Hero logo — absolutely positioned within the zero-height host.
+ * right:-20px lets the structure bleed slightly off the right viewport
+ * edge for a more organic, cropped-in feel. pointer-events:auto re-enables
+ * drag-to-spin interaction on the logo itself despite the host being none.
  */
 .fc-hero-logo {
   position: absolute;
-  left: -60px;
-  top: 50%;
-  transform: translateY(-50%);
+  right: -20px;
+  top: 0;
   width: 380px;
   height: 380px;
-  z-index: -1;
   opacity: 0.85;
   cursor: grab;
   /* why: prevent the page scrolling during a horizontal drag gesture */
   touch-action: none;
   /* why: prevent text becoming selected while dragging over the element */
   user-select: none;
+  pointer-events: auto;
   color: var(--fc-primary);
 }
 
-/* Raise above text on keyboard focus so the outline is actually visible. */
 .fc-hero-logo:focus-visible {
-  z-index: 1;
   outline: 2px solid var(--fc-primary);
   outline-offset: 4px;
 }

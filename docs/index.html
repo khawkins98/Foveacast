@@ -129,6 +129,25 @@
       </nav>
 
       <!--
+        Hero logo host — zero-height sticky container. position:sticky
+        makes it scroll with the page and then lock in place once it
+        reaches the threshold below the topnav. Zero height means no
+        layout gap is created; the logo hangs below it via absolute
+        positioning. pointer-events:none lets clicks pass through to
+        content behind it; the logo div inside re-enables its own events.
+      -->
+      <div class="fc-hero-logo-host" aria-hidden="true">
+        <!--
+          Animated voxel oblate spheroid. Draggable / keyboard-spinnable.
+          aria-hidden: the host is decorative; keyboard users reach the
+          focusable div inside only when tabbing (tabindex="0").
+        -->
+        <div id="fc-hero-logo-voxel"
+             class="fc-hero-logo"
+             tabindex="0"
+             aria-label="Foveacast logo — drag or use arrow keys to spin"></div>
+      </div>
+      <!--
         Main workspace — comes before the sidebar in the DOM so keyboard
         and AT users reach the primary action (the dropzone) before the
         secondary controls (the sidebar). CSS positions the sidebar
@@ -138,18 +157,6 @@
         <!-- Workspace header: page title + HUD stats. -->
         <header class="fc-workspace-header">
           <div class="fc-workspace-header__title-wrap">
-            <!--
-              Hero logo — animated voxel oblate spheroid that auto-rotates
-              to give the impression of a 3D eye orbiting. Replaced the
-              static SVG so the brand mark uses the same heerich voxel tool
-              as the rest of the page. Falls back gracefully if JS is off.
-              ARIA: role+label describe it as the brand mark; the heading
-              below provides the actual page title.
-            -->
-            <div id="fc-hero-logo-voxel"
-                 class="fc-hero-logo"
-                 tabindex="0"
-                 aria-label="Foveacast logo — drag or use arrow keys to spin"></div>
             <h1 class="fc-workspace-header__title">Predicted Eye Attention Heatmaps</h1>
             <!-- Etymology — what "Foveacast" means. Static copy; purely informational. -->
             <p class="fc-workspace-header__etymology">
