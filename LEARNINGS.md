@@ -27,7 +27,7 @@ Every call site in boot() uses the bound form. The real functions stay free of i
 
 ---
 
-: retiring file:// and unlocking WASM threading
+## 2026-04-22 — COEP service worker: retiring file:// and unlocking WASM threading
 
 **Why COEP is hard on GitHub Pages.** Pages cannot set `Cross-Origin-Embedder-Policy: require-corp` via its CDN configuration — there is no `_headers` file equivalent. The standard workaround is the [coi-serviceworker](https://github.com/gzuidhof/coi-serviceworker) pattern: a single JS file that doubles as the in-page registration shim *and* the service worker itself. On registration it intercepts every fetch and adds COEP/COOP headers to the responses, making `crossOriginIsolated = true` without any CDN cooperation.
 
