@@ -89,19 +89,50 @@
       <nav class="fc-topnav" aria-label="Primary navigation">
         <div class="fc-topnav__brand">
           <!--
-            Eye logo mark — inlined so it appears before JS loads.
+            Voxel logo mark — inlined so it appears before JS loads, and so
             `currentColor` picks up `.fc-topnav__logo-mark { color: var(--fc-primary) }`.
-            The same geometry is exported as iconVoxelMark from ui/icons.js.
+            Coarse outline version of the hero voxel oblate-spheroid;
+            regenerate via `node scripts/generate-voxel-logo-snapshot.js`
+            (body mirrored in iconVoxelMark inside ui/icons.js).
             aria-hidden: the wordmark span carries the accessible label.
           -->
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+          <svg xmlns="http://www.w3.org/2000/svg"
+               viewBox="19.15 19.71 31.7 30.58"
                class="fc-topnav__logo-mark"
-               fill="none" aria-hidden="true" focusable="false">
-            <path stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"
-                  d="M2,12 C5,5 19,5 22,12 C19,19 5,19 2,12 Z
-                     M12,9 L14.6,10.5 L14.6,13.5 L12,15 L9.4,13.5 L9.4,10.5 Z"/>
-            <path fill="currentColor"
-                  d="M12,10.5 A1.5,1.5 0 0 1 12,13.5 A1.5,1.5 0 0 1 12,10.5 Z"/>
+               fill="none" stroke="currentColor" stroke-width="1"
+               aria-hidden="true" focusable="false">
+            <polygon points="30.0503,32.1425 30.0503,37.858 35,35.0003 35,29.2848" />
+            <polygon points="35,29.2848 39.9497,32.1425 39.9497,37.858 35,35.0003" />
+            <polygon points="30.0503,26.427 35,23.5693 30.0503,20.7116 25.1005,23.5693" />
+            <polygon points="39.9497,26.427 44.8995,23.5693 39.9497,20.7116 35,23.5693" />
+            <polygon points="30.0503,26.427 30.0503,32.1425 35,29.2848 35,23.5693" />
+            <polygon points="35,23.5693 39.9497,26.427 39.9497,32.1425 35,29.2848" />
+            <polygon points="25.1005,35.0002 25.1005,40.7158 30.0503,37.858 30.0503,32.1425" />
+            <polygon points="20.1508,32.1425 25.1005,35.0002 25.1005,40.7158 20.1508,37.858" />
+            <polygon points="44.8995,35.0002 44.8995,40.7158 49.8492,37.858 49.8492,32.1425" />
+            <polygon points="39.9497,32.1425 44.8995,35.0002 44.8995,40.7158 39.9497,37.858" />
+            <polygon points="25.1005,29.2847 30.0503,26.427 25.1005,23.5693 20.1508,26.427" />
+            <polygon points="44.8995,29.2847 49.8492,26.427 44.8995,23.5693 39.9497,26.427" />
+            <polygon points="25.1005,29.2847 25.1005,35.0002 30.0503,32.1425 30.0503,26.427" />
+            <polygon points="20.1508,26.427 25.1005,29.2847 25.1005,35.0002 20.1508,32.1425" />
+            <polygon points="44.8995,29.2847 44.8995,35.0002 49.8492,32.1425 49.8492,26.427" />
+            <polygon points="39.9497,26.427 44.8995,29.2847 44.8995,35.0002 39.9497,32.1425" />
+            <polygon points="20.1508,37.858 25.1005,40.7157 25.1005,46.4312 20.1508,43.5735" />
+            <polygon points="44.8995,40.7157 44.8995,46.4312 49.8492,43.5735 49.8492,37.858" />
+            <polygon points="25.1005,35.0002 30.0503,32.1425 25.1005,29.2847 20.1508,32.1425" />
+            <polygon points="44.8995,35.0002 49.8492,32.1425 44.8995,29.2847 39.9497,32.1425" />
+            <polygon points="20.1508,32.1425 25.1005,35.0002 25.1005,40.7157 20.1508,37.858" />
+            <polygon points="44.8995,35.0002 44.8995,40.7157 49.8492,37.858 49.8492,32.1425" />
+            <polygon points="30.0503,43.5734 30.0503,49.2889 35,46.4312 35,40.7157" />
+            <polygon points="25.1005,40.7157 30.0503,43.5734 30.0503,49.2889 25.1005,46.4312" />
+            <polygon points="39.9497,43.5734 39.9497,49.2889 44.8995,46.4312 44.8995,40.7157" />
+            <polygon points="35,40.7157 39.9497,43.5734 39.9497,49.2889 35,46.4312" />
+            <polygon points="30.0503,37.8579 35,35.0002 30.0503,32.1425 25.1005,35.0002" />
+            <polygon points="39.9497,37.8579 44.8995,35.0002 39.9497,32.1425 35,35.0002" />
+            <polygon points="30.0503,37.8579 30.0503,43.5734 35,40.7157 35,35.0002" />
+            <polygon points="25.1005,35.0002 30.0503,37.8579 30.0503,43.5734 25.1005,40.7157" />
+            <polygon points="39.9497,37.8579 39.9497,43.5734 44.8995,40.7157 44.8995,35.0002" />
+            <polygon points="35,35.0002 39.9497,37.8579 39.9497,43.5734 35,40.7157" />
           </svg>
           <span class="fc-topnav__wordmark" aria-label="Foveacast">Foveacast</span>
         </div>
@@ -212,7 +243,6 @@
             predicted attention heatmap. PNG or JPEG, up to 20&nbsp;MB.
             Controls appear after the first analysis.
           </p>
-          <p class="fc-disclaimer">Runs locally — your image never leaves this tab.</p>
         </div>
 
         <!-- Mount point: status banner (model loading, errors, etc.).
