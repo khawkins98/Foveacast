@@ -523,8 +523,14 @@ a:hover {
   position: absolute;
   right: -20px;
   top: 0;
-  width: 380px;
-  height: 380px;
+  /*
+   * Fluid size: holds at 380 px up to a 1200 px viewport, then grows
+   * linearly at 0.25× the extra viewport width, capped at 600 px (~2080
+   * px viewport). Keeps narrow layouts unchanged, fills the wider empty
+   * space on big monitors without the logo swallowing the page.
+   */
+  width:  clamp(380px, calc(380px + (100vw - 1200px) * 0.25), 600px);
+  height: clamp(380px, calc(380px + (100vw - 1200px) * 0.25), 600px);
   opacity: 0.85;
   cursor: grab;
   /* why: prevent the page scrolling during a horizontal drag gesture */
