@@ -399,12 +399,18 @@ a:hover {
 
 /*
  * Rest-state variant — once the voxel-bg.js controller re-parents the
- * element into .fc-main, it sits behind the page content as ambient
- * decoration. Absolute positioning anchors it to the column; opacity
- * and transform classes drive the loading→ready transition.
+ * element into .fc-main, it becomes a fixed viewport decoration pinned to
+ * the bottom-right corner so it stays in view while the user scrolls the
+ * analysis results. z-index: 0 keeps it behind all content (z-index ≥ 1)
+ * while remaining above the page background.
+ *
+ * The base rule below handles the defensive --loading case (element briefly
+ * in .fc-main before morph begins) and provides defaults that --ready then
+ * overrides.
  */
 .fc-main > .fc-voxel-bg {
-  position: absolute;
+  position: fixed;
+  /* Defensive defaults; --ready overrides bottom/right. */
   top: 0;
   left: 0;
   right: 0;
@@ -414,11 +420,8 @@ a:hover {
   justify-content: center;
   z-index: 0;
   opacity: 0;
-  transition:
-    opacity 1s ease,
-    transform 1.5s ease;
-  /* Contain the SVG so it does not overflow the main column. */
-  overflow: hidden;
+  transition: opacity 1s ease;
+  pointer-events: none;
 }
 
 .fc-main > .fc-voxel-bg.fc-voxel-bg--loading {
@@ -426,8 +429,18 @@ a:hover {
 }
 
 .fc-main > .fc-voxel-bg.fc-voxel-bg--ready {
-  opacity: 0.15;
-  transform: scale(0.65) translate(55%, -25%);
+  /* Pin to bottom-right; ~70 px bleed so the sphere sits half-cropped
+     at the corner rather than floating as an island. */
+  top: auto;
+  left: auto;
+  right: -70px;
+  bottom: -70px;
+  /* Auto-size to the SVG instead of stretching to fill the viewport. */
+  width: auto;
+  height: auto;
+  overflow: visible;
+  opacity: 0.12;
+  transform: none;
 }
 
 /* Ensure flex children stacked after .fc-voxel-bg sit on top of it. */
