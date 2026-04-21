@@ -404,7 +404,12 @@ export function createVoxelLogo(containerEl) {
     // why: 14 ms floor caps to ~60 fps on high-refresh displays so rotation
     // speed stays perceptually constant regardless of the panel's Hz.
     if (ts - lastTs >= 14) {
-      if (!isDragging) {
+      // Advance rotation only when not dragging AND not paused. Skipping
+      // the velocity-floor line while paused is the whole reason this
+      // branch exists — otherwise DEG_PER_FRAME * (1 - FRICTION) would
+      // creep velocity back above zero every frame and the logo would
+      // silently start spinning again a few frames after a pause.
+      if (!isDragging && !paused) {
         angle = (angle + velocity + 360) % 360;
 
         if (prefersReduced) {
@@ -417,7 +422,6 @@ export function createVoxelLogo(containerEl) {
           if (Math.abs(velocity) < 0.005 && hoverSettled) {
             velocity = 0;
             hoverT   = isHovered ? 1 : 0;
-            // Ease hoverT + render one final frame at the settled values.
             render(ts);
             rafAlive = false;
             return; // don't re-schedule — static until user acts again
@@ -429,6 +433,7 @@ export function createVoxelLogo(containerEl) {
           velocity = velocity * FRICTION + DEG_PER_FRAME * (1 - FRICTION);
         }
       }
+
       // Ease hover state toward its target every frame. Faster attack than
       // release matches how most hover/press interactions feel right.
       const hoverTarget = isHovered ? 1 : 0;
@@ -436,6 +441,17 @@ export function createVoxelLogo(containerEl) {
       hoverT += (hoverTarget - hoverT) * rate;
       render(ts);
       lastTs = ts;
+
+      // While paused, the only reasons to keep ticking are (a) the
+      // hover-out transition is still in flight and (b) the pointer is
+      // over the logo and the heat spot needs to follow mouse moves.
+      // Once neither is true, stop rAF so the paused logo sits still.
+      if (paused && !isHovered && Math.abs(hoverT) < 0.005) {
+        hoverT   = 0;
+        render(ts);
+        rafAlive = false;
+        return;
+      }
     }
     rafId = requestAnimationFrame(frame);
   }
