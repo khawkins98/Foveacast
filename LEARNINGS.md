@@ -6,6 +6,16 @@ This file is not a changelog (that's `CHANGELOG.md`) and it isn't the spec (that
 
 ---
 
+## 2026-04-21 — Voxel hero logo: tap-vs-drag, sticky placement, and unifying the loading indicator
+
+**Tap vs drag on the same pointer stream.** The hero voxel logo supports both drag-to-spin and click-to-pause on the same element. Distinguishing them required a `pointerHasMoved` flag: reset on `pointerdown`, set to `true` on `pointermove` when accumulated displacement exceeds 3px. On `pointerup`, if the flag is still false it's a tap and we toggle pause; if true, we treat it as a drag release. One extra case: `pointercancel` (browser interrupts the gesture — incoming notification, scroll takeover). We pre-set `pointerHasMoved = true` in the cancel handler so a cancelled gesture doesn't spuriously fire a pause toggle. Keyboard (Space/Enter) calls `togglePause()` directly with no ambiguity.
+
+**Replacing the wireframe cube/sphere with the same heatmap eye as the hero logo.** The original `voxel-bg.js` had a cube→sphere morph that looked good in isolation but was visually disconnected from the hero logo we built later in the same PR. We replaced it with the same oblate-spheroid heatmap geometry. The main question was timing: `setState('ready')` triggers a 200 ms overlay fade-out, but the element also needs to re-parent into the main column at the end of that fade. Calling `onReady()` first and delaying the DOM re-parent by 250 ms (50 ms headroom past the fade) keeps the spinner visible throughout the transition. If a queued inference run calls `activate()` within that window, the state has already advanced to `'spinning'`, so the delayed re-parent guard (`currentState !== 'ready'`) skips the move and there is no race condition. The cube→sphere morph pattern is preserved in `docs/heerich-notes.md` for reference even though `voxel-bg.js` no longer uses it.
+
+Code in `docs/src/ui/voxel-logo.js` (hero logo) and `docs/src/ui/voxel-bg.js` (loading indicator).
+
+---
+
 ## 2026-04-20 — Voxel loading indicator: heerich style shape + CSS-vs-rAF for compositor smoothness
 
 Two related gotchas in turning the heerich wireframe cube into Foveacast's loading indicator.
