@@ -73,6 +73,8 @@ describe('renderOutput', () => {
   let outputCanvasWrap;
   /** @type {HTMLElement} */
   let outputCaption;
+  /** @type {HTMLElement} */
+  let diagEl;
 
   const fakeImage = { naturalWidth: 200, naturalHeight: 100 };
   const fakeHeatmap = { width: 200, height: 100 };
@@ -110,17 +112,18 @@ describe('renderOutput', () => {
     // eslint-disable-next-line no-extend-native
     HTMLCanvasElement.prototype.getContext = () => ctxStub;
 
-    // Build a minimal DOM structure. outputCaption needs a parentNode so
-    // the diagnostics <details> insertBefore call has somewhere to go.
+    // Build a minimal DOM structure mirroring what main.js creates at boot.
     document.body.innerHTML = `
       <div id="container">
         <section id="sec" hidden></section>
         <div id="wrap" hidden></div>
         <p id="cap" hidden></p>
+        <details id="diag" hidden><summary>Diagnostics</summary></details>
       </div>`;
     outputSection = document.getElementById('sec');
     outputCanvasWrap = document.getElementById('wrap');
     outputCaption = document.getElementById('cap');
+    diagEl = document.getElementById('diag');
   });
 
   afterEach(() => {
@@ -128,7 +131,7 @@ describe('renderOutput', () => {
     document.body.innerHTML = '';
   });
 
-  const domNodes = () => ({ outputSection, outputCanvasWrap, outputCaption });
+  const domNodes = () => ({ outputSection, outputCanvasWrap, outputCaption, diagEl });
 
   it('reveals outputSection and outputCanvasWrap', () => {
     renderOutput(
@@ -208,7 +211,7 @@ describe('renderOutput', () => {
     expect(outputCanvasWrap.classList.contains('fc-output__canvas-wrap--sidebyside')).toBe(false);
   });
 
-  it('creates a diagnostics <details> element when diagnostics are provided', () => {
+  it('shows diagEl and populates it when diagnostics are provided', () => {
     renderOutput(
       {
         image: fakeImage, heatmapCanvas: fakeHeatmap, view: 'overlay', opacity: 0.6,
@@ -223,18 +226,58 @@ describe('renderOutput', () => {
       },
       domNodes(),
     );
-    const diagEl = document.getElementById('fc-diagnostics');
-    expect(diagEl).not.toBeNull();
-    expect(diagEl.tagName.toLowerCase()).toBe('details');
+    expect(diagEl.hidden).toBe(false);
     expect(diagEl.textContent).toContain('800 × 600');
   });
 
-  it('does not create a diagnostics element when diagnostics is null', () => {
+  it('hides diagEl when diagnostics is null', () => {
     renderOutput(
       { image: fakeImage, heatmapCanvas: fakeHeatmap, view: 'overlay', opacity: 0.6,
         fixation: null, origDims: null, diagnostics: null },
       domNodes(),
     );
+    expect(diagEl.hidden).toBe(true);
+  });
+
+  it('hides diagEl on a subsequent render after a render with diagnostics', () => {
+    const fakeDiagnostics = {
+      sourceWidth: 800, sourceHeight: 600, modelInputDims: [240, 320],
+      saliencyLength: 76800, saliencyMin: '0', saliencyMax: '1', saliencyMean: '0.5',
+      peakLocation: '(0, 0)',
+    };
+    renderOutput(
+      { image: fakeImage, heatmapCanvas: fakeHeatmap, view: 'overlay', opacity: 0.6,
+        fixation: null, origDims: null, diagnostics: fakeDiagnostics },
+      domNodes(),
+    );
+    expect(diagEl.hidden).toBe(false);
+
+    // Second render without diagnostics — panel must go back to hidden.
+    renderOutput(
+      { image: fakeImage, heatmapCanvas: fakeHeatmap, view: 'overlay', opacity: 0.6,
+        fixation: null, origDims: null, diagnostics: null },
+      domNodes(),
+    );
+    expect(diagEl.hidden).toBe(true);
+  });
+
+  it('uses the passed diagEl rather than querying the document by id', () => {
+    // Rename the element's id so getElementById would return null; the
+    // function must still work using the passed reference.
+    diagEl.id = 'fc-diagnostics-renamed';
+    const fakeDiagnostics = {
+      sourceWidth: 100, sourceHeight: 100, modelInputDims: [128, 128],
+      saliencyLength: 1024, saliencyMin: '0', saliencyMax: '1', saliencyMean: '0.5',
+      peakLocation: '(0, 0)',
+    };
+    renderOutput(
+      { image: fakeImage, heatmapCanvas: fakeHeatmap, view: 'overlay', opacity: 0.6,
+        fixation: null, origDims: null, diagnostics: fakeDiagnostics },
+      domNodes(),
+    );
+    expect(diagEl.hidden).toBe(false);
+    expect(diagEl.textContent).toContain('100 × 100');
+    // No stray element was created under the original id.
     expect(document.getElementById('fc-diagnostics')).toBeNull();
   });
 

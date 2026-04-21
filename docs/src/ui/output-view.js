@@ -48,6 +48,7 @@ import { compositeImageAndHeatmap } from '../render/saliency-canvas.js';
  *   outputSection: HTMLElement,
  *   outputCanvasWrap: HTMLElement,
  *   outputCaption: HTMLElement,
+ *   diagEl: HTMLElement,
  * }} OutputDomNodes
  */
 
@@ -60,7 +61,7 @@ import { compositeImageAndHeatmap } from '../render/saliency-canvas.js';
  * @returns {HTMLCanvasElement | null} The composite canvas, or null when
  *   view is 'original' (no composite is produced in that mode).
  */
-export function renderOutput(viewModel, { outputSection, outputCanvasWrap, outputCaption }) {
+export function renderOutput(viewModel, { outputSection, outputCanvasWrap, outputCaption, diagEl }) {
   const {
     image,
     heatmapCanvas,
@@ -102,21 +103,11 @@ export function renderOutput(viewModel, { outputSection, outputCanvasWrap, outpu
   outputCaption.hidden = false;
 
   // Diagnostic panel — collapsible details below the caption showing
-  // what the pipeline actually did. Only rendered when diagnostics are
-  // available; no empty container is left in the DOM otherwise.
+  // what the pipeline actually did. The caller creates diagEl once at
+  // boot and passes it here; we show/hide it every render rather than
+  // relying on a lazy getElementById inside this module.
   if (diagnostics) {
     const d = diagnostics;
-    let diagEl = document.getElementById('fc-diagnostics');
-    if (!diagEl) {
-      diagEl = document.createElement('details');
-      diagEl.id = 'fc-diagnostics';
-      diagEl.style.cssText = 'margin:0.5rem 0; font-size:0.75rem; color:#666; max-width:600px;';
-      const summary = document.createElement('summary');
-      summary.textContent = 'Diagnostics';
-      summary.style.cursor = 'pointer';
-      diagEl.appendChild(summary);
-      outputCaption.parentNode.insertBefore(diagEl, outputCaption.nextSibling);
-    }
     const lines = [
       `Source image: ${d.sourceWidth} × ${d.sourceHeight} px`,
       `Model input: ${d.modelInputDims[0]} × ${d.modelInputDims[1]} (NCHW, RGB, 0–255)`,
@@ -134,6 +125,9 @@ export function renderOutput(viewModel, { outputSection, outputCanvasWrap, outpu
     pre.textContent = lines.join('\n');
     diagEl.appendChild(pre);
   }
+  // Always sync visibility — a render without diagnostics (e.g. view
+  // change before a second inference) must hide the stale panel.
+  diagEl.hidden = !diagnostics;
 
   if (view === 'original') {
     const plain = drawPlainImageCanvas(image);

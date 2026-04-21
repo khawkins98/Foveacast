@@ -6,6 +6,27 @@ This file is not a changelog (that's `CHANGELOG.md`) and it isn't the spec (that
 
 ---
 
+## 2026-04-21 — Extracting boot-time helpers from main.js: modules, deps injection, and bound wrappers
+
+**Why a separate module was necessary.** The obvious first move — pull `reloadModel` and `handleFile` up to module level in main.js so tests could import them directly — does not work. The bottom of main.js calls `boot()` immediately (or queues it on `DOMContentLoaded`). Any `import` of main.js in a test triggers the full boot sequence: DOM queries, dropzone setup, model load kick-off. The extracted functions need their own file so tests can import them cleanly with no side effects.
+
+**Explicit deps instead of closure capture.** Each function receives a `deps` object rather than closing over `boot()` locals. This is dependency injection without a framework: the caller builds one deps object at boot time and the function is stateless beyond what it's handed. Unit tests supply mock deps with `vi.fn()` stubs, covering queueing, banner heuristics, and queued-file drain without touching the DOM or loading ONNX. The pattern is in `docs/src/boot-handlers.js`; tests are in `tests/boot-handlers.test.js`.
+
+**Bound wrappers restore clean call sites.** Accepting `(options, deps)` is fine for tests but verbose at 10+ call sites in boot(). The fix is thin wrappers built once after all deps exist:
+
+```js
+const boundHandleFile = (file) => handleFile(file, handleFileDeps);
+const boundReloadModel = (opts) => reloadModel(opts, reloadModelDeps);
+```
+
+Every call site in boot() uses the bound form. The real functions stay free of implicit state.
+
+**`const` closures and the temporal dead zone.** `fileCallbacks.onFile` (early in boot()) references `boundHandleFile`, which is defined roughly 450 lines later. That looks like a TDZ violation. It's not, because: (a) the callback captures the variable *binding*, not the current value, and (b) the callback only fires when a user drops a file — which is always after `boot()` has run to completion. By then `boundHandleFile` is defined. TDZ only throws if you *read* a `const` before its declaration line executes in the current call stack; a deferred callback is not that.
+
+**`runInferenceOnImage` stays in `boot()`.** It closes over ~10 boot-local names (renderOutput, updateReport, status, hud, outputSection, and more). Extracting it would require an equally large deps object and is a natural follow-up, not part of this pass. The issue only asked for `reloadModel` and `handleFile`.
+
+---
+
 ## 2026-04-22 — COEP service worker: retiring file:// and unlocking WASM threading
 
 **Why COEP is hard on GitHub Pages.** Pages cannot set `Cross-Origin-Embedder-Policy: require-corp` via its CDN configuration — there is no `_headers` file equivalent. The standard workaround is the [coi-serviceworker](https://github.com/gzuidhof/coi-serviceworker) pattern: a single JS file that doubles as the in-page registration shim *and* the service worker itself. On registration it intercepts every fetch and adds COEP/COOP headers to the responses, making `crossOriginIsolated = true` without any CDN cooperation.
