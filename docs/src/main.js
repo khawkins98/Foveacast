@@ -845,7 +845,16 @@ function boot() {
     dropzone.setEnabled(true);
     controls.setDisabled(false);
     controls.setDurationLoading(false);
-    if (!silent) status.showReady();
+    if (!silent) {
+      // Show "Model ready" inside the drop zone rather than in a
+      // separate banner above it — the two messages were redundant.
+      // The label resets to the default on the next setEnabled(true)
+      // call (i.e. after inference completes), so it only appears once.
+      dropzone.setLabel(
+        'Model ready \u2014 drop a screenshot here, click to choose a file, or paste from the clipboard.',
+      );
+      status.clear();
+    }
     // Trigger the cube→sphere morph now that the model is ready. The
     // overlay stays up until voxelBg fires onReady (above), which then
     // calls setAppBusy(false). If voxelBg is missing, fall back to the

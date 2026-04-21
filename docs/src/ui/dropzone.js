@@ -86,6 +86,13 @@ export function createDropzone({ onFile, onError }) {
   hint.textContent = 'PNG or JPEG, up to 20 MB.';
   element.appendChild(hint);
 
+  // why: reinforces the privacy promise at the point of action, where
+  // users are most likely to have concerns about uploading an image.
+  const privacy = document.createElement('p');
+  privacy.className = 'fc-dropzone__hint';
+  privacy.textContent = 'Runs locally \u2014 your image never leaves this tab.';
+  element.appendChild(privacy);
+
   // Hidden file input — cloned-and-replaced on each pick so the same
   // file can be chosen twice in a row. (Browsers suppress a `change`
   // event when the selected file is identical to the prior value.)
@@ -232,5 +239,17 @@ export function createDropzone({ onFile, onError }) {
     input.click();
   }
 
-  return { element, setEnabled, setBusy, openPicker };
+  /**
+   * Override the visible label text without changing the enabled/disabled
+   * state. Used after model load to surface "Model ready" inside the
+   * drop zone instead of showing a separate status banner.
+   * Automatically reset on the next {@link setEnabled} call.
+   *
+   * @param {string} text
+   */
+  function setLabel(text) {
+    label.textContent = text;
+  }
+
+  return { element, setEnabled, setBusy, openPicker, setLabel };
 }
