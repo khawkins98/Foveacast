@@ -1,9 +1,15 @@
 # Vendored third-party libraries
 
-This folder carries runtime dependencies as their original minified files, so Foveacast works when unzipped and opened directly from the filesystem — no CDN round-trip, no "jsDelivr is down today" failure mode.
+This folder carries runtime dependencies as their original minified files so Foveacast works without a CDN round-trip. Scripts are pinned to reviewed bytes and protected by SRI hashes.
+
+Note: `coi-sw.js` must live at the root of the served site (`docs/coi-sw.js`) rather than
+under `docs/vendor/` because a service worker's scope is determined by its URL. A SW at
+`/vendor/coi-sw.js` would only control requests under `/vendor/`, not the whole app.
+Its source, version, licence, and SRI are tracked here even though the file is at the root.
 
 | File | Package | Version | Source URL | Licence | Licence file | SRI (sha384) |
 |---|---|---|---|---|---|---|
+| `../coi-sw.js` | `coi-serviceworker` | 0.1.7 | https://github.com/gzuidhof/coi-serviceworker | MIT | [LICENCE-COI-SW.txt](LICENCE-COI-SW.txt) | `YipJyYgokClYMywyER53bs1C8eZ33vS1UWzn11T726UMKtvr8yMUFqe0xIhrY076` |
 | `ort.wasm.min.js` | `onnxruntime-web` | 1.24.3 | https://cdn.jsdelivr.net/npm/onnxruntime-web@1.24.3/dist/ort.wasm.min.js | MIT | [LICENCE-ORT-WEB.txt](LICENCE-ORT-WEB.txt) | `1SBQgvQsxJRGAOAJ6K2nPaLO1SKelZwoF+biXgv2/D9fPspYLhvG4WIMDb/BUoJC` |
 | `ort-wasm-simd-threaded.mjs` | `onnxruntime-web` | 1.24.3 | https://cdn.jsdelivr.net/npm/onnxruntime-web@1.24.3/dist/ort-wasm-simd-threaded.mjs | MIT | [LICENCE-ORT-WEB.txt](LICENCE-ORT-WEB.txt) | `/xM/eq8aUBJZgBuVwTQcLA5KlNmP6HOaENdJVgCkA/06cOMdL9EIQtmMuXOlMZEd` |
 | `ort-wasm-simd-threaded.wasm` | `onnxruntime-web` | 1.24.3 | https://cdn.jsdelivr.net/npm/onnxruntime-web@1.24.3/dist/ort-wasm-simd-threaded.wasm | MIT | [LICENCE-ORT-WEB.txt](LICENCE-ORT-WEB.txt) | `sZw0EVBgUn+dNhQfjHDg8lwtmicKMm1bTvWS4rIRNxoVN1S9HkVyJ2nreMpYruEZ` |
@@ -13,9 +19,9 @@ Licence terms require the full licence text to travel with the code. The files a
 
 ## Why the WASM-only ORT Web build
 
-`onnxruntime-web` ships several entry points. We use `ort.wasm.min.js` rather than `ort.all.min.js` because WebGPU is out of reach — GitHub Pages cannot set the `Cross-Origin-Embedder-Policy: require-corp` header that cross-origin isolation requires, and without COEP the WebGPU execution provider is a larger WASM binary shipping capability we cannot use. `ort.wasm.min.js` is the CPU-only build: one 12 MB WASM file, one small JS entry, one small glue module. Everything runs single-threaded. That is the permanent performance floor for this project's distribution model.
+`onnxruntime-web` ships several entry points. We use `ort.wasm.min.js` rather than `ort.all.min.js` because WebGPU has not yet been evaluated — the binary is larger and WebGPU inference performance needs its own benchmarking before enabling. `ort.wasm.min.js` is the CPU-only build: one 12 MB WASM file, one small JS entry, one small glue module.
 
-The wasm binary is named `ort-wasm-simd-threaded.wasm` for historical reasons. When `crossOriginIsolated` is false in the host page — which is always, on Pages — ORT Web detects it and runs single-threaded against the same binary. No separate no-threads build exists.
+The WASM binary (`ort-wasm-simd-threaded.wasm`) supports both single- and multi-threaded execution. `loader.js` sets `numThreads` conditionally: multi-threaded when `crossOriginIsolated` is true (which `coi-sw.js` ensures), single-threaded otherwise. The threaded path gives a typical 2–4× speedup on desktop hardware.
 
 ## Updating a vendored file (with SRI)
 
