@@ -184,6 +184,17 @@ a:hover {
 
 .fc-topnav__brand {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Isometric cube logo mark — size and tint matching the wordmark. */
+.fc-topnav__logo-mark {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  color: var(--fc-primary);
 }
 
 .fc-topnav__wordmark {
@@ -310,6 +321,133 @@ a:hover {
   flex-direction: column;
   gap: 1.5rem;
   padding: calc(var(--fc-topnav-h) + 2rem) 2rem 2rem;
+
+  /* why: required so .fc-voxel-bg (position: absolute) anchors to this
+     column rather than the viewport or a higher ancestor. */
+  position: relative;
+}
+
+/* -- Voxel background decoration ------------------------------------------ */
+
+/*
+ * .fc-voxel-bg is a purely decorative, aria-hidden SVG container driven by
+ * ui/voxel-bg.js. It renders the same heatmap oblate-spheroid eye as the hero
+ * logo. Pointer-events: none throughout.
+ *
+ * State classes applied by voxel-bg.js:
+ *   .fc-voxel-bg--loading  →  prominent, centred, full-opacity (spinning eye)
+ *   .fc-voxel-bg--ready    →  hidden in rest container (opacity: 0)
+ *   .fc-voxel-bg--spinning →  CSS-animated during inference runs
+ */
+.fc-voxel-bg {
+  /* Default colouring — heerich writes stroke as an SVG presentation
+     attribute, so CSS custom properties (var()) won't resolve inside
+     it. We set `color` here and the heerich style config uses
+     `currentColor` so the design token propagates via the cascade. */
+  color: var(--fc-primary);
+  pointer-events: none;
+}
+
+.fc-voxel-bg svg {
+  /* The heerich SVG is unitless; scale it to a visible size. */
+  width: 260px;
+  height: 260px;
+  display: block;
+}
+
+/*
+ * In-overlay variant — while the model is loading, .fc-voxel-bg lives
+ * inside .fc-busy-overlay__card and IS the loading indicator. Full-opacity,
+ * centred in the card. ui/voxel-bg.js re-parents the element into .fc-main
+ * once the model is ready, at which point the rules below take over.
+ */
+.fc-busy-overlay__card .fc-voxel-bg {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+}
+
+.fc-busy-overlay__card .fc-voxel-bg svg {
+  width: 220px;
+  height: 220px;
+}
+
+/*
+ * Inference-time spin — applied to the SVG via the `--spinning` class
+ * by ui/voxel-bg.js when an analysis run starts. Driven by CSS rather
+ * than a JS rAF loop because ONNX inference blocks the main thread,
+ * which would freeze any JS-driven animation. Compositor-thread
+ * `transform` keeps ticking even while the main thread is busy with
+ * the model.
+ */
+@keyframes fc-voxel-spin {
+  to { transform: rotate(360deg); }
+}
+
+.fc-voxel-bg.fc-voxel-bg--spinning svg {
+  transform-origin: 50% 50%;
+  animation: fc-voxel-spin 4s linear infinite;
+  /* will-change is a hint that promotes the SVG to its own layer so
+     the rotation is composited rather than re-rasterised each tick. */
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-voxel-bg.fc-voxel-bg--spinning svg {
+    animation: none;
+  }
+}
+
+/*
+ * Rest-state variant — once re-parented into .fc-main, the element is hidden
+ * (opacity: 0). The hero logo fills the decorative background role; this
+ * element only reappears via activate() during inference runs.
+ */
+.fc-main > .fc-voxel-bg {
+  position: fixed;
+  /* Defensive defaults; --ready overrides bottom/right. */
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 1s ease;
+  pointer-events: none;
+}
+
+.fc-main > .fc-voxel-bg.fc-voxel-bg--loading {
+  opacity: 0.45;
+}
+
+.fc-main > .fc-voxel-bg.fc-voxel-bg--ready {
+  /* why: ambient decoration removed — the sticky hero logo now fills this
+     role. The element stays in the DOM for the analysis-run spinner below. */
+  opacity: 0;
+}
+
+/* Restore visibility during active inference so the spin indicator works. */
+.fc-main > .fc-voxel-bg.fc-voxel-bg--ready.fc-voxel-bg--spinning {
+  opacity: 0.45;
+}
+
+/* Ensure flex children stacked after .fc-voxel-bg sit on top of it. */
+.fc-main > *:not(.fc-voxel-bg) {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-main > .fc-voxel-bg {
+    transition: none;
+  }
 }
 
 /*
@@ -337,12 +475,75 @@ a:hover {
   gap: 1rem;
 }
 
+/*
+ * Title-wrap stacking context — required so that the hero logo (z-index:-1)
+ * stays BEHIND the heading text but still ABOVE the page background.
+ * Without an explicit z-index here, z-index:-1 would fall below the nearest
+ * ancestor stacking context and disappear behind the page background.
+ */
+.fc-workspace-header__title-wrap {
+  position: relative;
+  z-index: 0;
+}
+
 .fc-workspace-header__eyebrow {
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.02em;
   color: var(--fc-primary);
   margin: 0 0 0.25rem;
+}
+
+/*
+ * Sticky hero logo host — zero-height position:sticky wrapper.
+ * Sits in the document flow between the topnav and <main>; because it has
+ * no height, it creates no layout gap. As the user scrolls, the host locks
+ * at `top` (just below the topnav) and the logo inside it stays in view for
+ * the rest of the page. pointer-events:none lets clicks fall through to
+ * content behind; the .fc-hero-logo child re-enables its own events.
+ */
+.fc-hero-logo-host {
+  position: sticky;
+  top: calc(var(--fc-topnav-h) + 20px);
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+  /* z-index:0 keeps the host in the normal stacking order so content
+     painted after it (main) naturally renders on top. */
+  z-index: 0;
+}
+
+/*
+ * Hero logo — absolutely positioned within the zero-height host.
+ * right:-20px lets the structure bleed slightly off the right viewport
+ * edge for a more organic, cropped-in feel. pointer-events:auto re-enables
+ * drag-to-spin interaction on the logo itself despite the host being none.
+ */
+.fc-hero-logo {
+  position: absolute;
+  right: -20px;
+  top: 0;
+  width: 380px;
+  height: 380px;
+  opacity: 0.85;
+  cursor: grab;
+  /* why: prevent the page scrolling during a horizontal drag gesture */
+  touch-action: none;
+  /* why: prevent text becoming selected while dragging over the element */
+  user-select: none;
+  pointer-events: auto;
+  color: var(--fc-primary);
+}
+
+.fc-hero-logo:focus-visible {
+  outline: 2px solid var(--fc-primary);
+  outline-offset: 4px;
+}
+
+/* Dimmed when auto-spin is paused via click/tap. */
+.fc-hero-logo--paused {
+  opacity: 0.45;
+  transition: opacity 0.3s ease;
 }
 
 .fc-workspace-header__title {
@@ -359,6 +560,16 @@ a:hover {
   letter-spacing: 0.01em;
   color: var(--fc-primary);
   margin: 0.15rem 0 0;
+}
+
+/* Etymology tag below the h1 — explains the portmanteau "fovea + cast". */
+.fc-workspace-header__etymology {
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--fc-on-surface-variant);
+  margin: 0.35rem 0 0;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
 }
 
 
@@ -1116,26 +1327,47 @@ body.fc-page-dragover .fc-dropzone {
   gap: 1.25rem;
 }
 
-/* Two-tone spinner ring: --fc-surface-high track, --fc-primary arc. */
-.fc-busy-overlay__spinner {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: 4px solid var(--fc-surface-high);
-  border-top-color: var(--fc-primary);
-  animation: fc-overlay-spin 0.75s linear infinite;
-}
-
-@keyframes fc-overlay-spin {
-  to { transform: rotate(360deg); }
-}
-
 .fc-busy-overlay__label {
   font-size: 0.9375rem;
   font-weight: 700;
   color: var(--fc-on-surface);
   letter-spacing: -0.01em;
   margin: 0;
+}
+
+/*
+ * Slow-load hint — fades in (via the [hidden] removal in main.js) after
+ * FC_SLOW_LOAD_HINT_MS so users on a first-visit/slow-network download
+ * get an explanation rather than a silent wait. Constrained width keeps
+ * it from sprawling on wide viewports.
+ */
+.fc-busy-overlay__hint {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--fc-on-surface-dim);
+  max-width: 32rem;
+  margin: 0;
+  text-align: center;
+  /* Reveal animation. The element starts hidden via the `hidden`
+     attribute, which display:none-s it; main.js removes the attribute
+     when the timer fires, and the opacity transition takes over. */
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+
+.fc-busy-overlay__hint:not([hidden]) {
+  opacity: 1;
+}
+
+.fc-busy-overlay__hint a {
+  color: var(--fc-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.fc-busy-overlay__hint a:hover,
+.fc-busy-overlay__hint a:focus-visible {
+  text-decoration-thickness: 2px;
 }
 
 /* -- Responsive: narrow viewport (< 900 px) ------------------------------ */

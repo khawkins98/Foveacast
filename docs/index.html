@@ -76,6 +76,21 @@
       -->
       <nav class="fc-topnav" aria-label="Primary navigation">
         <div class="fc-topnav__brand">
+          <!--
+            Eye logo mark — inlined so it appears before JS loads.
+            `currentColor` picks up `.fc-topnav__logo-mark { color: var(--fc-primary) }`.
+            The same geometry is exported as iconVoxelMark from ui/icons.js.
+            aria-hidden: the wordmark span carries the accessible label.
+          -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+               class="fc-topnav__logo-mark"
+               fill="none" aria-hidden="true" focusable="false">
+            <path stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"
+                  d="M2,12 C5,5 19,5 22,12 C19,19 5,19 2,12 Z
+                     M12,9 L14.6,10.5 L14.6,13.5 L12,15 L9.4,13.5 L9.4,10.5 Z"/>
+            <path fill="currentColor"
+                  d="M12,10.5 A1.5,1.5 0 0 1 12,13.5 A1.5,1.5 0 0 1 12,10.5 Z"/>
+          </svg>
           <span class="fc-topnav__wordmark" aria-label="Foveacast">Foveacast</span>
         </div>
         <div class="fc-topnav__links" role="list">
@@ -114,6 +129,25 @@
       </nav>
 
       <!--
+        Hero logo host — zero-height sticky container. position:sticky
+        makes it scroll with the page and then lock in place once it
+        reaches the threshold below the topnav. Zero height means no
+        layout gap is created; the logo hangs below it via absolute
+        positioning. pointer-events:none lets clicks pass through to
+        content behind it; the logo div inside re-enables its own events.
+      -->
+      <div class="fc-hero-logo-host" aria-hidden="true">
+        <!--
+          Animated voxel oblate spheroid. Draggable / keyboard-spinnable.
+          aria-hidden: the host is decorative; keyboard users reach the
+          focusable div inside only when tabbing (tabindex="0").
+        -->
+        <div id="fc-hero-logo-voxel"
+             class="fc-hero-logo"
+             tabindex="0"
+             aria-label="Foveacast logo — drag or use arrow keys to spin. Click or press Space to pause."></div>
+      </div>
+      <!--
         Main workspace — comes before the sidebar in the DOM so keyboard
         and AT users reach the primary action (the dropzone) before the
         secondary controls (the sidebar). CSS positions the sidebar
@@ -123,7 +157,12 @@
         <!-- Workspace header: page title + HUD stats. -->
         <header class="fc-workspace-header">
           <div class="fc-workspace-header__title-wrap">
-            <h1 class="fc-workspace-header__title">Foveacast: Predicted Eye Attention Heatmaps</h1>
+            <h1 class="fc-workspace-header__title">Predicted Eye Attention Heatmaps</h1>
+            <!-- Etymology — what "Foveacast" means. Static copy; purely informational. -->
+            <p class="fc-workspace-header__etymology">
+              <em>fovea centralis</em>: the retina's point of sharpest focus +
+              <em>cast</em>, to project and predict
+            </p>
             <!-- Updated by renderOutput() to show the active viewing duration. Hidden until first inference. -->
             <p class="fc-workspace-header__duration-label" id="fc-duration-label" hidden></p>
             <!--
@@ -263,8 +302,29 @@
     -->
     <div class="fc-busy-overlay" id="fc-busy-overlay" role="status" aria-atomic="true">
       <div class="fc-busy-overlay__card">
-        <div class="fc-busy-overlay__spinner" aria-hidden="true"></div>
+        <!--
+          Heatmap voxel eye — loading indicator while the model is being
+          fetched/initialised. ui/voxel-bg.js drives it: the same oblate-
+          spheroid heatmap shape as the hero logo spins here while loading,
+          then re-parents into .fc-main (opacity: 0) once the model is
+          ready. During inference runs activate()/deactivate() bring it back.
+        -->
+        <div id="fc-voxel-bg" class="fc-voxel-bg" aria-hidden="true"></div>
         <p class="fc-busy-overlay__label" id="fc-busy-overlay-label">Analysing…</p>
+        <!--
+          Slow-load hint. Hidden by default; main.js reveals it after a
+          short delay (FC_SLOW_LOAD_HINT_MS) when the busy overlay is
+          showing the model-load label, so it only appears for users
+          actually waiting on the first download.
+        -->
+        <p class="fc-busy-overlay__hint" id="fc-busy-overlay-hint" hidden>
+          Heads up — Foveacast loads a fairly large model (~57&nbsp;MB) on
+          first visit. After that it is cached locally and starts
+          quickly. Curious how it works?
+          <a href="https://github.com/khawkins98/Foveacast"
+             target="_blank"
+             rel="noopener noreferrer">See it on GitHub</a>.
+        </p>
       </div>
     </div>
 

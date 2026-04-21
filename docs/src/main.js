@@ -29,6 +29,8 @@ import { readHasRunSentinel, writeHasRunSentinel } from './ui/has-run-sentinel.j
 import { computeSaliencyMetrics, computeZoneThresholds, computeRuleOfThirds } from './pipeline/metrics.js';
 import { createReport } from './ui/report.js';
 import { createHud, updateHud, updateHudRuleOfThirds } from './ui/hud.js';
+import { createVoxelBg } from './ui/voxel-bg.js';
+import { createVoxelLogo } from './ui/voxel-logo.js';
 
 /**
  * Threshold (ms) above which we treat the first onProgress tick as a
@@ -41,6 +43,14 @@ import { createHud, updateHud, updateHudRuleOfThirds } from './ui/hud.js';
  * first-run banner once a slow progress tick arrives.
  */
 const FIRST_RUN_THRESHOLD_MS = 800;
+
+/**
+ * Delay before the slow-load hint inside the busy overlay appears.
+ * Tuned high enough that fast (cached) model loads never flash the
+ * hint, low enough that anyone on a real first-visit download sees an
+ * explanation before they assume the page is broken.
+ */
+const FC_SLOW_LOAD_HINT_MS = 3000;
 
 /**
  * @typedef {{
@@ -183,6 +193,59 @@ function boot() {
   const reportMount = mustGet('fc-report-mount');
   const toolbarEl = mustGet('fc-toolbar');
 
+  // --- Voxel hero logo --------------------------------------------------
+  // Auto-rotating oblate spheroid in the hero area. Purely decorative;
+  // failure is non-fatal — the hero text still reads correctly without it.
+  const heroLogoEl = document.getElementById('fc-hero-logo-voxel');
+  if (heroLogoEl) {
+    try {
+      createVoxelLogo(heroLogoEl);
+    } catch (err) {
+      console.warn('voxel-logo init failed:', err);
+    }
+  }
+
+  // --- Voxel background -------------------------------------------------
+  // While the model is loading, the voxel cube lives inside the busy
+  // overlay card and serves as the loading indicator. When the morph
+  // completes (cube → sphere), voxel-bg.js re-parents the element into
+  // .fc-main and notifies us so we can fade the overlay out.
+  // Decorative; failures are non-fatal because the element is aria-hidden
+  // and pointer-events:none.
+  const voxelBgEl = document.getElementById('fc-voxel-bg');
+  const mainEl = document.querySelector('.fc-main');
+  let voxelMorphCompleted = false;
+  const voxelBg = voxelBgEl
+    ? createVoxelBg(voxelBgEl, {
+        restContainer: mainEl,
+        onReady: () => {
+          voxelMorphCompleted = true;
+          // Fade the overlay AFTER the cube has fully morphed and been
+          // re-parented out of it, otherwise the morph would fade with
+          // the overlay.
+          setAppBusy(false);
+        },
+      })
+    : null;
+
+  // Scroll-driven rotation for the ambient sphere.
+  // Advances the camera angle 1° per 20 px of scroll so the sphere
+  // drifts gently as the user reads down the page without dominating the
+  // visual. setAngle() is a no-op unless the sphere is in its 'ready'
+  // rest state, so the handler is safe to attach unconditionally.
+  // Batched via rAF to avoid rebuilding the SVG geometry on every event.
+  if (voxelBg) {
+    let scrollRafPending = false;
+    window.addEventListener('scroll', () => {
+      if (scrollRafPending) return;
+      scrollRafPending = true;
+      requestAnimationFrame(() => {
+        scrollRafPending = false;
+        voxelBg.setAngle(45 + window.scrollY * 0.05);
+      });
+    }, { passive: true });
+  }
+
   // --- Status banner ----------------------------------------------------
   const status = createStatus();
   statusMount.appendChild(status.element);
@@ -318,6 +381,13 @@ function boot() {
    * @param {boolean} busy
    * @param {string} [label] - Text shown inside the overlay card.
    */
+  /**
+   * Outstanding setTimeout id for the slow-load hint reveal. Stored at
+   * boot scope so scheduleSlowLoadHint() can clear pending timers
+   * across successive setAppBusy() calls.
+   */
+  let slowLoadHintTimer = /** @type {number|null} */ (null);
+
   function setAppBusy(busy, label = 'Analysing…') {
     document.querySelector('.fc-topnav')?.classList.toggle('fc-topnav--busy', busy);
     const overlay = document.getElementById('fc-busy-overlay');
@@ -328,10 +398,58 @@ function boot() {
       }
       overlay.classList.toggle('fc-busy-overlay--active', busy);
     }
+    // Slow-load hint: only meaningful during a model load (the first
+    // visit downloads ~57 MB). Show after FC_SLOW_LOAD_HINT_MS so we do
+    // not flash explanatory text at users whose model loads quickly.
+    scheduleSlowLoadHint(busy, label);
+    // Voxel-as-spinner: once the model has loaded and the voxel has
+    // morphed to its ambient sphere, every subsequent busy=true (e.g.
+    // an inference run) brings the sphere back into the overlay card
+    // and spins it as the loading indicator. busy=false sends it back
+    // to its rest position. The very first model-load busy=true is
+    // skipped here because the voxel is already mounted in the overlay
+    // by index.html.
+    if (voxelBg && voxelMorphCompleted) {
+      if (busy) voxelBg.activate();
+      else voxelBg.deactivate();
+    }
     // Mirror busy state onto the new-image button so it cannot be used
     // while a model load or inference run is already in progress.
     const newUploadBtn = document.getElementById('fc-new-upload-btn');
     if (newUploadBtn) newUploadBtn.disabled = busy;
+  }
+
+  /**
+   * Show or hide the slow-load hint inside the busy overlay. Called from
+   * setAppBusy so the hint lifecycle stays bound to the overlay state.
+   *
+   * The hint only appears when:
+   *   - the overlay is being shown (busy = true), AND
+   *   - the label indicates a model load (not an inference run), AND
+   *   - the load takes longer than FC_SLOW_LOAD_HINT_MS.
+   *
+   * Cleared on every busy=false and on every new busy=true call so a
+   * pending timer from one load does not bleed into the next.
+   *
+   * @param {boolean} busy
+   * @param {string} label
+   */
+  function scheduleSlowLoadHint(busy, label) {
+    const hint = document.getElementById('fc-busy-overlay-hint');
+    if (!hint) return;
+    if (slowLoadHintTimer != null) {
+      clearTimeout(slowLoadHintTimer);
+      slowLoadHintTimer = null;
+    }
+    hint.hidden = true;
+    if (!busy) return;
+    // why: only show during model loads. Inference runs are short and the
+    // hint copy ("loads a fairly large model") would be misleading there.
+    if (!label.toLowerCase().startsWith('loading model')) return;
+    slowLoadHintTimer = window.setTimeout(() => {
+      hint.hidden = false;
+      slowLoadHintTimer = null;
+    }, FC_SLOW_LOAD_HINT_MS);
   }
 
   /**
@@ -728,7 +846,15 @@ function boot() {
     controls.setDisabled(false);
     controls.setDurationLoading(false);
     if (!silent) status.showReady();
-    setAppBusy(false);
+    // Trigger the cube→sphere morph now that the model is ready. The
+    // overlay stays up until voxelBg fires onReady (above), which then
+    // calls setAppBusy(false). If voxelBg is missing, fall back to the
+    // immediate fade so the user is not stuck behind the overlay.
+    if (voxelBg) {
+      voxelBg.setState('ready');
+    } else {
+      setAppBusy(false);
+    }
 
     // Drain any file the user dropped while we were still loading.
     // This is the second half of the demo-mode queued-drop flow.
@@ -1003,7 +1129,7 @@ function boot() {
       renderOutput();
       updateReport();
       // Reveal controls now that there is a real result to operate on
-      // (non-demo path). Safe to call repeatedly — no-op after first.
+      // (non-debug path). Safe to call repeatedly — no-op after first.
       showControls();
       status.clear();
 

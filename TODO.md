@@ -50,6 +50,21 @@ Animate a dot traversing the IoR fixation sequence with saccade lines drawing in
 
 ---
 
+## Speculative — structural input alongside the screenshot (2026-04-20)
+
+### P2 — Optional HTML input for element-level feedback
+
+Today the pipeline sees pixels. A designer gets a heatmap but no answer to "where does my primary CTA rank?" If the user could optionally drop the page's HTML alongside the screenshot, we could extract element bounding boxes (from `getBoundingClientRect`-style data or a serialised DOM snapshot) and score each one against the saliency field the model already produces. Output would be a ranked list: "Sign up button — 4th most salient region, 0.31 peak" next to the existing heatmap.
+
+Why this and not URL input: URL input is out of scope (line 57) because it breaks offline-first and introduces CORS. An HTML *file* the user provides alongside the screenshot does neither — it's still a local-only drop.
+
+Main concerns before committing:
+- The screenshot and the HTML snapshot have to agree on viewport and DPR, or the bounding boxes land in the wrong place on the heatmap. Users would need a small capture helper (bookmarklet? Playwright snippet in the docs?) to produce both in lockstep. That's real UX friction.
+- The saliency model itself doesn't get smarter from HTML — this is purely a *second track* of feedback derived from the existing heatmap. Worth doing only if element-level ranking is meaningfully more useful to users than the current visual overlay.
+- Adds a structural-analysis slice to `pipeline/` that currently doesn't exist. Not a layer violation, but a new responsibility.
+
+**Size:** ~3 days for a rough version (file input + DOM parser + box-to-saliency scoring + UI list). More if we build the capture helper. Revisit once we have user feedback on whether the pixel-only heatmap is sufficient.
+
 ---
 
 ## Items explicitly not going into this TODO

@@ -6,6 +6,28 @@ This file is not a changelog (that's `CHANGELOG.md`) and it isn't the spec (that
 
 ---
 
+## 2026-04-21 — Voxel hero logo: tap-vs-drag, sticky placement, and unifying the loading indicator
+
+**Tap vs drag on the same pointer stream.** The hero voxel logo supports both drag-to-spin and click-to-pause on the same element. Distinguishing them required a `pointerHasMoved` flag: reset on `pointerdown`, set to `true` on `pointermove` when accumulated displacement exceeds 3px. On `pointerup`, if the flag is still false it's a tap and we toggle pause; if true, we treat it as a drag release. One extra case: `pointercancel` (browser interrupts the gesture — incoming notification, scroll takeover). We pre-set `pointerHasMoved = true` in the cancel handler so a cancelled gesture doesn't spuriously fire a pause toggle. Keyboard (Space/Enter) calls `togglePause()` directly with no ambiguity.
+
+**Replacing the wireframe cube/sphere with the same heatmap eye as the hero logo.** The original `voxel-bg.js` had a cube→sphere morph that looked good in isolation but was visually disconnected from the hero logo we built later in the same PR. We replaced it with the same oblate-spheroid heatmap geometry. The main question was timing: `setState('ready')` triggers a 200 ms overlay fade-out, but the element also needs to re-parent into the main column at the end of that fade. Calling `onReady()` first and delaying the DOM re-parent by 250 ms (50 ms headroom past the fade) keeps the spinner visible throughout the transition. If a queued inference run calls `activate()` within that window, the state has already advanced to `'spinning'`, so the delayed re-parent guard (`currentState !== 'ready'`) skips the move and there is no race condition. The cube→sphere morph pattern is preserved in `docs/heerich-notes.md` for reference even though `voxel-bg.js` no longer uses it.
+
+Code in `docs/src/ui/voxel-logo.js` (hero logo) and `docs/src/ui/voxel-bg.js` (loading indicator).
+
+---
+
+## 2026-04-20 — Voxel loading indicator: heerich style shape + CSS-vs-rAF for compositor smoothness
+
+Two related gotchas in turning the heerich wireframe cube into Foveacast's loading indicator.
+
+**heerich's `style` constructor option is flat, not keyed by face.** I cribbed an example that used `style: { default: {...} }`, which is valid as a per-voxel `styles` object (where keys are face names like `default`, `front`, `top`). But the constructor option is the *defaultStyle* itself — a flat `{ fill, stroke, strokeWidth }` map. Wrapping it in `default:` made the renderer emit `default="[object Object]"` as the only attribute on every polygon, with no `fill` or `stroke` attribute at all. SVG defaults take over: black fill, no stroke. Result: invisible cube against the dark backdrop. Fix: drop the wrapper. Confirmed by diffing the SVG output of both shapes side-by-side.
+
+**Main-thread inference freezes JS animations; CSS animations on `transform` keep ticking.** Once the cube morphs to a sphere and the user starts an inference run, we want the sphere to keep spinning as the per-analysis loading indicator. The first attempt used the same rAF loop with a per-frame camera-angle update — and it stuttered to a stop the moment ORT started running, because the rAF callback was queued behind the inference work on the main thread. The fix is to render the sphere SVG once, then apply a CSS keyframes `transform: rotate()` animation. Compositor-thread `transform` animations don't block on the main thread, so the spin stays smooth all the way through inference. We add `will-change: transform` so the SVG gets promoted to its own layer up front. Tradeoff: the analyzing-state spin is a 2D in-plane rotation rather than a 3D camera rotation around an axis (which would require per-frame geometry rebuilds). Visually the difference is negligible because the sphere shell is roughly symmetric.
+
+The cube spin during model load *is* still rAF-driven, because that phase is dominated by network I/O (off the main thread) and the rAF cadence stays smooth.
+
+Code in `docs/src/ui/voxel-bg.js`. Vendored renderer at `docs/vendor/heerich.js` (heerich 0.14.0, MIT, [meodai/heerich](https://github.com/meodai/heerich)).
+
 ## 2026-04-20 — GitHub Pages HTTP cache TTL is 10 minutes, not "permanent"
 
 The model `.onnx` files are served by GitHub Pages with `Cache-Control: max-age=600`. That's 10 minutes. After every 10-minute window the browser must revalidate. If a new deployment happened (changing the ETag), the browser re-downloads the full file — 57 MB for each V3 duration model.

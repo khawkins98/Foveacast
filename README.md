@@ -1,10 +1,16 @@
 # Foveacast
 
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="Foveacast" width="240">
+</p>
+
 Predicted attention heatmaps, right in your browser.
 
 ![version 0.2.0](https://img.shields.io/badge/version-0.2.0-blue) ![status V3](https://img.shields.io/badge/status-V3-green) ![licence MIT](https://img.shields.io/badge/licence-MIT-lightgrey)
 
 ## What it is
+
+*fovea centralis*: the retina's point of sharpest focus + *cast*, to project and predict.
 
 Foveacast takes a screenshot of a web page and shows you where a typical viewer is likely to look first. It runs entirely in the browser on your own machine, so nothing you drop on it ever leaves the device — no account, no upload, no server. It is free and open source.
 
@@ -107,6 +113,7 @@ Foveacast stands on two pieces of open-source work:
 
 - **MSI-Net** (Kroner et al. 2020), fine-tuned on UEyes (Jiang et al. 2023) — the saliency model. [github.com/alexanderkroner/saliency](https://github.com/alexanderkroner/saliency)
 - **ONNX Runtime Web** — the inference runtime. MIT. [onnxruntime.ai/docs/tutorials/web/](https://onnxruntime.ai/docs/tutorials/web/)
+- **heerich** by [meodai](https://github.com/meodai) — the tiny voxel/SVG renderer behind the loading-time wireframe cube/sphere animation. MIT. [github.com/meodai/heerich](https://github.com/meodai/heerich)
 
 Prior to V3, UNISAL (Droste et al., Apache 2.0) was the inference model, and heatmap.js by Patrick Wied (MIT) handled the overlay renderer. Both were removed in 0.3.0.
 

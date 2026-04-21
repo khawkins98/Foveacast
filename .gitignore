@@ -43,3 +43,4 @@ docs/models/*
 # V3 MSI-Net model is NOT committed (57 MB). Use scripts/fetch-v3-model.sh
 # locally; the deploy workflow fetches it before the Pages upload.
 docs/models/v3/
+.gstack/

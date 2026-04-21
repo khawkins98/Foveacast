@@ -82,3 +82,50 @@ export const iconCompare = svg(
   'M10 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h5v2h2V1h-2v2zm0 15H5l5-6v6zm9-15h-5v2l5 6V5zm0 14h-5v2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2v14z',
   'Compare',
 );
+
+/**
+ * Build a stroke-only SVG wrapper (fill:none) for outline-style mark icons.
+ * Differs from svg() which uses fill:currentColor for solid filled paths.
+ *
+ * @param {string} pathData  - The `d` attribute for the <path>.
+ * @param {string} [title]   - If provided, adds a <title> for accessible use.
+ * @returns {string} SVG markup.
+ */
+function svgStroke(pathData, title) {
+  const titleEl = title ? `<title>${title}</title>` : '';
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" ` +
+    `width="18" height="18" fill="none" stroke="currentColor" ` +
+    `stroke-width="1.5" stroke-linejoin="round" ` +
+    `aria-hidden="true" focusable="false">` +
+    `${titleEl}<path d="${pathData}"/></svg>`
+  );
+}
+
+/**
+ * Eye logo mark — the Foveacast brand icon.
+ *
+ * Geometry (24×24 viewBox):
+ *   - Outer lens: cubic-bezier almond (eye silhouette)
+ *   - Iris:       pointy-top hexagon, r=3.  A regular hexagon is the
+ *                 isometric silhouette of a cube viewed straight-on,
+ *                 tying the mark back to the heerich voxel sphere.
+ *   - Pupil:      filled circle, r=1.5
+ *
+ * The icon is a two-path element — stroke-only outline + filled pupil —
+ * so it cannot be expressed with the single-path svgStroke() helper.
+ * The topnav brand area also inlines this SVG directly in index.html so
+ * the mark renders before JS loads.  When inlined, `currentColor` picks
+ * up the host element's CSS `color` property automatically.
+ */
+export const iconVoxelMark = (
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" ` +
+  `width="22" height="22" fill="none" aria-hidden="true" focusable="false">` +
+  `<title>Foveacast logo mark</title>` +
+  `<path stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" ` +
+  `d="M2,12 C5,5 19,5 22,12 C19,19 5,19 2,12 Z ` +
+  `M12,9 L14.6,10.5 L14.6,13.5 L12,15 L9.4,13.5 L9.4,10.5 Z"/>` +
+  `<path fill="currentColor" ` +
+  `d="M12,10.5 A1.5,1.5 0 0 1 12,13.5 A1.5,1.5 0 0 1 12,10.5 Z"/>` +
+  `</svg>`
+);
