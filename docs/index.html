@@ -76,6 +76,19 @@
       -->
       <nav class="fc-topnav" aria-label="Primary navigation">
         <div class="fc-topnav__brand">
+          <!--
+            Isometric wireframe cube — logo mark. Inlined so it appears before
+            JS loads. SVG also exported as iconVoxelMark from ui/icons.js for
+            programmatic use. aria-hidden because the wordmark span carries the
+            accessible label.
+          -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+               class="fc-topnav__logo-mark"
+               fill="none" stroke="currentColor"
+               stroke-width="1.5" stroke-linejoin="round"
+               aria-hidden="true" focusable="false">
+            <path d="M12,2 L21,7 L12,12 L3,7 Z M3,7 L12,12 L12,22 L3,17 Z M21,7 L12,12 L12,22 L21,17 Z"/>
+          </svg>
           <span class="fc-topnav__wordmark" aria-label="Foveacast">Foveacast</span>
         </div>
         <div class="fc-topnav__links" role="list">
@@ -124,6 +137,11 @@
         <header class="fc-workspace-header">
           <div class="fc-workspace-header__title-wrap">
             <h1 class="fc-workspace-header__title">Foveacast: Predicted Eye Attention Heatmaps</h1>
+            <!-- Etymology — what "Foveacast" means. Static copy; purely informational. -->
+            <p class="fc-workspace-header__etymology">
+              <em>fovea centralis</em> — the retina's point of sharpest focus — +
+              <em>cast</em>, to project and predict
+            </p>
             <!-- Updated by renderOutput() to show the active viewing duration. Hidden until first inference. -->
             <p class="fc-workspace-header__duration-label" id="fc-duration-label" hidden></p>
             <!--

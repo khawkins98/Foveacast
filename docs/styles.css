@@ -184,6 +184,17 @@ a:hover {
 
 .fc-topnav__brand {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Isometric cube logo mark — size and tint matching the wordmark. */
+.fc-topnav__logo-mark {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  color: var(--fc-primary);
 }
 
 .fc-topnav__wordmark {
@@ -502,6 +513,16 @@ a:hover {
   letter-spacing: 0.01em;
   color: var(--fc-primary);
   margin: 0.15rem 0 0;
+}
+
+/* Etymology tag below the h1 — explains the portmanteau "fovea + cast". */
+.fc-workspace-header__etymology {
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--fc-on-surface-variant);
+  margin: 0.35rem 0 0;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
 }
 
 

@@ -82,3 +82,38 @@ export const iconCompare = svg(
   'M10 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h5v2h2V1h-2v2zm0 15H5l5-6v6zm9-15h-5v2l5 6V5zm0 14h-5v2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2v14z',
   'Compare',
 );
+
+/**
+ * Build a stroke-only SVG wrapper (fill:none) for outline-style mark icons.
+ * Differs from svg() which uses fill:currentColor for solid filled paths.
+ *
+ * @param {string} pathData  - The `d` attribute for the <path>.
+ * @param {string} [title]   - If provided, adds a <title> for accessible use.
+ * @returns {string} SVG markup.
+ */
+function svgStroke(pathData, title) {
+  const titleEl = title ? `<title>${title}</title>` : '';
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" ` +
+    `width="18" height="18" fill="none" stroke="currentColor" ` +
+    `stroke-width="1.5" stroke-linejoin="round" ` +
+    `aria-hidden="true" focusable="false">` +
+    `${titleEl}<path d="${pathData}"/></svg>`
+  );
+}
+
+/**
+ * Isometric wireframe cube — the Foveacast logo mark.
+ *
+ * Three visible faces of a cube in isometric projection on a 24×24 grid,
+ * matching the heerich voxel aesthetic used in the background sphere.
+ * Uses stroke rather than fill so it reads as a wireframe outline.
+ *
+ * This export is for programmatic use (e.g. injecting into tool buttons).
+ * The topnav brand area inlines the same SVG directly in index.html so the
+ * mark renders before JS loads, without a flash of unstyled content.
+ */
+export const iconVoxelMark = svgStroke(
+  'M12,2 L21,7 L12,12 L3,7 Z M3,7 L12,12 L12,22 L3,17 Z M21,7 L12,12 L12,22 L21,17 Z',
+  'Foveacast logo mark',
+);
