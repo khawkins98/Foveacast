@@ -17,6 +17,16 @@
 // Web WASM is 12 MB. Over localhost that is a second or two on a
 // reasonable machine; the timeouts below leave ample headroom without
 // being silly.
+//
+// Service worker (coi-sw.js) note: on a fresh browser context the SW
+// registers on the first navigation and triggers one page reload so
+// that COEP/COOP headers take effect (making crossOriginIsolated = true
+// and enabling WASM threading). Playwright's page object tracks
+// through this reload automatically; the generous timeouts below
+// absorb the extra round-trip. On the first load (before the SW is
+// active) ORT may emit SharedArrayBuffer warnings — those are expected
+// and filtered below. On the reloaded page crossOriginIsolated = true
+// and no threading warnings are emitted.
 
 import { test, expect } from '@playwright/test';
 
@@ -64,13 +74,22 @@ test.describe('Foveacast — real model load end-to-end', () => {
     // The real load path must not throw anywhere.
     expect(pageErrors.map(String)).toEqual([]);
 
-    // Filter the same ORT/WASM environment noise the demo suite
-    // tolerates — SharedArrayBuffer warnings on non-COEP origins are
-    // expected, not meaningful.
+    // On the first navigation the SW has not yet installed, so ORT may
+    // emit SharedArrayBuffer / threading warnings before the SW-triggered
+    // reload. Filter those expected noise lines. After the reload
+    // crossOriginIsolated = true and no threading warnings appear.
     const meaningfulErrors = consoleErrors.filter(
       (m) => !/SharedArrayBuffer|cross-origin|numThreads/i.test(m),
     );
     expect(meaningfulErrors).toEqual([]);
+
+    // Verify the SW is active and the page is cross-origin isolated.
+    // If coi-sw.js fails to register, this fails fast and surfaces
+    // the root cause before ORT threading bugs become mysterious.
+    const isCrossOriginIsolated = await page.evaluate(
+      () => /** @type {any} */ (globalThis).crossOriginIsolated,
+    );
+    expect(isCrossOriginIsolated, 'crossOriginIsolated should be true after SW reload').toBe(true);
   });
 
   test('duration picker shows all three options (1s, 3s, 7s) after demo render', async ({ page }) => {
