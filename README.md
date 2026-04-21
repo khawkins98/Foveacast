@@ -36,18 +36,16 @@ Demo mode also doubles as the target for the Playwright end-to-end test suite (s
 
 Three ways, in order of how quickly you want to be looking at a heatmap.
 
-### 1. Zero install
-
-Download or unzip the repo, open `docs/index.html` directly in Chrome or Firefox, and drop a screenshot onto the drop zone. That's the whole flow. The model weights are committed directly to the repo under `docs/models/unisal/`, so the zero-install path works offline once you have the folder.
-
-### 2. Dev server (hot reload)
+### 1. Dev server (quick start)
 
 ```sh
 pnpm install
 pnpm dev
 ```
 
-Vite serves the `docs/` folder on <http://localhost:5173>. There is no build step — the folder Vite serves is the same folder GitHub Pages publishes, which is the same folder you open when you double-click `index.html`. Editing a file reloads the page.
+Vite serves the `docs/` folder on <http://localhost:5173>. There is no build step — the folder Vite serves is the same folder GitHub Pages publishes. Editing a file reloads the page.
+
+> **Note:** Foveacast requires a proper HTTP/S origin (localhost, GitHub Pages, or similar). Opening `docs/index.html` directly as a `file://` URL no longer works — the service worker that enables WASM threading cannot register from a `file://` origin.
 
 ### 3. From a clone
 

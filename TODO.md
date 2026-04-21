@@ -70,7 +70,7 @@ Main concerns before committing:
 ## Items explicitly not going into this TODO
 
 - Mobile support, URL input, webcam gaze tracking, and video — explicitly out of scope.
-- Anything that would require a build step — the "unzip and open" promise still stands.
+- Anything that would require a build step beyond what Vite provides at dev time.
 - Architectural debates about future model versions. Those belong in `LEARNINGS.md`, not here.
 
 ---

@@ -84,10 +84,11 @@ test.describe('Foveacast — demo mode end-to-end', () => {
     // The console-error filter is intentionally lenient about
     // network- and backend-related noise that is expected in this
     // environment:
-    //   - ORT Web can log SharedArrayBuffer / threading warnings when
-    //     `crossOriginIsolated` is false; these are expected on
-    //     GitHub Pages and in the Playwright dev-server, and ORT
-    //     falls back to single-threaded automatically.
+    //   - On the very first navigation (before the coi-sw.js service
+    //     worker has installed and triggered its one reload), ORT Web
+    //     may log SharedArrayBuffer / threading warnings. After the
+    //     SW-triggered reload, crossOriginIsolated = true and those
+    //     warnings go away.
     //   - The silent background model load in demo mode will try to
     //     fetch `./models/v3/3s/model.onnx`. Playwright serves this
     //     file correctly when present, but Chromium still logs any

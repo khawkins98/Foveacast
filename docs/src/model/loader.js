@@ -310,10 +310,11 @@ async function fetchModelBytes(url, onProgress) {
  * "ort is not defined".
  *
  * Note on execution provider: we request the `wasm` EP explicitly
- * and nothing else. ORT Web will fall back to single-threaded WASM
- * automatically when `crossOriginIsolated` is false, which is the
- * permanent state on GitHub Pages. WebGPU is out of scope for this
- * build; see docs/vendor/README.md for the reasoning.
+ * and nothing else. When `crossOriginIsolated` is true (coi-sw.js is
+ * active) ORT uses up to four WASM threads for a 2–4× speedup. On the
+ * first page visit before the service worker installs, it falls back to
+ * single-threaded automatically. WebGPU is out of scope for this build;
+ * see docs/vendor/README.md for the reasoning.
  *
  * @param {object} [options]
  * @param {Duration} [options.duration] - Viewing window (default: '3s').
@@ -345,11 +346,19 @@ export async function loadModel(options = {}) {
   // and it double-prefixed the path to `/vendor/vendor/` because
   // ORT resolves the override relative to its own script too.
   //
-  // Cross-origin isolation is off on Pages (no COEP header), so we
-  // force single-threaded explicitly — otherwise ORT warns about
-  // `numThreads > 1` on load.
+  // Note on execution provider: we request the `wasm` EP explicitly
+  // and nothing else. ORT Web falls back to single-threaded WASM
+  // automatically when `crossOriginIsolated` is false, which is the
+  // case on the very first page load before coi-sw.js has installed.
+  // After that first-visit reload, coi-sw.js injects COEP/COOP headers
+  // and `crossOriginIsolated` becomes true — at that point we allow up
+  // to four threads. WebGPU is out of scope; see docs/vendor/README.md.
   if (ort.env && ort.env.wasm) {
-    ort.env.wasm.numThreads = 1;
+    // why: ORT warns loudly if numThreads > 1 when crossOriginIsolated
+    // is false; cap at 1 in that case to keep the console clean.
+    ort.env.wasm.numThreads = globalThis.crossOriginIsolated
+      ? Math.max(1, Math.min(4, navigator.hardwareConcurrency ?? 1))
+      : 1;
   }
 
   let bytes;

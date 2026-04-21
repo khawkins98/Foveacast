@@ -32,7 +32,7 @@ pnpm exec playwright install chromium
 
 The V3 ONNX model files are **not committed** — they are gitignored due to their size (57 MB each). Three duration variants (1 s, 3 s, 7 s) live at `docs/models/v3/{1s,3s,7s}/model.onnx`. For local dev, run `scripts/fetch-v3-model.sh`. The deploy workflow fetches all three before the Pages upload.
 
-Foveacast is buildless on purpose — the `docs/` folder you edit is the folder GitHub Pages publishes, which is the folder a user unzips and opens. There is no bundler step between edit and publish. Vite is a dev-time convenience, not a dependency of the shipped artefact. If your change introduces a build step, please flag that in the PR description; the bar for reintroducing tooling is high.
+Foveacast is buildless on purpose — the `docs/` folder you edit is the folder GitHub Pages publishes. There is no bundler step between edit and publish. Vite is a dev-time convenience, not a dependency of the shipped artefact. The app requires a proper HTTP/S origin (localhost or Pages) so the `coi-sw.js` service worker can register and inject the COEP/COOP headers that enable WASM multi-threading. `file://` URLs no longer work. If your change introduces a build step beyond what Vite provides at dev time, please flag that in the PR description.
 
 ## Architecture, briefly
 

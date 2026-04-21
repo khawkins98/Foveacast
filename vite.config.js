@@ -1,17 +1,11 @@
 // Vite dev-server configuration for Foveacast.
 //
 // Foveacast ships as a "buildless" static site: the files inside `docs/`
-// are exactly what GitHub Pages publishes, and exactly what a user gets
-// when they download the repo as a zip and double-click `index.html`.
-// There is deliberately no build step that copies or transforms the
-// source. The "unzip and open index.html" promise is only
-// credible if the folder the developer edits is the folder the user
-// runs.
-//
-// Pointing Vite's `root` at `docs/` means `pnpm dev` serves that same
-// folder over HTTP with live reload, without ever producing a `dist/`
-// directory. Tests do not use Vite — they run under Vitest with jsdom —
-// so this file stays minimal.
+// are exactly what GitHub Pages publishes. There is deliberately no build
+// step that copies or transforms the source. Pointing Vite's `root` at
+// `docs/` means `pnpm dev` serves that same folder over HTTP with live
+// reload, without ever producing a `dist/` directory. Tests do not use
+// Vite — they run under Vitest with jsdom — so this file stays minimal.
 import { defineConfig } from 'vite';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -23,25 +17,24 @@ import { join, resolve } from 'node:path';
  *
  * Why this exists — two separate dev-server quirks, same fix:
  *
- *   1. `/models/*` — V1's TF.js weight shards (group1-shard1of6, etc.)
- *      had no file extension, and Vite's import-analysis plugin 500'd
- *      trying to parse them as JavaScript. V2 serves a single
- *      `model.onnx` file under this prefix; the `.onnx` extension
- *      avoids the parse attempt, but we keep the passthrough here
- *      because (a) we also want to emit an accurate
- *      `application/octet-stream` Content-Type and (b) the V1 pattern
- *      was useful enough that restoring it for any future multi-file
- *      model should be friction-free.
+ *   1. `/models/*` — V1's TF.js weight shards had no file extension, and
+ *      Vite's import-analysis plugin 500'd trying to parse them as
+ *      JavaScript. V2+ serve `.onnx` files which avoids that, but we
+ *      keep the passthrough for correct `application/octet-stream` and
+ *      to make future multi-file model layouts friction-free.
  *
  *   2. `/vendor/*` — Vite mutates the bytes of some vendored scripts
  *      before serving them (observed 9 KB heatmap.min.js becoming
  *      50 KB with a source-map stub). The mutation breaks the SRI
  *      `integrity=` hashes in index.html, which are computed from
- *      the bytes on disk. The browser then refuses to execute the
- *      script. The V2 ORT Web vendor files (~12.5 MB wasm plus JS
- *      glue) need the same guarantee — ORT's loader also reaches for
- *      its own wasm/mjs siblings and expects the bytes to be what is
- *      on disk.
+ *      the bytes on disk. The ORT Web vendor files also need the same
+ *      guarantee.
+ *
+ *   3. `coi-sw.js` — the coi-serviceworker script lives at the root
+ *      of `docs/` so the service worker scope is `/` (if it were under
+ *      `/vendor/`, the SW scope would only cover `/vendor/` paths).
+ *      Vite would otherwise transform its bytes, breaking both the SRI
+ *      hash and the service worker runtime.
  *
  * GitHub Pages (the production host) serves static files verbatim,
  * so both issues are dev-server-specific. This plugin pre-empts
@@ -59,6 +52,14 @@ function servePassthroughStatic() {
     { url: '/vendor/', dir: 'vendor', fallbackOn404: false },
   ];
 
+  /**
+   * Exact root-level files that must be served verbatim.
+   * `coi-sw.js` acts as both the in-page registration shim and the
+   * service worker script; any byte mutation by Vite would (a) break
+   * the SRI `integrity=` check and (b) corrupt the SW binary.
+   */
+  const exactFiles = ['coi-sw.js'];
+
   return {
     name: 'foveacast-serve-passthrough-static',
     configureServer(server) {
@@ -68,6 +69,30 @@ function servePassthroughStatic() {
         const url = req.url || '';
         // Strip querystring + hash before matching.
         const pathPart = url.split('?')[0].split('#')[0];
+
+        // Check exact-file list first (e.g. /coi-sw.js at the root).
+        const exactName = pathPart.replace(/^\//, '');
+        if (exactFiles.includes(exactName)) {
+          const filePath = join(resolve(root), exactName);
+          if (!existsSync(filePath) || !statSync(filePath).isFile()) {
+            res.statusCode = 404;
+            res.setHeader('Content-Type', 'text/plain');
+            res.end('Not Found');
+            return;
+          }
+          try {
+            const bytes = readFileSync(filePath);
+            const contentType = pickContentType(filePath);
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Content-Length', String(bytes.length));
+            res.setHeader('Cache-Control', 'no-cache');
+            res.end(bytes);
+          } catch (err) {
+            res.statusCode = 500;
+            res.end(String((err && err.message) || err));
+          }
+          return;
+        }
 
         const match = prefixes.find((p) => pathPart.startsWith(p.url));
         if (!match) {
