@@ -103,17 +103,29 @@ function svgStroke(pathData, title) {
 }
 
 /**
- * Isometric wireframe cube — the Foveacast logo mark.
+ * Eye logo mark — the Foveacast brand icon.
  *
- * Three visible faces of a cube in isometric projection on a 24×24 grid,
- * matching the heerich voxel aesthetic used in the background sphere.
- * Uses stroke rather than fill so it reads as a wireframe outline.
+ * Geometry (24×24 viewBox):
+ *   - Outer lens: cubic-bezier almond (eye silhouette)
+ *   - Iris:       pointy-top hexagon, r=3.  A regular hexagon is the
+ *                 isometric silhouette of a cube viewed straight-on,
+ *                 tying the mark back to the heerich voxel sphere.
+ *   - Pupil:      filled circle, r=1.5
  *
- * This export is for programmatic use (e.g. injecting into tool buttons).
- * The topnav brand area inlines the same SVG directly in index.html so the
- * mark renders before JS loads, without a flash of unstyled content.
+ * The icon is a two-path element — stroke-only outline + filled pupil —
+ * so it cannot be expressed with the single-path svgStroke() helper.
+ * The topnav brand area also inlines this SVG directly in index.html so
+ * the mark renders before JS loads.  When inlined, `currentColor` picks
+ * up the host element's CSS `color` property automatically.
  */
-export const iconVoxelMark = svgStroke(
-  'M12,2 L21,7 L12,12 L3,7 Z M3,7 L12,12 L12,22 L3,17 Z M21,7 L12,12 L12,22 L21,17 Z',
-  'Foveacast logo mark',
+export const iconVoxelMark = (
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" ` +
+  `width="22" height="22" fill="none" aria-hidden="true" focusable="false">` +
+  `<title>Foveacast logo mark</title>` +
+  `<path stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" ` +
+  `d="M2,12 C5,5 19,5 22,12 C19,19 5,19 2,12 Z ` +
+  `M12,9 L14.6,10.5 L14.6,13.5 L12,15 L9.4,13.5 L9.4,10.5 Z"/>` +
+  `<path fill="currentColor" ` +
+  `d="M12,10.5 A1.5,1.5 0 0 1 12,13.5 A1.5,1.5 0 0 1 12,10.5 Z"/>` +
+  `</svg>`
 );

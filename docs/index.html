@@ -77,17 +77,19 @@
       <nav class="fc-topnav" aria-label="Primary navigation">
         <div class="fc-topnav__brand">
           <!--
-            Isometric wireframe cube — logo mark. Inlined so it appears before
-            JS loads. SVG also exported as iconVoxelMark from ui/icons.js for
-            programmatic use. aria-hidden because the wordmark span carries the
-            accessible label.
+            Eye logo mark — inlined so it appears before JS loads.
+            `currentColor` picks up `.fc-topnav__logo-mark { color: var(--fc-primary) }`.
+            The same geometry is exported as iconVoxelMark from ui/icons.js.
+            aria-hidden: the wordmark span carries the accessible label.
           -->
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
                class="fc-topnav__logo-mark"
-               fill="none" stroke="currentColor"
-               stroke-width="1.5" stroke-linejoin="round"
-               aria-hidden="true" focusable="false">
-            <path d="M12,2 L21,7 L12,12 L3,7 Z M3,7 L12,12 L12,22 L3,17 Z M21,7 L12,12 L12,22 L21,17 Z"/>
+               fill="none" aria-hidden="true" focusable="false">
+            <path stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"
+                  d="M2,12 C5,5 19,5 22,12 C19,19 5,19 2,12 Z
+                     M12,9 L14.6,10.5 L14.6,13.5 L12,15 L9.4,13.5 L9.4,10.5 Z"/>
+            <path fill="currentColor"
+                  d="M12,10.5 A1.5,1.5 0 0 1 12,13.5 A1.5,1.5 0 0 1 12,10.5 Z"/>
           </svg>
           <span class="fc-topnav__wordmark" aria-label="Foveacast">Foveacast</span>
         </div>
@@ -136,7 +138,17 @@
         <!-- Workspace header: page title + HUD stats. -->
         <header class="fc-workspace-header">
           <div class="fc-workspace-header__title-wrap">
-            <h1 class="fc-workspace-header__title">Foveacast: Predicted Eye Attention Heatmaps</h1>
+            <!--
+              Hero logo lockup — large brand mark shown at the top of the
+              workspace before any inference has been run. The SVG carries
+              its own dark/light media query so it renders correctly when
+              loaded via <img> (no CSS context).
+            -->
+            <img src="assets/logo.svg"
+                 class="fc-hero-logo"
+                 alt="Foveacast"
+                 width="220" height="44">
+            <h1 class="fc-workspace-header__title">Predicted Eye Attention Heatmaps</h1>
             <!-- Etymology — what "Foveacast" means. Static copy; purely informational. -->
             <p class="fc-workspace-header__etymology">
               <em>fovea centralis</em>: the retina's point of sharpest focus +

@@ -1,0 +1,33 @@
+<!--
+  Foveacast logo mark — standalone SVG.
+
+  Geometry: 24×24 viewBox.
+    - Outer lens: cubic-bezier almond (eye silhouette)
+    - Iris: hexagon, pointy-top, r=3.  A regular hexagon is the
+      silhouette of an isometric cube viewed straight-on, which ties
+      the mark back to the heerich voxel background sphere.
+    - Pupil: filled circle, r=1.5
+
+  Colours: fc-primary (#b4c5ff) on dark by default; fc-primary-container
+  (#0052d9) on light (via prefers-color-scheme media query).
+  When inlined in HTML, the host element's `color` CSS property overrides
+  these via `currentColor` — the logo-mark.svg file is for standalone use
+  (e.g. <img src>, README badges) where CSS is not available.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+     role="img" aria-label="Foveacast logo mark">
+  <title>Foveacast logo mark</title>
+  <style>
+    .m { stroke: #b4c5ff; stroke-width: 1.5; stroke-linejoin: round; fill: none; }
+    .p { fill: #b4c5ff; }
+    @media (prefers-color-scheme: light) {
+      .m { stroke: #0052d9; }
+      .p { fill: #0052d9; }
+    }
+  </style>
+  <!-- Outer eye lens + hexagonal iris as a single compound path -->
+  <path class="m" d="M2,12 C5,5 19,5 22,12 C19,19 5,19 2,12 Z
+                     M12,9 L14.6,10.5 L14.6,13.5 L12,15 L9.4,13.5 L9.4,10.5 Z"/>
+  <!-- Filled pupil -->
+  <path class="p" d="M12,10.5 A1.5,1.5 0 0 1 12,13.5 A1.5,1.5 0 0 1 12,10.5 Z"/>
+</svg>

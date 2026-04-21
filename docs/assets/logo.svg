@@ -1,0 +1,69 @@
+<!--
+  Foveacast horizontal logo lockup.
+
+  Canvas: 280×56 viewBox.
+  Layout:
+    - Eye mark: 48×48 block (paths are the logo-mark geometry ×2), centred
+      vertically with 4 px top/bottom padding.
+    - Wordmark "Foveacast": 26 px, weight 900, x=62.
+    - Tagline: 9.5 px italic, x=63.
+
+  Colours: dark-first (#b4c5ff accent, #dce2f7 text).
+  A prefers-color-scheme: light block flips to blue-on-white for README
+  rendering in GitHub's light mode.
+
+  Font: Inter if available, otherwise system-ui / -apple-system stack.
+  SVG text is not converted to paths — GitHub's SVG renderer uses the
+  system font stack which renders cleanly in both themes.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 56" fill="none">
+  <title>Foveacast</title>
+  <style>
+    .m { stroke: #b4c5ff; stroke-width: 1.5; stroke-linejoin: round; fill: none; }
+    .p { fill: #b4c5ff; }
+    .word {
+      fill: #dce2f7;
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-weight: 900;
+      font-size: 26px;
+      letter-spacing: -0.03em;
+    }
+    .tag {
+      fill: #c3c6d7;
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-size: 9.5px;
+      font-style: italic;
+      letter-spacing: 0.01em;
+    }
+    @media (prefers-color-scheme: light) {
+      .m { stroke: #0052d9; }
+      .p { fill: #0052d9; }
+      .word { fill: #0c1322; }
+      .tag  { fill: #3a3f50; }
+    }
+  </style>
+
+  <!--
+    Eye mark — same geometry as logo-mark.svg but coordinates ×2.
+    Placed inside a translate(4,4) group so it sits with 4 px margin
+    from the canvas edges, occupying the 48×48 block at (4,4)–(52,52).
+
+    Scaled coordinates (original ×2):
+      Lens end-points:  (4,24) … (44,24)
+      Cubic controls:   (10,10) and (38,10) for top; (38,38) and (10,38) for bottom
+      Iris hex (r=6):   top (24,18), TR (29.2,21), BR (29.2,27),
+                        bottom (24,30), BL (18.8,27), TL (18.8,21)
+      Pupil circle r=3: (24,21) → (24,27) via two arcs
+  -->
+  <g transform="translate(4,4)">
+    <path class="m" d="M4,24 C10,10 38,10 44,24 C38,38 10,38 4,24 Z
+                       M24,18 L29.2,21 L29.2,27 L24,30 L18.8,27 L18.8,21 Z"/>
+    <path class="p"  d="M24,21 A3,3 0 0 1 24,27 A3,3 0 0 1 24,21 Z"/>
+  </g>
+
+  <!-- Wordmark — baseline at y=36, approximately vertically centred. -->
+  <text class="word" x="62" y="36">Foveacast</text>
+
+  <!-- Tagline — sitting 13 px below the wordmark baseline. -->
+  <text class="tag" x="63" y="49">fovea centralis: sharpest focus + cast, to project</text>
+</svg>

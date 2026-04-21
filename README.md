@@ -1,5 +1,9 @@
 # Foveacast
 
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="Foveacast" width="240">
+</p>
+
 Predicted attention heatmaps, right in your browser.
 
 ![version 0.2.0](https://img.shields.io/badge/version-0.2.0-blue) ![status V3](https://img.shields.io/badge/status-V3-green) ![licence MIT](https://img.shields.io/badge/licence-MIT-lightgrey)

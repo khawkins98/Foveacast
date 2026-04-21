@@ -499,6 +499,14 @@ a:hover {
   margin: 0 0 0.25rem;
 }
 
+/* Hero logo lockup — displayed before the h1 in the workspace header. */
+.fc-hero-logo {
+  display: block;
+  width: 220px;
+  height: auto;
+  margin-bottom: 0.75rem;
+}
+
 .fc-workspace-header__title {
   font-size: clamp(1.5rem, 2vw + 1rem, 2.5rem);
   font-weight: 900;
