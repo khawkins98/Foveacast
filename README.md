@@ -3,7 +3,7 @@
   <h1>Foveacast</h1>
   <p>Predicted attention heatmaps, right in your browser.</p>
 
-  [![version 0.3.0](https://img.shields.io/badge/version-0.3.0-blue)](CHANGELOG.md) [![model MSI-Net V3](https://img.shields.io/badge/model-MSI--Net_V3-green)](docs/methodology.md) [![licence MIT](https://img.shields.io/badge/licence-MIT-lightgrey)](LICENSE)
+  [![version 0.3.0](https://img.shields.io/badge/version-0.3.0-blue)](CHANGELOG.md) [![model MSI-Net V3](https://img.shields.io/badge/model-MSI--Net_V3-green)](docs/methodology.md#the-model-msi-net-fine-tuned-on-ueyes) [![licence MIT](https://img.shields.io/badge/licence-MIT-lightgrey)](LICENSE)
 
   **[Try it live →](https://khawkins98.github.io/Foveacast/)**
 </div>
@@ -27,6 +27,8 @@ Aimed at those who want a quick sanity check on a layout before publishing, with
 - **MSI-Net V3** — fine-tuned on real UI eye-tracking data from the [UEyes dataset](https://doi.org/10.1145/3544548.3581096)
 - **Full analysis report** — rule-of-thirds breakdown, fixation sequence, attention zones, centroid trajectory
 - **No account needed** — free, open source, drop and go
+
+The first visit downloads about 57 MB of ONNX model weights (one per duration). Subsequent visits load them from your browser cache, so repeat use is fast and stays fully offline.
 
 ## Run locally
 
