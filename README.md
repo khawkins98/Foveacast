@@ -5,7 +5,7 @@
 
   [![version 0.3.0](https://img.shields.io/badge/version-0.3.0-blue)](CHANGELOG.md) [![model MSI-Net V3](https://img.shields.io/badge/model-MSI--Net_V3-green)](docs/methodology.md#the-model-msi-net-fine-tuned-on-ueyes) [![licence MIT](https://img.shields.io/badge/licence-MIT-lightgrey)](LICENSE)
 
-  **[Try it live →](https://khawkins98.github.io/Foveacast/)**
+  **[Try it live →](https://www.allaboutken.com/Foveacast/)**
 </div>
 
 ---
