@@ -16,8 +16,35 @@
     <link rel="canonical" href="https://www.allaboutken.com/Foveacast/" />
 
     <!--
-      Cross-origin isolation service worker — must be the FIRST script so the
-      SW registers before anything else loads. On first visit the SW installs
+      Canonical home is https://www.allaboutken.com/Foveacast/ — Vercel
+      reverse-proxies this GitHub Pages deployment as its origin. Send anyone
+      arriving directly on github.io to the canonical URL, keeping the path.
+
+      The hostname guard is load-bearing. Because the proxy serves THIS markup
+      under www.allaboutken.com, an unguarded redirect would bounce the
+      canonical URL back to itself forever. Do not drop the condition, and do
+      not swap this for a meta refresh, which cannot be made conditional.
+
+      This sits ahead of the COI service worker below on purpose: on github.io
+      we navigate away immediately, so installing a SW (and taking its reload)
+      for an origin the visitor is leaving would be wasted work and could race
+      the redirect. It is inline and fetches nothing, so the SW is still the
+      first script that LOADS anything.
+    -->
+    <script>
+      if (window.location.hostname === 'khawkins98.github.io') {
+        window.location.replace(
+          'https://www.allaboutken.com' +
+            window.location.pathname + window.location.search + window.location.hash
+        );
+      }
+    </script>
+
+    <!--
+      Cross-origin isolation service worker — must be the first script that
+      LOADS anything, so the SW registers before the vendored runtimes below.
+      (The inline canonical-redirect guard above fetches nothing; see its note.)
+      On first visit the SW installs
       and triggers a single page reload; thereafter it intercepts all fetches
       and injects COEP/COOP headers, making crossOriginIsolated = true.
       That flag unlocks SharedArrayBuffer and ORT WASM multi-threading.
